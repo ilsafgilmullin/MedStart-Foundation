@@ -1,97 +1,108 @@
-import Link from 'next/link'
 import type { Metadata } from 'next'
-import { Container } from '@/components/layout/container'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import Link from 'next/link'
+import { Logo }    from '@/components/common/logo'
+import { Button }  from '@/components/ui/button'
+import { Input }   from '@/components/ui/input'
+import { ROUTES }  from '@/lib/constants'
 
-export const metadata: Metadata = {
-  title: 'Sign in',
-}
+export const metadata: Metadata = { title: 'Sign in' }
 
 // ─── Page ──────────────────────────────────────────────────────────────────
 export default function LoginPage() {
   return (
-    <div className="min-h-dvh bg-surface-50 flex flex-col">
+    <div className="min-h-dvh bg-surface flex flex-col">
       {/* Top bar */}
-      <header className="border-b border-surface-200 bg-surface-0/80 backdrop-blur-md">
-        <Container>
-          <div className="flex h-16 items-center justify-between">
-            <Link href="/" className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600">
-                <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 text-white" aria-hidden="true">
-                  <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-                  <path d="M9 12h6M12 9v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              </div>
-              <span className="text-lg font-semibold text-surface-900 tracking-tight">MedStart</span>
+      <header className="border-b border-border bg-background/80 backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Link href={ROUTES.HOME}>
+            <Logo />
+          </Link>
+          <p className="text-sm text-foreground-muted">
+            No account?{' '}
+            <Link href={ROUTES.REGISTER.STUDENT} className="font-medium text-brand-600 hover:text-brand-700 transition-colors">
+              Sign up free
             </Link>
-            <span className="text-sm text-surface-500">
-              No account?{' '}
-              <Link href="/register/student" className="font-medium text-primary-600 hover:text-primary-700">
-                Sign up
-              </Link>
-            </span>
-          </div>
-        </Container>
+          </p>
+        </div>
       </header>
 
-      {/* Main */}
+      {/* Auth card */}
       <main className="flex flex-1 items-center justify-center py-12 px-4">
-        <div className="w-full max-w-md">
-          <Card>
-            <CardHeader>
-              <CardTitle>Welcome back</CardTitle>
-              <CardDescription>Sign in to your MedStart account</CardDescription>
-            </CardHeader>
+        <div className="w-full max-w-sm">
+          {/* Heading */}
+          <div className="mb-8 text-center">
+            <h1 className="text-2xl font-bold text-foreground tracking-tight">Welcome back</h1>
+            <p className="mt-2 text-sm text-foreground-muted">Sign in to your MedStart account</p>
+          </div>
 
-            <CardContent>
-              {/*
-               * TODO: wire up authentication.
-               * Keep this form empty — no handlers, no business logic.
-               */}
-              <form className="flex flex-col gap-4" noValidate>
+          {/* Form card */}
+          <div className="rounded-2xl border border-border bg-background p-8 shadow-sm">
+            {/*
+             * TODO: wire up authentication.
+             * Handlers and validation will be added separately.
+             */}
+            <form className="flex flex-col gap-5" noValidate>
+              <Input
+                label="Email address"
+                type="email"
+                placeholder="you@example.com"
+                autoComplete="email"
+                required
+              />
+
+              <div className="flex flex-col gap-1.5">
                 <Input
-                  label="Email address"
-                  type="email"
-                  placeholder="you@example.com"
-                  autoComplete="email"
+                  label="Password"
+                  type="password"
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
                   required
                 />
-
-                <div className="flex flex-col gap-1.5">
-                  <Input
-                    label="Password"
-                    type="password"
-                    placeholder="••••••••"
-                    autoComplete="current-password"
-                    required
-                  />
-                  <div className="flex justify-end">
-                    <Link
-                      href="#"
-                      className="text-xs text-primary-600 hover:text-primary-700 transition-colors"
-                    >
-                      Forgot password?
-                    </Link>
-                  </div>
+                <div className="flex justify-end">
+                  <Link
+                    href="#"
+                    className="text-xs font-medium text-brand-600 hover:text-brand-700 transition-colors"
+                  >
+                    Forgot password?
+                  </Link>
                 </div>
+              </div>
 
-                <Button type="submit" fullWidth className="mt-2">
-                  Sign in
-                </Button>
-              </form>
-            </CardContent>
+              <Button type="submit" fullWidth className="mt-1">
+                Sign in
+              </Button>
+            </form>
 
-            <CardFooter className="justify-center">
-              <p className="text-sm text-surface-500">
-                New to MedStart?{' '}
-                <Link href="/register/student" className="font-medium text-primary-600 hover:text-primary-700">
-                  Create an account
-                </Link>
-              </p>
-            </CardFooter>
-          </Card>
+            {/* Divider */}
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center">
+                <span className="bg-background px-3 text-xs text-foreground-subtle">or</span>
+              </div>
+            </div>
+
+            {/* SSO placeholder */}
+            <Button variant="outline" fullWidth className="gap-2">
+              {/* Google icon placeholder */}
+              <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              Continue with Google
+            </Button>
+          </div>
+
+          {/* Footer */}
+          <p className="mt-6 text-center text-xs text-foreground-subtle">
+            By signing in you agree to our{' '}
+            <Link href="#" className="underline hover:text-foreground-muted transition-colors">Terms</Link>
+            {' '}and{' '}
+            <Link href="#" className="underline hover:text-foreground-muted transition-colors">Privacy Policy</Link>.
+          </p>
         </div>
       </main>
     </div>

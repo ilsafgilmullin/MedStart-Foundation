@@ -1,57 +1,45 @@
 import Link from 'next/link'
 import { Container } from '@/components/layout/container'
 import { Button } from '@/components/ui/button'
+import { Logo } from '@/components/common/logo'
+import { ROUTES } from '@/lib/constants'
+
+const NAV_LINKS = [
+  { label: 'Features',  href: '/#features' },
+  { label: 'Educators', href: '/#educators' },
+  { label: 'Pricing',   href: '/#pricing' },
+] as const
 
 export function Header() {
   return (
-    <header className="sticky top-0 z-50 border-b border-surface-200 bg-surface-0/80 backdrop-blur-md">
+    <header className="sticky top-0 z-[200] w-full border-b border-border/60 bg-background/80 backdrop-blur-md">
       <Container>
-        <div className="flex h-16 items-center justify-between gap-4">
+        <div className="flex h-14 items-center gap-6">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 shrink-0">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                className="h-4 w-4 text-white"
-                aria-hidden="true"
-              >
-                <path
-                  d="M12 2L2 7v10l10 5 10-5V7L12 2z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M9 12h6M12 9v6"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </div>
-            <span className="text-lg font-semibold text-surface-900 tracking-tight">
-              MedStart
-            </span>
+          <Link href={ROUTES.HOME} className="shrink-0 flex items-center gap-2">
+            <Logo />
           </Link>
 
-          {/* Nav */}
-          <nav className="hidden md:flex items-center gap-6" aria-label="Main navigation">
-            <Link href="/#features" className="text-sm text-surface-600 hover:text-surface-900 transition-colors">
-              Features
-            </Link>
-            <Link href="/#about" className="text-sm text-surface-600 hover:text-surface-900 transition-colors">
-              About
-            </Link>
+          {/* Navigation */}
+          <nav className="hidden md:flex items-center gap-1 flex-1" aria-label="Main">
+            {NAV_LINKS.map(({ label, href }) => (
+              <Link
+                key={href}
+                href={href}
+                className="rounded-lg px-3 py-1.5 text-sm text-foreground-muted hover:text-foreground hover:bg-surface transition-colors"
+              >
+                {label}
+              </Link>
+            ))}
           </nav>
 
-          {/* Auth actions */}
-          <div className="flex items-center gap-2 shrink-0">
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/login">Sign in</Link>
+          {/* Actions */}
+          <div className="flex items-center gap-2 ml-auto">
+            <Button href={ROUTES.LOGIN} variant="ghost" size="sm">
+              Sign in
             </Button>
-            <Button asChild size="sm">
-              <Link href="/register/student">Get started</Link>
+            <Button href={ROUTES.REGISTER.STUDENT} size="sm">
+              Get started
             </Button>
           </div>
         </div>

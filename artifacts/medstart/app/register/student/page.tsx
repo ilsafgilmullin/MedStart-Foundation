@@ -1,142 +1,147 @@
-import Link from 'next/link'
 import type { Metadata } from 'next'
-import { Container } from '@/components/layout/container'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import Link from 'next/link'
+import { BookOpen } from 'lucide-react'
+import { Logo }    from '@/components/common/logo'
+import { Button }  from '@/components/ui/button'
+import { Input }   from '@/components/ui/input'
+import { Select }  from '@/components/ui/select'
+import { Badge }   from '@/components/ui/badge'
+import { ROUTES }  from '@/lib/constants'
 
-export const metadata: Metadata = {
-  title: 'Student registration',
-}
+export const metadata: Metadata = { title: 'Student registration' }
+
+const YEAR_OPTIONS = [1, 2, 3, 4, 5, 6].map((y) => ({
+  label: `Year ${y}`,
+  value: String(y),
+}))
+
+const FIELD_OPTIONS = [
+  'Medicine (MBBS/MD)',
+  'Nursing',
+  'Pharmacy',
+  'Dentistry',
+  'Physiotherapy',
+  'Biomedical Sciences',
+  'Public Health',
+  'Other',
+].map((f) => ({ label: f, value: f.toLowerCase().replace(/\s+/g, '-') }))
 
 // ─── Page ──────────────────────────────────────────────────────────────────
 export default function RegisterStudentPage() {
   return (
-    <div className="min-h-dvh bg-surface-50 flex flex-col">
+    <div className="min-h-dvh bg-surface flex flex-col">
       {/* Top bar */}
-      <header className="border-b border-surface-200 bg-surface-0/80 backdrop-blur-md">
-        <Container>
-          <div className="flex h-16 items-center justify-between">
-            <Link href="/" className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600">
-                <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 text-white" aria-hidden="true">
-                  <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-                  <path d="M9 12h6M12 9v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              </div>
-              <span className="text-lg font-semibold text-surface-900 tracking-tight">MedStart</span>
+      <header className="border-b border-border bg-background/80 backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Link href={ROUTES.HOME}>
+            <Logo />
+          </Link>
+          <p className="text-sm text-foreground-muted">
+            Already have an account?{' '}
+            <Link href={ROUTES.LOGIN} className="font-medium text-brand-600 hover:text-brand-700 transition-colors">
+              Sign in
             </Link>
-            <span className="text-sm text-surface-500">
-              Already have an account?{' '}
-              <Link href="/login" className="font-medium text-primary-600 hover:text-primary-700">
-                Sign in
-              </Link>
-            </span>
-          </div>
-        </Container>
+          </p>
+        </div>
       </header>
 
-      {/* Main */}
-      <main className="flex flex-1 items-center justify-center py-12 px-4">
+      <main className="flex flex-1 items-start justify-center py-12 px-4">
         <div className="w-full max-w-md">
           {/* Role switcher */}
           <div className="mb-6 flex items-center justify-center gap-2">
-            <Badge variant="primary" className="text-sm px-3 py-1">Student</Badge>
-            <span className="text-surface-300">·</span>
+            <Badge variant="brand" className="gap-1.5">
+              <BookOpen className="h-3 w-3" />
+              Student
+            </Badge>
+            <span className="text-foreground-subtle">·</span>
             <Link
-              href="/register/teacher"
-              className="text-sm text-surface-500 hover:text-surface-700 transition-colors"
+              href={ROUTES.REGISTER.TEACHER}
+              className="text-sm text-foreground-muted hover:text-foreground transition-colors"
             >
               Register as educator →
             </Link>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Create your student account</CardTitle>
-              <CardDescription>
-                Start your medical learning journey with MedStart.
-              </CardDescription>
-            </CardHeader>
+          {/* Heading */}
+          <div className="mb-8 text-center">
+            <h1 className="text-2xl font-bold text-foreground tracking-tight">Create your account</h1>
+            <p className="mt-2 text-sm text-foreground-muted">Start your medical learning journey today — it's free.</p>
+          </div>
 
-            <CardContent>
-              {/*
-               * TODO: wire up student registration.
-               * Keep this form empty — no handlers, no business logic.
-               */}
-              <form className="flex flex-col gap-4" noValidate>
-                <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    label="First name"
-                    type="text"
-                    placeholder="Ada"
-                    autoComplete="given-name"
-                    required
-                  />
-                  <Input
-                    label="Last name"
-                    type="text"
-                    placeholder="Lovelace"
-                    autoComplete="family-name"
-                    required
-                  />
-                </div>
-
+          {/* Form card */}
+          <div className="rounded-2xl border border-border bg-background p-8 shadow-sm">
+            {/*
+             * TODO: wire up student registration logic.
+             * Handlers, validation, and API calls will be added separately.
+             */}
+            <form className="flex flex-col gap-5" noValidate>
+              <div className="grid grid-cols-2 gap-4">
                 <Input
-                  label="Email address"
-                  type="email"
-                  placeholder="you@university.edu"
-                  autoComplete="email"
-                  required
-                />
-
-                <Input
-                  label="Field of study"
+                  label="First name"
                   type="text"
-                  placeholder="e.g. Medicine, Nursing, Pharmacy"
-                />
-
-                <Input
-                  label="Year of study"
-                  type="number"
-                  placeholder="e.g. 2"
-                  min={1}
-                  max={10}
-                />
-
-                <Input
-                  label="Password"
-                  type="password"
-                  placeholder="Min. 8 characters"
-                  autoComplete="new-password"
-                  hint="Use at least 8 characters with a mix of letters and numbers."
+                  placeholder="Ada"
+                  autoComplete="given-name"
                   required
                 />
-
                 <Input
-                  label="Confirm password"
-                  type="password"
-                  placeholder="Repeat your password"
-                  autoComplete="new-password"
+                  label="Last name"
+                  type="text"
+                  placeholder="Lovelace"
+                  autoComplete="family-name"
                   required
                 />
+              </div>
 
-                <Button type="submit" fullWidth className="mt-2">
-                  Create student account
-                </Button>
-              </form>
-            </CardContent>
+              <Input
+                label="Email address"
+                type="email"
+                placeholder="you@university.edu"
+                autoComplete="email"
+                hint="We'll send a verification email."
+                required
+              />
 
-            <CardFooter className="flex-col gap-2 text-center">
-              <p className="text-xs text-surface-400">
-                By creating an account you agree to our{' '}
-                <Link href="#" className="underline hover:text-surface-600">Terms of Service</Link>{' '}
-                and{' '}
-                <Link href="#" className="underline hover:text-surface-600">Privacy Policy</Link>.
-              </p>
-            </CardFooter>
-          </Card>
+              <Select
+                label="Field of study"
+                options={FIELD_OPTIONS}
+                placeholder="Select your field"
+              />
+
+              <Select
+                label="Year of study"
+                options={YEAR_OPTIONS}
+                placeholder="Select your year"
+              />
+
+              <Input
+                label="Password"
+                type="password"
+                placeholder="Create a strong password"
+                autoComplete="new-password"
+                hint="At least 8 characters with letters and numbers."
+                required
+              />
+
+              <Input
+                label="Confirm password"
+                type="password"
+                placeholder="Repeat your password"
+                autoComplete="new-password"
+                required
+              />
+
+              <Button type="submit" fullWidth className="mt-1">
+                Create student account
+              </Button>
+            </form>
+          </div>
+
+          <p className="mt-6 text-center text-xs text-foreground-subtle">
+            By creating an account you agree to our{' '}
+            <Link href="#" className="underline hover:text-foreground-muted">Terms</Link>{' '}
+            and{' '}
+            <Link href="#" className="underline hover:text-foreground-muted">Privacy Policy</Link>.
+          </p>
         </div>
       </main>
     </div>

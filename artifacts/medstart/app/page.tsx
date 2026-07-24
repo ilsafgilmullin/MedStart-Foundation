@@ -1,160 +1,438 @@
-import Link from 'next/link'
-import type { Metadata } from 'next'
-import { Header } from '@/components/layout/header'
-import { Container } from '@/components/layout/container'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
+import type { Metadata } from "next";
+import { ArrowRight, BookOpen, Users, BarChart2, ShieldCheck, Globe, Zap, CheckCircle2 } from "lucide-react";
+
+import { Header } from "@/components/layout/header";
+import { Footer } from "@/components/layout/footer";
+import { Container } from "@/components/layout/container";
+
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+
+import { ROUTES } from "@/lib/constants";
 
 export const metadata: Metadata = {
-  title: 'MedStart — Modern Medical Education',
-}
+  title: "MedStart — Современное медицинское образование",
+  description:
+    "Платформа MedStart объединяет студентов-медиков и преподавателей для современного обучения.",
+};
 
-// ─── Feature cards data ────────────────────────────────────────────────────
 const features = [
   {
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
-      </svg>
-    ),
-    title: 'Structured Learning',
-    description: 'Curated curricula designed by leading medical educators aligned with international standards.',
+    icon: <BookOpen className="h-5 w-5" />,
+    title: "Структурированные программы",
+    description:
+      "Пошаговые образовательные программы, основанные на современных международных медицинских стандартах.",
   },
   {
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
-      </svg>
-    ),
-    title: 'Expert Teachers',
-    description: 'Connect with verified medical professionals who bring real-world clinical expertise to every lesson.',
+    icon: <Users className="h-5 w-5" />,
+    title: "Опытные преподаватели",
+    description:
+      "Обучайтесь у практикующих врачей и преподавателей с подтвержденной квалификацией.",
   },
   {
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-      </svg>
-    ),
-    title: 'Progress Tracking',
-    description: 'Visualise your growth with detailed analytics and personalised study insights.',
+    icon: <BarChart2 className="h-5 w-5" />,
+    title: "Отслеживание прогресса",
+    description:
+      "Следите за своими результатами, достижениями и рекомендациями по дальнейшему обучению.",
   },
   {
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <rect x="2" y="3" width="20" height="14" rx="2" ry="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
-      </svg>
-    ),
-    title: 'Interactive Content',
-    description: 'Case studies, simulations, and multimedia resources that go beyond the textbook.',
+    icon: <ShieldCheck className="h-5 w-5" />,
+    title: "Проверенные специалисты",
+    description:
+      "Каждый преподаватель проходит проверку документов и профессионального опыта.",
   },
-]
+  {
+    icon: <Globe className="h-5 w-5" />,
+    title: "Международное сообщество",
+    description:
+      "Общайтесь со студентами и преподавателями со всего мира.",
+  },
+  {
+    icon: <Zap className="h-5 w-5" />,
+    title: "Гибкое обучение",
+    description:
+      "Занимайтесь в удобное время и проходите материал в собственном темпе.",
+  },
+];
 
-// ─── Page ──────────────────────────────────────────────────────────────────
+const benefits = [
+  "Гибкое расписание",
+  "Индивидуальные и групповые занятия",
+  "Материалы по медицинским специальностям",
+  "Проверка знаний",
+  "Сертификат после завершения курса",
+  "Полная поддержка мобильных устройств",
+];
+
 export default function HomePage() {
   return (
     <>
       <Header />
 
       <main>
+
         {/* Hero */}
-        <section className="relative overflow-hidden bg-surface-0 py-24 sm:py-32" id="hero">
-          {/* Background gradient blob */}
+
+        <section
+          className="relative overflow-hidden bg-background py-16 sm:py-20 lg:py-24"
+          aria-label="Главный экран"
+        >
           <div
-            className="pointer-events-none absolute -top-40 left-1/2 -z-10 h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-primary-100 opacity-40 blur-3xl"
             aria-hidden="true"
-          />
+            className="pointer-events-none absolute inset-0 flex justify-center"
+          >
+            <div className="h-[520px] w-[520px] rounded-full bg-brand-500/10 blur-3xl" />
+          </div>
 
-          <Container size="narrow">
-            <div className="flex flex-col items-center text-center gap-6">
-              <Badge variant="primary">Now in beta</Badge>
+          <Container size="lg">
 
-              <h1 className="text-4xl font-bold tracking-tight text-surface-900 sm:text-5xl lg:text-6xl leading-tight">
-                Where medical education
+            <div className="mx-auto max-w-3xl text-center">
+
+              <Badge variant="brand" className="mb-5">
+                🚀 Платформа уже доступна
+              </Badge>
+
+              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-tight">
+
+                Современное
                 <br />
-                <span className="text-primary-600">begins.</span>
+
+                <span className="text-brand-500">
+                  медицинское образование
+                </span>
+
               </h1>
 
-              <p className="max-w-xl text-lg text-surface-500 leading-relaxed">
-                MedStart connects students and educators on a single platform built for the demands of modern healthcare training.
+              <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-foreground-muted">
+                MedStart объединяет студентов и преподавателей медицины
+                на современной образовательной платформе для эффективного
+                обучения, обмена опытом и профессионального развития.
               </p>
 
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                <Button asChild size="lg">
-                  <Link href="/register/student">Join as a student</Link>
-                </Button>
-                <Button asChild variant="outline" size="lg">
-                  <Link href="/register/teacher">I&apos;m an educator</Link>
-                </Button>
-              </div>
-            </div>
-          </Container>
-        </section>
+              <div className="mt-10 flex flex-wrap justify-center gap-4">
 
-        {/* Features */}
-        <section className="py-20 bg-surface-50" id="features">
+                <Button
+                  href={ROUTES.REGISTER.STUDENT}
+                  size="lg"
+                >
+                  Начать обучение
+
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+
+                <Button
+                  href={ROUTES.REGISTER.TEACHER}
+                  variant="outline"
+                  size="lg"
+                >
+                  Стать преподавателем
+                </Button>
+
+              </div>
+
+              <p className="mt-5 text-sm text-foreground-subtle">
+                Бесплатная регистрация • Без банковской карты
+              </p>
+
+            </div>
+
+          </Container>
+
+        </section>
+        {/* Статистика */}
+
+        <section
+          className="border-y border-border bg-surface py-8"
+          aria-label="Статистика"
+        >
           <Container>
-            <div className="mb-12 text-center">
-              <h2 className="text-3xl font-bold text-surface-900 tracking-tight">
-                Everything you need to learn smarter
-              </h2>
-              <p className="mt-3 text-surface-500">
-                A complete toolkit for students and educators in one place.
-              </p>
-            </div>
+            <div className="grid grid-cols-2 gap-8 text-center lg:grid-cols-4">
 
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {features.map((f) => (
-                <Card key={f.title}>
-                  <CardContent className="flex flex-col gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
-                      {f.icon}
-                    </div>
-                    <h3 className="font-semibold text-surface-900">{f.title}</h3>
-                    <p className="text-sm text-surface-500 leading-relaxed">{f.description}</p>
-                  </CardContent>
-                </Card>
+              {[
+                {
+                  value: "50 000+",
+                  label: "Студентов",
+                },
+                {
+                  value: "3 200+",
+                  label: "Преподавателей",
+                },
+                {
+                  value: "98%",
+                  label: "Положительных отзывов",
+                },
+                {
+                  value: "80+",
+                  label: "Стран",
+                },
+              ].map((item) => (
+                <div key={item.label}>
+                  <div className="text-3xl font-bold text-brand-500">
+                    {item.value}
+                  </div>
+
+                  <div className="mt-2 text-sm text-foreground-muted">
+                    {item.label}
+                  </div>
+                </div>
               ))}
+
             </div>
           </Container>
         </section>
 
-        {/* CTA */}
-        <section className="py-20 bg-primary-600" id="cta">
-          <Container size="narrow">
-            <div className="flex flex-col items-center text-center gap-6">
-              <h2 className="text-3xl font-bold text-white tracking-tight">
-                Ready to get started?
+        {/* Возможности */}
+
+        <section
+          className="py-20"
+          id="features"
+        >
+          <Container>
+
+            <div className="mx-auto mb-14 max-w-2xl text-center">
+
+              <Badge className="mb-4">
+                Возможности платформы
+              </Badge>
+
+              <h2 className="text-4xl font-bold tracking-tight">
+
+                Всё необходимое
+                <br />
+                для современного медицинского образования
+
               </h2>
-              <p className="text-primary-200 max-w-md">
-                Join thousands of medical students and educators already using MedStart.
-              </p>
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                <Button asChild variant="secondary" size="lg">
-                  <Link href="/register/student">Create account</Link>
-                </Button>
-                <Button asChild variant="ghost" size="lg" className="text-white hover:text-white hover:bg-primary-700">
-                  <Link href="/login">Sign in</Link>
-                </Button>
-              </div>
-            </div>
-          </Container>
-        </section>
-      </main>
 
-      {/* Footer */}
-      <footer className="border-t border-surface-200 bg-surface-0 py-10">
-        <Container>
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-surface-400">
-            <p>© {new Date().getFullYear()} MedStart. All rights reserved.</p>
-            <div className="flex gap-6">
-              <Link href="#" className="hover:text-surface-600 transition-colors">Privacy</Link>
-              <Link href="#" className="hover:text-surface-600 transition-colors">Terms</Link>
-              <Link href="#" className="hover:text-surface-600 transition-colors">Contact</Link>
+              <p className="mt-5 text-lg text-foreground-muted">
+
+                MedStart создавался специально
+                для медицинского образования,
+                а не является переделанной LMS.
+
+              </p>
+
             </div>
-          </div>
-        </Container>
-      </footer>
-    </>
-  )
-}
+
+            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+
+              {features.map((feature) => (
+
+                <div
+                  key={feature.title}
+                  className="rounded-2xl border border-border bg-background p-7 transition-all hover:-translate-y-1 hover:shadow-lg"
+                >
+
+                  <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50 text-brand-500">
+                    {feature.icon}
+                  </div>
+
+                  <h3 className="mb-3 text-xl font-semibold">
+                    {feature.title}
+                  </h3>
+
+                  <p className="leading-7 text-foreground-muted">
+                    {feature.description}
+                  </p>
+
+                </div>
+
+              ))}
+
+            </div>
+
+          </Container>
+
+        </section>
+        {/* Для преподавателей */}
+
+        <section
+          id="educators"
+          className="border-y border-border bg-surface py-20"
+        >
+          <Container>
+
+            <div className="grid items-center gap-14 lg:grid-cols-2">
+
+              <div>
+
+                <Badge variant="brand" className="mb-4">
+                  Для преподавателей
+                </Badge>
+
+                <h2 className="text-4xl font-bold tracking-tight">
+                  Делитесь знаниями.
+                  <br />
+                  Обучайте новое поколение врачей.
+                </h2>
+
+                <p className="mt-6 text-lg leading-8 text-foreground-muted">
+                  Создавайте авторские курсы, публикуйте учебные материалы,
+                  проводите индивидуальные и групповые занятия, отслеживайте
+                  прогресс студентов и развивайте свою профессиональную
+                  репутацию на одной современной платформе.
+                </p>
+
+                <div className="mt-8 grid gap-4 sm:grid-cols-2">
+
+                  {benefits.map((item) => (
+
+                    <div
+                      key={item}
+                      className="flex items-center gap-3 rounded-xl border border-border bg-background p-4"
+                    >
+                      <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
+
+                      <span className="text-sm font-medium">
+                        {item}
+                      </span>
+
+                    </div>
+
+                  ))}
+
+                </div>
+
+                <div className="mt-10">
+
+                  <Button
+                    href={ROUTES.REGISTER.TEACHER}
+                    size="lg"
+                  >
+                    Стать преподавателем
+
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+
+                </div>
+
+              </div>
+
+              {/* Правая карточка */}
+
+              <div className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-brand-500 to-brand-700 p-10 text-white shadow-2xl">
+
+                <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
+
+                <div className="relative">
+
+                  <div className="mb-6 inline-flex rounded-full bg-white/15 px-4 py-2 text-sm">
+                    MedStart PRO
+                  </div>
+
+                  <h3 className="text-3xl font-bold">
+                    Создавайте собственные курсы
+                  </h3>
+
+                  <p className="mt-5 text-white/90 leading-8">
+                    Загружайте лекции, тесты, презентации, клинические случаи,
+                    проводите онлайн-занятия и формируйте профессиональное
+                    медицинское сообщество.
+                  </p>
+
+                  <div className="mt-10 grid grid-cols-2 gap-4">
+
+                    <div className="rounded-2xl bg-white/10 p-5 backdrop-blur">
+
+                      <div className="text-3xl font-bold">
+                        24/7
+                      </div>
+
+                      <div className="mt-1 text-sm text-white/80">
+                        доступ к материалам
+                      </div>
+
+                    </div>
+
+                    <div className="rounded-2xl bg-white/10 p-5 backdrop-blur">
+
+                      <div className="text-3xl font-bold">
+                        AI
+                      </div>
+
+                      <div className="mt-1 text-sm text-white/80">
+                        интеллектуальная помощь
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </Container>
+
+        </section>
+                {/* Финальный призыв */}
+
+                <section
+                  className="relative overflow-hidden py-20"
+                  aria-label="Начать"
+                >
+
+                  <div className="absolute inset-0 bg-brand-600" />
+
+                  <div className="absolute left-1/2 top-0 h-[450px] w-[450px] -translate-x-1/2 rounded-full bg-white/10 blur-3xl" />
+
+                  <Container>
+
+                    <div className="relative mx-auto max-w-3xl text-center text-white">
+
+                      <Badge
+                        variant="outline"
+                        className="mb-6 border-white/30 text-white"
+                      >
+                        MedStart
+                      </Badge>
+
+                      <h2 className="text-4xl font-bold tracking-tight sm:text-5xl">
+
+                        Начните обучение уже сегодня
+
+                      </h2>
+
+                      <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-brand-100">
+
+                        Присоединяйтесь к студентам и преподавателям,
+                        которые уже используют MedStart
+                        для современного медицинского образования.
+
+                      </p>
+
+                      <div className="mt-10 flex flex-wrap justify-center gap-4">
+
+                        <Button
+                          href={ROUTES.REGISTER.STUDENT}
+                          variant="secondary"
+                          size="lg"
+                        >
+                          Создать аккаунт
+                        </Button>
+
+                        <Button
+                          href={ROUTES.LOGIN}
+                          variant="ghost"
+                          size="lg"
+                          className="border border-white/20 text-white hover:bg-white/10 hover:text-white"
+                        >
+                          Войти
+                        </Button>
+
+                      </div>
+
+                    </div>
+
+                  </Container>
+
+                </section>
+
+              </main>
+
+              <Footer />
+
+            </>
+          )
+        }
