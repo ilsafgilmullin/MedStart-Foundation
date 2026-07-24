@@ -1,46 +1,59 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { GraduationCap } from 'lucide-react'
-import { Logo }      from '@/components/common/logo'
-import { Button }    from '@/components/ui/button'
-import { Input }     from '@/components/ui/input'
-import { Textarea }  from '@/components/ui/textarea'
-import { Select }    from '@/components/ui/select'
-import { Badge }     from '@/components/ui/badge'
-import { Alert }     from '@/components/ui/alert'
-import { ROUTES }    from '@/lib/constants'
+import { Logo }     from '@/components/common/logo'
+import { Button }   from '@/components/ui/button'
+import { Input }    from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Select }   from '@/components/ui/select'
+import { Badge }    from '@/components/ui/badge'
+import { Alert }    from '@/components/ui/alert'
+import { ROUTES }   from '@/lib/constants'
 
-export const metadata: Metadata = { title: 'Educator registration' }
+export const metadata: Metadata = { title: 'Регистрация преподавателя' }
 
 const SPECIALIZATION_OPTIONS = [
-  'Internal Medicine', 'Cardiology', 'Neurology', 'Surgery',
-  'Paediatrics', 'Obstetrics & Gynaecology', 'Psychiatry',
-  'Radiology', 'Anaesthesiology', 'Pathology', 'Pharmacology',
-  'General Practice', 'Emergency Medicine', 'Other',
-].map((s) => ({ label: s, value: s.toLowerCase().replace(/\s+/g, '-') }))
+  { label: 'Терапия',                        value: 'internal-medicine'     },
+  { label: 'Кардиология',                    value: 'cardiology'            },
+  { label: 'Неврология',                     value: 'neurology'             },
+  { label: 'Хирургия',                       value: 'surgery'               },
+  { label: 'Педиатрия',                      value: 'paediatrics'           },
+  { label: 'Акушерство и гинекология',       value: 'obstetrics-gynaecology'},
+  { label: 'Психиатрия',                     value: 'psychiatry'            },
+  { label: 'Лучевая диагностика',            value: 'radiology'             },
+  { label: 'Анестезиология',                 value: 'anaesthesiology'       },
+  { label: 'Патологическая анатомия',        value: 'pathology'             },
+  { label: 'Фармакология',                   value: 'pharmacology'          },
+  { label: 'Общая врачебная практика',       value: 'general-practice'      },
+  { label: 'Скорая медицинская помощь',      value: 'emergency-medicine'    },
+  { label: 'Другое',                         value: 'other'                 },
+]
 
 const EXPERIENCE_OPTIONS = [
-  { label: '1–3 years',   value: '1-3'  },
-  { label: '3–5 years',   value: '3-5'  },
-  { label: '5–10 years',  value: '5-10' },
-  { label: '10–20 years', value: '10-20'},
-  { label: '20+ years',   value: '20+'  },
+  { label: '1–3 года',           value: '1-3'  },
+  { label: '3–5 лет',            value: '3-5'  },
+  { label: '5–10 лет',           value: '5-10' },
+  { label: '10–20 лет',          value: '10-20'},
+  { label: '20 и более лет',     value: '20+'  },
 ]
 
 // ─── Page ──────────────────────────────────────────────────────────────────
 export default function RegisterTeacherPage() {
   return (
     <div className="min-h-dvh bg-surface flex flex-col">
-      {/* Top bar */}
+      {/* Верхняя панель */}
       <header className="border-b border-border bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href={ROUTES.HOME}>
+          <Link href={ROUTES.HOME} aria-label="MedStart — главная">
             <Logo />
           </Link>
           <p className="text-sm text-foreground-muted">
-            Already have an account?{' '}
-            <Link href={ROUTES.LOGIN} className="font-medium text-brand-600 hover:text-brand-700 transition-colors">
-              Sign in
+            Уже есть аккаунт?{' '}
+            <Link
+              href={ROUTES.LOGIN}
+              className="font-medium text-brand-600 hover:text-brand-700 transition-colors"
+            >
+              Войти
             </Link>
           </p>
         </div>
@@ -48,67 +61,68 @@ export default function RegisterTeacherPage() {
 
       <main className="flex flex-1 items-start justify-center py-12 px-4">
         <div className="w-full max-w-lg">
-          {/* Role switcher */}
+          {/* Переключатель роли */}
           <div className="mb-6 flex items-center justify-center gap-2">
             <Link
               href={ROUTES.REGISTER.STUDENT}
               className="text-sm text-foreground-muted hover:text-foreground transition-colors"
             >
-              ← Register as student
+              ← Регистрация студента
             </Link>
-            <span className="text-foreground-subtle">·</span>
+            <span className="text-foreground-subtle" aria-hidden="true">·</span>
             <Badge variant="brand" className="gap-1.5">
-              <GraduationCap className="h-3 w-3" />
-              Educator
+              <GraduationCap className="h-3 w-3" aria-hidden="true" />
+              Преподаватель
             </Badge>
           </div>
 
-          {/* Heading */}
+          {/* Заголовок */}
           <div className="mb-8 text-center">
-            <h1 className="text-2xl font-bold text-foreground tracking-tight">Become an educator</h1>
+            <h1 className="text-2xl font-bold text-foreground tracking-tight">Стать преподавателем</h1>
             <p className="mt-2 text-sm text-foreground-muted">
-              Share your clinical expertise and shape future medical professionals.
+              Делитесь клиническим опытом и формируйте профессионалов медицины будущего.
             </p>
           </div>
 
-          {/* Verification notice */}
+          {/* Уведомление о проверке */}
           <Alert variant="info" className="mb-6">
-            <strong>Educator profiles are manually reviewed.</strong> We verify credentials before your profile goes live — this usually takes 1–2 business days.
+            <strong>Анкеты преподавателей проверяются вручную.</strong>{' '}
+            Мы верифицируем документы перед публикацией профиля — это занимает 1–2 рабочих дня.
           </Alert>
 
-          {/* Form card */}
+          {/* Форма */}
           <div className="rounded-2xl border border-border bg-background p-8 shadow-sm">
             {/*
-             * TODO: wire up educator registration logic.
-             * Handlers, credential verification, and API calls will be added separately.
+             * TODO: подключить логику регистрации преподавателя.
+             * Обработчики, проверка документов и API-запросы будут добавлены отдельно.
              */}
             <form className="flex flex-col gap-5" noValidate>
               <div className="grid grid-cols-2 gap-4">
                 <Input
-                  label="First name"
+                  label="Имя"
                   type="text"
-                  placeholder="Jane"
+                  placeholder="Анна"
                   autoComplete="given-name"
                   required
                 />
                 <Input
-                  label="Last name"
+                  label="Фамилия"
                   type="text"
-                  placeholder="Smith"
+                  placeholder="Иванова"
                   autoComplete="family-name"
                   required
                 />
               </div>
 
               <Input
-                label="Professional title"
+                label="Профессиональное звание"
                 type="text"
-                placeholder="e.g. Dr., Prof., Assoc. Prof."
-                hint="Include your recognised title."
+                placeholder="например, д-р мед. н., проф., доц."
+                hint="Укажите ваше официальное звание или учёную степень."
               />
 
               <Input
-                label="Email address"
+                label="Электронная почта"
                 type="email"
                 placeholder="you@institution.org"
                 autoComplete="email"
@@ -116,70 +130,77 @@ export default function RegisterTeacherPage() {
               />
 
               <Input
-                label="Current institution"
+                label="Место работы"
                 type="text"
-                placeholder="e.g. Mayo Clinic, UCL"
-                hint="Hospital, university, or medical school."
+                placeholder="например, НМИЦ кардиологии, Первый МГМУ им. Сеченова"
+                hint="Больница, университет или медицинская академия."
               />
 
               <Select
-                label="Medical specialization"
+                label="Медицинская специализация"
                 options={SPECIALIZATION_OPTIONS}
-                placeholder="Select specialization"
+                placeholder="Выберите специализацию"
                 required
               />
 
               <Select
-                label="Years of clinical experience"
+                label="Стаж клинической практики"
                 options={EXPERIENCE_OPTIONS}
-                placeholder="Select experience range"
+                placeholder="Выберите диапазон стажа"
               />
 
               <Input
-                label="Medical licence / registration number"
+                label="Лицензия / регистрационный номер"
                 type="text"
-                placeholder="e.g. GMC 1234567"
-                hint="Used for credential verification only — never shown publicly."
+                placeholder="например, РЛН 123456"
+                hint="Используется только для проверки квалификации — никогда не отображается публично."
               />
 
               <Textarea
-                label="Short biography"
-                placeholder="Tell students about your background, clinical experience, and what you plan to teach on MedStart..."
-                hint="Aim for 100–300 words. This appears on your public profile."
+                label="Краткая биография"
+                placeholder="Расскажите студентам о вашем образовании, клинической практике и о том, чему вы планируете учить на MedStart..."
+                hint="Рекомендуется 100–300 слов. Отображается в вашем публичном профиле."
                 maxLength={500}
                 showCount
               />
 
               <Input
-                label="Password"
+                label="Пароль"
                 type="password"
-                placeholder="Create a strong password"
+                placeholder="Придумайте надёжный пароль"
                 autoComplete="new-password"
-                hint="At least 8 characters with letters and numbers."
+                hint="Не менее 8 символов: буквы и цифры."
                 required
               />
 
               <Input
-                label="Confirm password"
+                label="Подтвердите пароль"
                 type="password"
-                placeholder="Repeat your password"
+                placeholder="Повторите пароль"
                 autoComplete="new-password"
                 required
               />
 
               <Button type="submit" fullWidth className="mt-1">
-                Submit educator application
+                Подать заявку преподавателя
               </Button>
             </form>
           </div>
 
           <p className="mt-6 text-center text-xs text-foreground-subtle">
-            By creating an account you agree to our{' '}
-            <Link href="#" className="underline hover:text-foreground-muted">Terms</Link>
-            {' '}and{' '}
-            <Link href="#" className="underline hover:text-foreground-muted">Privacy Policy</Link>.
-            Educator applications are subject to our{' '}
-            <Link href="#" className="underline hover:text-foreground-muted">Educator Standards</Link>.
+            Создавая аккаунт, вы соглашаетесь с нашими{' '}
+            <Link href="#" className="underline hover:text-foreground-muted">
+              Условиями использования
+            </Link>
+            {' '}и{' '}
+            <Link href="#" className="underline hover:text-foreground-muted">
+              Политикой конфиденциальности
+            </Link>
+            . Заявки преподавателей рассматриваются согласно{' '}
+            <Link href="#" className="underline hover:text-foreground-muted">
+              Стандартам преподавателей
+            </Link>
+            .
           </p>
         </div>
       </main>

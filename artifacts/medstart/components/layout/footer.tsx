@@ -2,44 +2,56 @@ import Link from 'next/link'
 import { Container } from '@/components/layout/container'
 import { Logo } from '@/components/common/logo'
 
-const LINKS = {
-  Product:  [
-    { label: 'Features', href: '/#features' },
-    { label: 'Pricing',  href: '/#pricing'  },
-    { label: 'Roadmap',  href: '/#roadmap'  },
-    { label: 'Changelog', href: '/#changelog' },
-  ],
-  Company: [
-    { label: 'About',    href: '/about'    },
-    { label: 'Blog',     href: '/blog'     },
-    { label: 'Careers',  href: '/careers'  },
-    { label: 'Contact',  href: '/contact'  },
-  ],
-  Legal: [
-    { label: 'Privacy policy', href: '/privacy' },
-    { label: 'Terms of service', href: '/terms' },
-    { label: 'Cookie policy', href: '/cookies' },
-  ],
-} as const
+const LINK_GROUPS = [
+  {
+    id:    'product',
+    title: 'Продукт',
+    links: [
+      { label: 'Возможности',        href: '/#features'  },
+      { label: 'Тарифы',             href: '/#pricing'   },
+      { label: 'Дорожная карта',     href: '/#roadmap'   },
+      { label: 'История изменений',  href: '/#changelog' },
+    ],
+  },
+  {
+    id:    'company',
+    title: 'Компания',
+    links: [
+      { label: 'О нас',    href: '/about'   },
+      { label: 'Блог',     href: '/blog'    },
+      { label: 'Вакансии', href: '/careers' },
+      { label: 'Контакты', href: '/contact' },
+    ],
+  },
+  {
+    id:    'legal',
+    title: 'Правовая информация',
+    links: [
+      { label: 'Политика конфиденциальности', href: '/privacy' },
+      { label: 'Условия использования',       href: '/terms'   },
+      { label: 'Политика cookies',            href: '/cookies' },
+    ],
+  },
+] as const
 
 export function Footer() {
   return (
     <footer className="border-t border-border bg-background">
       <Container>
         <div className="py-12 grid grid-cols-2 gap-8 md:grid-cols-5">
-          {/* Brand column */}
+          {/* Колонка с брендом */}
           <div className="col-span-2 md:col-span-2 flex flex-col gap-4">
-            <Link href="/" className="inline-flex items-center gap-2">
+            <Link href="/" className="inline-flex items-center gap-2" aria-label="MedStart — главная">
               <Logo />
             </Link>
             <p className="text-sm text-foreground-muted max-w-xs leading-relaxed">
-              The modern platform connecting medical students and educators worldwide.
+              Современная платформа, объединяющая студентов-медиков и преподавателей по всему миру.
             </p>
           </div>
 
-          {/* Link columns */}
-          {Object.entries(LINKS).map(([title, links]) => (
-            <div key={title} className="flex flex-col gap-3">
+          {/* Колонки со ссылками */}
+          {LINK_GROUPS.map(({ id, title, links }) => (
+            <div key={id} className="flex flex-col gap-3">
               <p className="text-xs font-semibold text-foreground uppercase tracking-wider">{title}</p>
               <ul className="flex flex-col gap-2">
                 {links.map(({ label, href }) => (
@@ -57,13 +69,13 @@ export function Footer() {
           ))}
         </div>
 
-        {/* Bottom bar */}
+        {/* Нижняя панель */}
         <div className="border-t border-border py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-xs text-foreground-subtle">
-            © {new Date().getFullYear()} MedStart. All rights reserved.
+            © {new Date().getFullYear()} MedStart. Все права защищены.
           </p>
           <p className="text-xs text-foreground-subtle">
-            Built for the future of medical education.
+            Создано для будущего медицинского образования.
           </p>
         </div>
       </Container>

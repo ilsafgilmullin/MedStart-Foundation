@@ -2,7 +2,7 @@
 
 export const APP_NAME = 'MedStart' as const
 export const APP_DESCRIPTION =
-  'The modern platform connecting medical students and educators.' as const
+  'Современная платформа для медицинского образования, объединяющая студентов и преподавателей.' as const
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://medstart.app'
 
 // ─── Routes ─────────────────────────────────────────────────────────────────

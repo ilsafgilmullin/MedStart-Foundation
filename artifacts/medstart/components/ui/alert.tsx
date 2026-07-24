@@ -79,7 +79,7 @@ export function Alert({
             'ml-auto shrink-0 rounded-md p-0.5 opacity-60 hover:opacity-100 transition-opacity',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current',
           )}
-          aria-label="Dismiss"
+          aria-label="Закрыть"
         >
           <X className="h-4 w-4" />
         </button>

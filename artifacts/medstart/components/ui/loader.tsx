@@ -88,7 +88,7 @@ export function Loader({
   return (
     <div
       role="status"
-      aria-label={label ?? 'Loading'}
+      aria-label={label ?? 'Загрузка'}
       className={cn('inline-flex items-center gap-2 text-brand-500', className)}
       style={color ? { color } : undefined}
     >
@@ -96,7 +96,7 @@ export function Loader({
       {variant === 'dots'    && <DotsLoader    size={size} />}
       {variant === 'bar'     && <BarLoader />}
       {label && <span className="text-sm text-foreground-muted">{label}</span>}
-      <span className="sr-only">{label ?? 'Loading...'}</span>
+      <span className="sr-only">{label ?? 'Загрузка...'}</span>
     </div>
   )
 }

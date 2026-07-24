@@ -1,7 +1,7 @@
 {
   "/_not-found/page": "/_not-found",
-  "/page": "/",
-  "/register/teacher/page": "/register/teacher",
+  "/register/student/page": "/register/student",
   "/login/page": "/login",
-  "/register/student/page": "/register/student"
+  "/register/teacher/page": "/register/teacher",
+  "/page": "/"
 }
