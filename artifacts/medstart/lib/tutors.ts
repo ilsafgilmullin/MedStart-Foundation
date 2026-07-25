@@ -17,16 +17,12 @@ export interface TutorCardData {
   title?: string
   specialization?: string
   experience?: string
+  institution?: string
   bio?: string
   lessonPrice: number
   rating: number
   reviewCount: number
   studentsCount: number
-}
-
-interface PublicTutorDocument extends TutorCardData {
-  status: 'active' | 'blocked'
-  isPublic: boolean
 }
 
 function text(value: unknown, fallback = '') {
@@ -45,22 +41,30 @@ function toTutor(uid: string, data: Record<string, unknown>): TutorCardData {
     title: text(data.title) || undefined,
     specialization: text(data.specialization) || undefined,
     experience: text(data.experience) || undefined,
+    institution: text(data.institution) || undefined,
     bio: text(data.bio) || undefined,
     lessonPrice: number(data.lessonPrice),
     rating: number(data.rating),
-    reviewCount: number(data.reviewCount),
+    reviewCount: number(data.reviewsCount),
     studentsCount: number(data.studentsCount),
   }
 }
 
 function isPublished(data: Record<string, unknown>) {
-  return data.status === 'active' && data.isPublic === true
+  return (
+    data.role === 'tutor' &&
+    data.status === 'active' &&
+    data.isPublic === true
+  )
 }
 
-export async function getPublicTutors(maxResults = 6): Promise<TutorCardData[]> {
+export async function getPublicTutors(
+  maxResults = 50,
+): Promise<TutorCardData[]> {
   const snapshot = await getDocs(
     query(
-      collection(db, 'tutors'),
+      collection(db, 'users'),
+      where('role', '==', 'tutor'),
       where('status', '==', 'active'),
       where('isPublic', '==', true),
       firestoreLimit(Math.max(1, Math.min(maxResults, 50))),
@@ -72,12 +76,14 @@ export async function getPublicTutors(maxResults = 6): Promise<TutorCardData[]> 
     .sort((a, b) => b.rating - a.rating || b.reviewCount - a.reviewCount)
 }
 
-export async function getPublicTutorById(uid: string): Promise<TutorCardData | null> {
-  const snapshot = await getDoc(doc(db, 'tutors', uid))
+export async function getPublicTutorById(
+  uid: string,
+): Promise<TutorCardData | null> {
+  const snapshot = await getDoc(doc(db, 'users', uid))
   if (!snapshot.exists()) return null
 
-  const data = snapshot.data() as PublicTutorDocument
-  if (!isPublished(data as unknown as Record<string, unknown>)) return null
+  const data = snapshot.data() as Record<string, unknown>
+  if (!isPublished(data)) return null
 
-  return toTutor(snapshot.id, data as unknown as Record<string, unknown>)
+  return toTutor(snapshot.id, data)
 }
