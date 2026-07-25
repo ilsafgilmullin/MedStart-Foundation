@@ -1,7 +1,0 @@
-{
-  "/_not-found/page": "app/_not-found/page.js",
-  "/register/student/page": "app/register/student/page.js",
-  "/login/page": "app/login/page.js",
-  "/register/teacher/page": "app/register/teacher/page.js",
-  "/page": "app/page.js"
-}
