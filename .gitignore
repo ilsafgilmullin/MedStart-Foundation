@@ -1,18 +1,27 @@
 # See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
 # compiled output
-dist
-tmp
-out-tsc
+**/.next/
+**/dist/
+dist/
+tmp/
+out-tsc/
 *.tsbuildinfo
-.expo
-.expo-shared
+.expo/
+.expo-shared/
+.turbo/
+.vercel/
 
 # dependencies
-node_modules
+node_modules/
+
+# environment files and secrets
+.env
+.env.*
+!.env.example
 
 # IDEs and editors
-/.idea
+/.idea/
 .project
 .classpath
 .c9/
@@ -28,14 +37,14 @@ node_modules
 !.vscode/extensions.json
 
 # misc
-/.sass-cache
+/.sass-cache/
 /connect.lock
-/coverage
+/coverage/
 /libpeerconnection.log
 npm-debug.log
 yarn-error.log
 testem.log
-/typings
+/typings/
 
 # System Files
 .DS_Store
@@ -44,6 +53,11 @@ Thumbs.db
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 
-# Replit
+# Replit runtime and temporary copies
 .cache/
 .local/
+.config/
+artifacts/medstart_backup/
+artifacts/mockup-sandbox/
+MedStart-Foundation/
+*.zip
