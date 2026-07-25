@@ -1,0 +1,63 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function currentUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return signedIn() && (
+        request.auth.token.owner == true ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          currentUser().data.role == 'admin' &&
+          currentUser().data.status == 'active')
+      );
+    }
+
+    function createsValidOwnProfile(uid) {
+      return isSelf(uid) &&
+        request.resource.data.uid == uid &&
+        request.resource.data.email == request.auth.token.email &&
+        (
+          (request.resource.data.role == 'student' &&
+            request.resource.data.status == 'active' &&
+            request.resource.data.isPublic == false) ||
+          (request.resource.data.role == 'tutor' &&
+            request.resource.data.status == 'pending' &&
+            request.resource.data.isPublic == false)
+        );
+    }
+
+    function keepsProtectedFields() {
+      return request.resource.data.uid == resource.data.uid &&
+        request.resource.data.email == resource.data.email &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.status == resource.data.status &&
+        request.resource.data.isPublic == resource.data.isPublic &&
+        request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    match /users/{uid} {
+      allow create: if createsValidOwnProfile(uid);
+      allow read: if isSelf(uid) || isAdmin() ||
+        (resource.data.role == 'tutor' &&
+          resource.data.status == 'active' &&
+          resource.data.isPublic == true);
+      allow update: if isAdmin() || (isSelf(uid) && keepsProtectedFields());
+      allow delete: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,99 @@
+'use client'
+
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
+import { LogOut, X } from 'lucide-react'
+
+import { getNavigation } from './Navigation'
+import { useAuth } from '@/hooks/useAuth'
+
+export default function MobileSidebar({
+  open,
+  onClose,
+}: {
+  open: boolean
+  onClose: () => void
+}) {
+  const pathname = usePathname()
+  const router = useRouter()
+  const { role, logout } = useAuth()
+
+  async function exit() {
+    await logout()
+    onClose()
+    router.replace('/login')
+  }
+
+  return (
+    <>
+      {open && (
+        <button
+          type="button"
+          aria-label="Закрыть меню"
+          onClick={onClose}
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+        />
+      )}
+
+      <aside
+        className={`fixed left-0 top-0 z-50 flex h-screen w-72 flex-col bg-white shadow-2xl transition-transform lg:hidden ${
+          open ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="flex items-center justify-between border-b p-6">
+          <Link
+            href="/dashboard"
+            onClick={onClose}
+            className="text-xl font-bold text-violet-700"
+          >
+            MedStart
+          </Link>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl p-2 hover:bg-slate-100"
+            aria-label="Закрыть меню"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <nav className="flex-1 space-y-1 overflow-y-auto p-5">
+          {getNavigation(role).map((item) => {
+            const Icon = item.icon
+            const active =
+              pathname === item.href ||
+              (item.href !== '/dashboard' && pathname.startsWith(item.href))
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onClose}
+                className={`flex items-center gap-3 rounded-2xl px-4 py-3 font-medium ${
+                  active
+                    ? 'bg-violet-600 text-white'
+                    : 'text-slate-700 hover:bg-violet-50'
+                }`}
+              >
+                <Icon className="h-5 w-5" />
+                {item.name}
+              </Link>
+            )
+          })}
+        </nav>
+
+        <div className="border-t p-5">
+          <button
+            type="button"
+            onClick={exit}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-100 py-3 text-red-600"
+          >
+            <LogOut className="h-5 w-5" />
+            Выйти
+          </button>
+        </div>
+      </aside>
+    </>
+  )
+}
