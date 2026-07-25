@@ -1,35 +1,106 @@
+'use client'
+
 import Link from 'next/link'
-import { CalendarDays, MessageSquare, Search, UserRound } from 'lucide-react'
+import {
+  CalendarDays,
+  MessageCircle,
+  Search,
+  ShieldCheck,
+  UserRound,
+} from 'lucide-react'
 
-import { ROUTES } from '@/lib/constants'
+import { useAuth } from '@/hooks/useAuth'
 
-const actions = [
-  { title: 'Найти репетитора', description: 'Открыть каталог специалистов', href: ROUTES.TUTORS, icon: Search },
-  { title: 'Расписание', description: 'Посмотреть будущие занятия', href: ROUTES.SCHEDULE, icon: CalendarDays },
-  { title: 'Сообщения', description: 'Открыть переписку', href: ROUTES.MESSAGES, icon: MessageSquare },
-  { title: 'Профиль', description: 'Изменить данные аккаунта', href: ROUTES.PROFILE, icon: UserRound },
+const studentActions = [
+  {
+    title: 'Найти репетитора',
+    description: 'Открыть каталог специалистов',
+    href: '/dashboard/tutors',
+    icon: Search,
+  },
+  {
+    title: 'Мои занятия',
+    description: 'Посмотреть расписание',
+    href: '/dashboard/schedule',
+    icon: CalendarDays,
+  },
+  {
+    title: 'Сообщения',
+    description: 'Перейти к диалогам',
+    href: '/dashboard/messages',
+    icon: MessageCircle,
+  },
+  {
+    title: 'Профиль',
+    description: 'Изменить данные аккаунта',
+    href: '/dashboard/profile',
+    icon: UserRound,
+  },
+]
+
+const tutorActions = [
+  {
+    title: 'Мои занятия',
+    description: 'Посмотреть расписание',
+    href: '/dashboard/schedule',
+    icon: CalendarDays,
+  },
+  {
+    title: 'Сообщения',
+    description: 'Перейти к диалогам со студентами',
+    href: '/dashboard/messages',
+    icon: MessageCircle,
+  },
+  {
+    title: 'Публичный профиль',
+    description: 'Проверить данные анкеты',
+    href: '/dashboard/profile',
+    icon: UserRound,
+  },
+  {
+    title: 'Настройки',
+    description: 'Настроить аккаунт',
+    href: '/dashboard/settings',
+    icon: ShieldCheck,
+  },
 ]
 
 export default function QuickActions() {
+  const { role } = useAuth()
+
+  const actions =
+    role === 'admin' || role === 'owner'
+      ? [
+          {
+            title: 'Администрирование',
+            description: 'Открыть панель модерации',
+            href: '/dashboard/admin',
+            icon: ShieldCheck,
+          },
+          ...tutorActions.slice(1),
+        ]
+      : role === 'tutor'
+        ? tutorActions
+        : studentActions
+
   return (
     <section className="space-y-5">
       <div>
         <h2 className="text-2xl font-bold text-slate-900">Быстрые действия</h2>
-        <p className="mt-1 text-slate-500">Основные разделы MedStart</p>
+        <p className="mt-1 text-slate-500">Основные разделы платформы.</p>
       </div>
-
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {actions.map(({ title, description, href, icon: Icon }) => (
           <Link
-            key={title}
+            key={href}
             href={href}
-            className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100 text-violet-700">
-              <Icon className="h-5 w-5" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
+              <Icon className="h-6 w-6" />
             </div>
             <h3 className="mt-5 font-bold text-slate-900">{title}</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
+            <p className="mt-2 text-sm text-slate-500">{description}</p>
           </Link>
         ))}
       </div>
