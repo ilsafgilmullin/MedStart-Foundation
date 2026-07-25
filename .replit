@@ -1,5 +1,7 @@
 modules = ["nodejs-24"]
 
+run = "pnpm install --frozen-lockfile && pnpm --filter @workspace/medstart dev"
+
 [deployment]
 router = "application"
 deploymentTarget = "autoscale"
@@ -7,30 +9,6 @@ deploymentTarget = "autoscale"
 [deployment.postBuild]
 args = ["pnpm", "store", "prune"]
 env = { "CI" = "true" }
-
-[workflows]
-runButton = "Project"
-
-[[workflows.workflow]]
-name = "Project"
-mode = "parallel"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "MedStart"
-
-[[workflows.workflow]]
-name = "MedStart"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm --filter @workspace/medstart dev"
-waitForPort = 3000
-
-[workflows.workflow.metadata]
-outputType = "webview"
 
 [agent]
 stack = "PNPM_WORKSPACE"
