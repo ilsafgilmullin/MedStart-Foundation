@@ -1,4 +1,16 @@
-import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore'
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+} from 'firebase/firestore'
+
 import { db } from './firebase'
 import type { UserProfile, UserRole, UserStatus } from './user-profile'
 
@@ -23,9 +35,18 @@ export interface CreateUserProfileParams {
   onboardingCompleted?: boolean
 }
 
+export type EditableUserProfilePatch = Partial<
+  Omit<
+    UserProfile,
+    'uid' | 'email' | 'role' | 'status' | 'isPublic' | 'createdAt' | 'updatedAt'
+  >
+>
+
 const clean = (value: string | undefined) => value?.trim() || ''
 
-export async function createUserProfile(input: CreateUserProfileParams): Promise<UserProfile> {
+export async function createUserProfile(
+  input: CreateUserProfileParams,
+): Promise<UserProfile> {
   const profile: UserProfile = {
     uid: input.uid,
     firstName: clean(input.firstName),
@@ -61,18 +82,28 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   return snapshot.exists() ? (snapshot.data() as UserProfile) : null
 }
 
-export async function updateUserProfile(uid: string, patch: Partial<UserProfile>) {
-  const { uid: _uid, createdAt: _createdAt, ...safePatch } = patch
-  await updateDoc(doc(db, 'users', uid), { ...safePatch, updatedAt: serverTimestamp() })
+export async function updateUserProfile(
+  uid: string,
+  patch: EditableUserProfilePatch,
+): Promise<void> {
+  await updateDoc(doc(db, 'users', uid), {
+    ...patch,
+    updatedAt: serverTimestamp(),
+  })
 }
 
-export async function deleteUserProfile(uid: string) {
+export async function deleteUserProfile(uid: string): Promise<void> {
   await deleteDoc(doc(db, 'users', uid))
 }
 
 export async function getPublicTutors(): Promise<UserProfile[]> {
-  const snapshot = await getDocs(query(collection(db, 'users'), where('role', '==', 'tutor')))
-  return snapshot.docs
-    .map((item) => item.data() as UserProfile)
-    .filter((item) => item.status === 'active' && item.isPublic)
+  const tutorsQuery = query(
+    collection(db, 'users'),
+    where('role', '==', 'tutor'),
+    where('status', '==', 'active'),
+    where('isPublic', '==', true),
+  )
+
+  const snapshot = await getDocs(tutorsQuery)
+  return snapshot.docs.map((item) => item.data() as UserProfile)
 }
