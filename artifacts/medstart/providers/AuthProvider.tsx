@@ -84,9 +84,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const role = user && isOwnerUid(user.uid) ? 'owner' : profile?.role ?? null
+  const role: EffectiveUserRole | null =
+    user && isOwnerUid(user.uid) ? 'owner' : profile?.role ?? null
 
-  const value = useMemo(
+  const value = useMemo<AuthContextValue>(
     () => ({
       user,
       profile,
