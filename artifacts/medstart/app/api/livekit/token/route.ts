@@ -32,6 +32,31 @@ function isLiveKitConfigurationError(error: unknown) {
   )
 }
 
+function isVideoServerEnabled() {
+  const value = process.env.MEDSTART_LIVE_VIDEO_ENABLED
+    ?.trim()
+    .toLowerCase()
+
+  return value === 'true' || value === '1' || value === 'yes'
+}
+
+function demoCredentials(booking: Booking) {
+  return {
+    serverUrl: 'demo://local',
+    roomName: `medstart-demo-${booking.id}`,
+    participantToken: 'protected-no-server-mode',
+  }
+}
+
+function demoResponse(booking: Booking) {
+  return NextResponse.json(demoCredentials(booking), {
+    headers: {
+      'Cache-Control': 'no-store',
+      'X-MedStart-Mode': 'medical-workspace-demo',
+    },
+  })
+}
+
 export async function POST(request: Request) {
   const authorization = request.headers.get('authorization') || ''
   if (!authorization.startsWith('Bearer ')) {
@@ -94,6 +119,13 @@ export async function POST(request: Request) {
       return jsonError('Это занятие запланировано в очном формате.', 409)
     }
 
+    // До подключения собственного видеосервера MedStart намеренно работает
+    // в защищённом режиме медицинской доски. Наличие старых LIVEKIT_* secrets
+    // больше не заставляет клиент подключаться к недоступному серверу.
+    if (!isVideoServerEnabled()) {
+      return demoResponse(booking)
+    }
+
     const participantName =
       participantRole === 'student' ? booking.studentName : booking.tutorName
 
@@ -113,19 +145,7 @@ export async function POST(request: Request) {
         throw error
       }
 
-      return NextResponse.json(
-        {
-          serverUrl: 'demo://local',
-          roomName: `medstart-demo-${booking.id}`,
-          participantToken: 'protected-no-server-mode',
-        },
-        {
-          headers: {
-            'Cache-Control': 'no-store',
-            'X-MedStart-Mode': 'medical-workspace-demo',
-          },
-        },
-      )
+      return demoResponse(booking)
     }
   } catch (error) {
     const message =
