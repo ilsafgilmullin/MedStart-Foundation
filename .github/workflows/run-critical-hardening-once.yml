@@ -109,7 +109,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           rm -f CRITICAL_MIGRATION_ERROR.txt CRITICAL_TYPECHECK_ERROR.txt
-          git add -A -- firestore.rules storage.rules artifacts/medstart scripts CRITICAL_MIGRATION_ERROR.txt CRITICAL_TYPECHECK_ERROR.txt
+          git add -A
           if ! git diff --cached --quiet; then
             git commit -m "security: fix critical MedStart vulnerabilities"
             git push origin HEAD:fix/critical-hardening-v1
