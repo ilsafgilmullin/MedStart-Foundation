@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start -p ${PORT:-3000} -H 0.0.0.0",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:rules": "node scripts/test-critical-rules.mjs"
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.23",
@@ -23,6 +24,7 @@
     "tailwind-merge": "catalog:"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@tailwindcss/postcss": "^4.1.14",
     "@types/dom-mediacapture-record": "^1.0.22",
     "@types/node": "catalog:",
