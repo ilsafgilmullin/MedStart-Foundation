@@ -41,9 +41,36 @@ export interface AuthSession {
   profile: UserProfile
 }
 
+function clearSensitiveBrowserState() {
+  if (typeof window === 'undefined') return
+
+  try {
+    for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+      const key = window.localStorage.key(index)
+      if (key?.startsWith('medstart-')) window.localStorage.removeItem(key)
+    }
+  } catch {
+    // Some private browsing modes disable localStorage access.
+  }
+
+  try {
+    window.sessionStorage.clear()
+  } catch {
+    // Session storage is best-effort cleanup only.
+  }
+}
+
+async function secureSignOut() {
+  try {
+    await signOut(auth)
+  } finally {
+    clearSensitiveBrowserState()
+  }
+}
+
 async function assertAccess(profile: UserProfile) {
   if (profile.status === 'blocked' || profile.status === 'deleted') {
-    await signOut(auth)
+    await secureSignOut()
     throw new Error(
       profile.status === 'blocked'
         ? 'Аккаунт заблокирован.'
@@ -63,7 +90,7 @@ export async function login(
   )
   const profile = await getUserProfile(credential.user.uid)
   if (!profile) {
-    await signOut(auth)
+    await secureSignOut()
     throw new Error('Профиль пользователя не найден. Обратитесь в поддержку.')
   }
   await assertAccess(profile)
@@ -86,6 +113,7 @@ async function registerWithProfile(
     return { credential, profile }
   } catch (error) {
     await deleteUser(credential.user).catch(() => undefined)
+    clearSensitiveBrowserState()
     throw error
   }
 }
@@ -130,7 +158,7 @@ export function registerTutor(input: TutorRegistrationInput) {
   )
 }
 
-export const logout = () => signOut(auth)
+export const logout = secureSignOut
 export const resetPassword = (email: string) =>
   sendPasswordResetEmail(auth, email.trim().toLowerCase())
 export async function resendEmailVerification(): Promise<void> {
