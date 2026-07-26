@@ -1,12 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import {
-  getFirestore,
-  initializeFirestore,
-  memoryLocalCache,
-  persistentLocalCache,
-  persistentMultipleTabManager,
-} from 'firebase/firestore'
+import { getFirestore, initializeFirestore, memoryLocalCache } from 'firebase/firestore'
 
 /**
  * Firebase's web configuration is public client metadata. Keeping it here
@@ -37,13 +31,11 @@ export const auth = getAuth(app)
 
 function createFirestore() {
   try {
+    // Medical and lesson data must not remain in a persistent browser cache
+    // after logout or on a shared device. Firestore still keeps pending writes
+    // in memory while the current page is open.
     return initializeFirestore(app, {
-      localCache:
-        typeof window === 'undefined'
-          ? memoryLocalCache()
-          : persistentLocalCache({
-              tabManager: persistentMultipleTabManager(),
-            }),
+      localCache: memoryLocalCache(),
     })
   } catch {
     // Hot reload can initialize the same Firebase app more than once.
