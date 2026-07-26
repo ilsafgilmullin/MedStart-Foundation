@@ -1,0 +1,59 @@
+name: MedStart v6 validation
+
+on:
+  push:
+    branches:
+      - agent/medical-workspace-v6
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: medstart-v6-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Prepare Firebase rules
+        run: node scripts/apply-v6-rules.mjs
+
+      - name: Commit generated rules
+        id: rules
+        shell: bash
+        run: |
+          if git diff --quiet -- firestore.rules storage.rules; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "MedStart CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add firestore.rules storage.rules
+          git commit -m "chore: apply v6 Firebase rules"
+          git push origin HEAD:${GITHUB_REF_NAME}
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck MedStart
+        run: pnpm --filter @workspace/medstart typecheck
+
+      - name: Build MedStart
+        run: pnpm --filter @workspace/medstart build
