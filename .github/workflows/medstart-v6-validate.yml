@@ -10,11 +10,11 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: medstart-v6-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   validate:
@@ -36,24 +36,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Prepare Firebase rules
-        run: node scripts/apply-v6-rules.mjs
-
-      - name: Commit generated rules
-        if: github.event_name == 'push'
-        id: rules
+      - name: Verify Firebase rules
         shell: bash
         run: |
-          if git diff --quiet -- firestore.rules storage.rules; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git config user.name "MedStart CI"
-          git config user.email "actions@users.noreply.github.com"
-          git add firestore.rules storage.rules
-          git commit -m "chore: apply v6 Firebase rules"
-          git push origin HEAD:${GITHUB_REF_NAME}
-          echo "changed=true" >> "$GITHUB_OUTPUT"
+          node scripts/apply-v6-rules.mjs
+          git diff --exit-code -- firestore.rules storage.rules
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
