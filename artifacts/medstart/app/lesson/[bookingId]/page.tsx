@@ -24,20 +24,30 @@ import { formatBookingDate, type Booking } from '@/lib/domain'
 
 type JoinMode = 'video' | 'audio'
 
+function RoomLoader({ label }: { label: string }) {
+  return (
+    <div className="flex min-h-dvh items-center justify-center bg-slate-950 text-white">
+      <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
+        <LoaderCircle className="h-5 w-5 animate-spin text-violet-300" />
+        <span className="text-sm font-semibold">{label}</span>
+      </div>
+    </div>
+  )
+}
+
+const DemoLessonRoom = dynamic(
+  () => import('@/components/live/DemoLessonRoom'),
+  {
+    ssr: false,
+    loading: () => <RoomLoader label="Открываем медицинскую доску…" />,
+  },
+)
+
 const LiveLessonRoom = dynamic(
   () => import('@/components/live/LiveLessonRoom'),
   {
     ssr: false,
-    loading: () => (
-      <div className="flex min-h-dvh items-center justify-center bg-slate-950 text-white">
-        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
-          <LoaderCircle className="h-5 w-5 animate-spin text-violet-300" />
-          <span className="text-sm font-semibold">
-            Подключаем защищённую комнату…
-          </span>
-        </div>
-      </div>
-    ),
+    loading: () => <RoomLoader label="Подключаем защищённую комнату…" />,
   },
 )
 
@@ -101,6 +111,9 @@ export default function LessonPage() {
     setJoining(mode)
     setError('')
 
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 15_000)
+
     try {
       const idToken = await user.getIdToken()
       const response = await fetch('/api/livekit/token', {
@@ -110,15 +123,17 @@ export default function LessonPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ bookingId: booking.id }),
+        signal: controller.signal,
       })
       const payload = (await response.json()) as
-        LiveSessionCredentials | { error?: string }
+        | LiveSessionCredentials
+        | { error?: string }
 
       if (!response.ok || !('participantToken' in payload)) {
         throw new Error(
           'error' in payload && payload.error
             ? payload.error
-            : 'Не удалось открыть видеокомнату.',
+            : 'Не удалось открыть комнату занятия.',
         )
       }
 
@@ -126,11 +141,14 @@ export default function LessonPage() {
       setCredentials(payload)
     } catch (caught) {
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Не удалось открыть видеокомнату.',
+        caught instanceof DOMException && caught.name === 'AbortError'
+          ? 'Подготовка комнаты заняла слишком много времени. Повторите попытку.'
+          : caught instanceof Error
+            ? caught.message
+            : 'Не удалось открыть комнату занятия.',
       )
     } finally {
+      window.clearTimeout(timeout)
       setJoining(null)
     }
   }
@@ -141,6 +159,21 @@ export default function LessonPage() {
 
   if (credentials && booking && user && profile) {
     const participantRole = user.uid === booking.tutorUid ? 'tutor' : 'student'
+
+    // В бесплатном режиме не загружаем LiveKit-клиент вообще. Это устраняет
+    // зависание Safari на этапе импорта/подключения видеобиблиотеки.
+    if (credentials.serverUrl === 'demo://local') {
+      return (
+        <DemoLessonRoom
+          booking={booking}
+          userUid={user.uid}
+          userName={profile.displayName}
+          participantRole={participantRole}
+          onLeave={leave}
+        />
+      )
+    }
+
     return (
       <>
         <LiveLessonRoom
@@ -268,15 +301,15 @@ export default function LessonPage() {
               <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
                 <MonitorUp className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" />
                 <p>
-                  Видео, демонстрация экрана и умная доска находятся в одной
-                  комнате.
+                  Медицинская доска, снимки, клинические шаблоны и чат работают
+                  без платного видеосервера.
                 </p>
               </div>
               <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
                 <Wifi className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
                 <p>
-                  При слабой сети можно отключить камеру: голос, чат и доска
-                  продолжат работать.
+                  Видеосвязь включим отдельным переключателем после подключения
+                  собственного сервера.
                 </p>
               </div>
             </div>
@@ -291,35 +324,29 @@ export default function LessonPage() {
             <div className="mt-7 space-y-3">
               <button
                 type="button"
-                onClick={() => void join('video')}
+                onClick={() => void join('audio')}
                 disabled={joining !== null}
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-4 font-semibold text-white transition hover:bg-violet-500 disabled:opacity-60"
               >
-                {joining === 'video' ? (
+                {joining !== null ? (
                   <LoaderCircle className="h-5 w-5 animate-spin" />
                 ) : (
-                  <Video className="h-5 w-5" />
+                  <MonitorUp className="h-5 w-5" />
                 )}
-                Войти с камерой
+                Открыть медицинскую доску
               </button>
               <button
                 type="button"
-                onClick={() => void join('audio')}
-                disabled={joining !== null}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/5 px-5 py-4 font-semibold text-white transition hover:bg-white/10 disabled:opacity-60"
+                disabled
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 font-semibold text-slate-500"
               >
-                {joining === 'audio' ? (
-                  <LoaderCircle className="h-5 w-5 animate-spin" />
-                ) : (
-                  <AudioLines className="h-5 w-5" />
-                )}
-                Только голос и доска
+                <Video className="h-5 w-5" />
+                Видео будет подключено позже
               </button>
             </div>
 
             <p className="mt-5 text-center text-xs leading-5 text-slate-500">
-              Браузер запросит разрешение на микрофон и, при необходимости,
-              камеру.
+              Доска, чат и учебные медицинские инструменты доступны уже сейчас.
             </p>
           </div>
         </section>
