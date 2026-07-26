@@ -82,7 +82,9 @@ const newLabStart = medicalLib.indexOf('export function newLabRow()', loadStart)
 if (loadStart < 0 || newLabStart < 0) {
   throw new Error('medical asset loader boundaries not found')
 }
-const quarantinedLoaders = `export async function loadMedicalAssetObjectUrl(_asset: MedicalAsset) {
+const quarantinedLoaders = `export async function loadMedicalAssetObjectUrl(
+  _asset: MedicalAsset,
+): Promise<string> {
   throw new Error(
     'Ранее загруженные медицинские файлы помещены в карантин и недоступны участникам занятия.',
   )
