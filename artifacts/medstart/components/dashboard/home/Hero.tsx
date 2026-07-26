@@ -2,34 +2,24 @@
 
 import Link from 'next/link'
 import { ArrowRight, Sparkles } from 'lucide-react'
-
 import { useAuth } from '@/hooks/useAuth'
 
 export default function Hero() {
   const { profile, role } = useAuth()
-  const firstName = profile?.firstName?.trim() || 'пользователь'
+  const firstName = profile?.firstName || 'пользователь'
   const tutorPending = role === 'tutor' && profile?.status === 'pending'
-  const isAdmin = role === 'admin' || role === 'owner'
+  const tutorRejected = role === 'tutor' && profile?.status === 'rejected'
+  const isModerator = role === 'admin' || role === 'owner'
 
-  const description = isAdmin
-    ? 'Управляйте пользователями, проверяйте анкеты репетиторов и контролируйте работу платформы.'
+  const description = isModerator
+    ? 'Проверяйте анкеты репетиторов и управляйте доступом к каталогу MedStart.'
     : tutorPending
       ? 'Ваш профиль репетитора отправлен на проверку. После одобрения он появится в каталоге.'
-      : role === 'tutor'
-        ? 'Управляйте занятиями, расписанием и общением со студентами в одном месте.'
-        : 'Выберите медицинского репетитора, согласуйте время и начните обучение.'
-
-  const primaryHref = isAdmin
-    ? '/dashboard/admin'
-    : role === 'tutor'
-      ? '/dashboard/profile'
-      : '/dashboard/tutors'
-
-  const primaryLabel = isAdmin
-    ? 'Открыть модерацию'
-    : role === 'tutor'
-      ? 'Открыть профиль'
-      : 'Найти репетитора'
+      : tutorRejected
+        ? `Анкета требует доработки${profile?.moderationNote ? `: ${profile.moderationNote}` : '.'}`
+        : role === 'tutor'
+          ? 'Управляйте занятиями, расписанием и общением со студентами в одном месте.'
+          : 'Выберите медицинского репетитора, согласуйте время и начните обучение.'
 
   return (
     <section className="relative overflow-hidden rounded-[32px] bg-gradient-to-br from-violet-700 via-violet-600 to-indigo-700 p-8 text-white shadow-xl lg:p-10">
@@ -46,21 +36,39 @@ export default function Hero() {
         </h1>
         <p className="mt-5 max-w-2xl text-lg text-violet-100">{description}</p>
         <div className="mt-8 flex flex-wrap gap-3">
-          <Link
-            href={primaryHref}
-            className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 font-semibold text-violet-700"
-          >
-            {primaryLabel}
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-          {!isAdmin && role !== 'tutor' && (
+          {isModerator && (
             <Link
-              href="/dashboard/profile"
-              className="rounded-2xl border border-white/25 bg-white/10 px-6 py-3 font-semibold"
+              href="/dashboard/admin"
+              className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 font-semibold text-violet-700"
             >
-              Открыть профиль
+              Открыть модерацию
+              <ArrowRight className="h-4 w-4" />
             </Link>
           )}
+          {role === 'student' && (
+            <Link
+              href="/dashboard/tutors"
+              className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 font-semibold text-violet-700"
+            >
+              Найти репетитора
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          )}
+          {role === 'tutor' && profile?.status === 'active' && (
+            <Link
+              href="/dashboard/requests"
+              className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 font-semibold text-violet-700"
+            >
+              Проверить заявки
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          )}
+          <Link
+            href="/dashboard/profile"
+            className="rounded-2xl border border-white/25 bg-white/10 px-6 py-3 font-semibold"
+          >
+            Открыть профиль
+          </Link>
         </div>
       </div>
     </section>

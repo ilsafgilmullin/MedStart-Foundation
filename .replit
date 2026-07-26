@@ -13,7 +13,7 @@ runButton = "Project"
 
 [[workflows.workflow]]
 name = "Project"
-mode = "sequential"
+mode = "parallel"
 author = "agent"
 
 [[workflows.workflow.tasks]]
@@ -22,12 +22,7 @@ args = "MedStart"
 
 [[workflows.workflow]]
 name = "MedStart"
-mode = "sequential"
 author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm install --frozen-lockfile"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
@@ -40,10 +35,6 @@ outputType = "webview"
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
-
-[postMerge]
-path = "scripts/post-merge.sh"
-timeoutMs = 20000
 
 [[ports]]
 localPort = 3000

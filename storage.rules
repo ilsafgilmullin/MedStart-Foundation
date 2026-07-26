@@ -1,0 +1,78 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userProfile(userId) {
+      return firestore.get(
+        /databases/(default)/documents/users/$(userId)
+      ).data;
+    }
+
+    function isOwner() {
+      return signedIn()
+        && request.auth.uid == 'm8JbbeeXMmZzywUwHboOyMm9MnG2';
+    }
+
+    function isActiveAdmin() {
+      return signedIn()
+        && userProfile(request.auth.uid).role == 'admin'
+        && userProfile(request.auth.uid).status == 'active';
+    }
+
+    function isModerator() {
+      return isOwner() || isActiveAdmin();
+    }
+
+    function isActiveTutor(userId) {
+      return signedIn()
+        && request.auth.uid == userId
+        && userProfile(userId).role == 'tutor'
+        && userProfile(userId).status == 'active';
+    }
+
+    function isPublishedSubmission(submissionId) {
+      return firestore.get(
+        /databases/(default)/documents/knowledgeSubmissions/$(submissionId)
+      ).data.status == 'published';
+    }
+
+    match /avatars/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+
+    match /knowledge-submissions/{userId}/{submissionId}/{fileName} {
+      allow read: if signedIn()
+        && (
+          request.auth.uid == userId
+          || isModerator()
+          || isPublishedSubmission(submissionId)
+        );
+
+      allow create: if isActiveTutor(userId)
+        && fileName.matches('.+[.]pdf')
+        && request.resource.size > 0
+        && request.resource.size <= 25 * 1024 * 1024
+        && request.resource.contentType == 'application/pdf';
+
+      allow update: if false;
+
+      allow delete: if signedIn()
+        && (
+          request.auth.uid == userId
+          || isModerator()
+        );
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

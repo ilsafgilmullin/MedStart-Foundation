@@ -1,56 +1,100 @@
-# MedStart 2.0
+# MedStart
 
-MedStart — маркетплейс медицинских репетиторов. Студенты самостоятельно выбирают специалистов, записываются на занятия и общаются с ними в едином кабинете.
+Маркетплейс медицинских репетиторов с собственным онлайн-занятием MedStart
+Live, совместной умной доской, проверяемой учебной материальной базой,
+Next.js 15, React 19, Tailwind CSS 4, Firebase и self-hosted LiveKit.
 
-## Команды
+## Запуск
 
-- `pnpm --filter @workspace/medstart dev` — запустить Next.js на порту 3000.
-- `pnpm --filter @workspace/medstart typecheck` — проверить TypeScript.
-- `pnpm --filter @workspace/medstart build` — собрать приложение.
-- `pnpm run typecheck` — проверить все workspace-пакеты.
-- `pnpm run build` — полная проверка и сборка workspace.
+Кнопка **Run** запускает:
 
-## Роли
+```bash
+pnpm --filter @workspace/medstart dev
+```
 
-- `student` — сразу получает активный аккаунт и доступ к каталогу.
-- `tutor` — создаётся со статусом `pending`; публикация только после модерации.
-- `admin` — модерирует пользователей и анкеты.
-- `owner` — эффективная роль владельца, временно определяется по `NEXT_PUBLIC_OWNER_UID`; перед production переносится в Firebase custom claims.
+Проверка перед публикацией:
 
-## Основные маршруты
-
-- `/` — публичная главная.
-- `/login` — вход.
-- `/register/student` — регистрация студента.
-- `/register/tutor` — заявка репетитора.
-- `/dashboard` — кабинет.
-- `/dashboard/tutors` — каталог проверенных репетиторов.
-- `/dashboard/schedule` — занятия.
-- `/dashboard/messages` — сообщения.
-- `/dashboard/profile` — профиль.
-- `/dashboard/admin` — модерация для администратора и владельца.
-
-## Firebase
-
-Клиентская конфигурация задаётся переменными из `artifacts/medstart/.env.example`.
-
-Правила безопасности находятся в `firestore.rules`. Клиент не может самостоятельно менять `role`, `status`, `isPublic`, `email`, `uid` и `createdAt`. Публично читаются только активные опубликованные репетиторы.
+```bash
+pnpm install --frozen-lockfile
+pnpm run typecheck
+pnpm run build
+```
 
 ## Структура
 
 ```text
 artifacts/medstart/
-├── app/                    # Next.js App Router
-├── components/dashboard/   # кабинет и навигация
-├── hooks/                  # формы и auth hooks
-├── lib/                    # Firebase, auth, Firestore, модели
-├── providers/              # AuthProvider
-└── messages/               # русские строки интерфейса
+├── app/
+│   ├── dashboard/
+│   │   ├── admin/
+│   │   ├── knowledge/
+│   │   ├── materials/
+│   │   ├── messages/
+│   │   ├── profile/
+│   │   ├── requests/
+│   │   ├── schedule/
+│   │   ├── settings/
+│   │   ├── students/
+│   │   └── tutors/
+│   ├── lesson/[bookingId]/
+│   ├── api/livekit/token/
+│   ├── login/
+│   └── register/
+├── components/dashboard/
+├── components/live/
+├── hooks/
+├── lib/
+│   └── server/
+└── providers/
+
+infra/livekit/
+firestore.rules
+firestore.indexes.json
+storage.rules
+firebase.json
 ```
 
-## Запрещено возвращать
+## Firebase
 
-- роль или маршрут `teacher`;
-- фиктивную статистику, курсы и сертификаты;
-- `.next`, `node_modules`, `.env`, ZIP и резервные копии в Git;
-- выдачу `owner` или `admin` через клиентскую регистрацию.
+Конфигурация веб-приложения берётся из `NEXT_PUBLIC_FIREBASE_*`. Для стабильной
+сборки Replit предусмотрена безопасная резервная публичная web-конфигурация
+проекта `medstart-e9bfe`.
+
+После замены исходников обязательно опубликовать правила:
+
+```bash
+npx firebase-tools deploy --only firestore,storage
+```
+
+Подробности находятся в `FIREBASE_SETUP.md`.
+
+## MedStart Live
+
+Клиент видеозанятия и защищённая выдача токенов уже реализованы. Для реального
+подключения комнаты нужны серверные Secrets LiveKit и Firebase Admin.
+
+Инструкции:
+
+- `LIVE_LESSON_SETUP.md` — подключение и контрольный тест;
+- `ARCHITECTURE_RU_RESILIENCE.md` — целевая российская инфраструктура,
+  резервирование и план миграции;
+- `infra/livekit/` — безопасный шаблон self-hosted SFU/TURN.
+
+## Учебная база
+
+- `LEARNING_BASE_SETUP.md` — уровни доверия, официальные источники, правила
+  публикации, модерации и безопасности файлов;
+- `REPLIT_V5_UPDATE.md` — порядок обновления проекта и контрольный сценарий.
+
+## Архитектурные ограничения
+
+- использовать только термины `tutor` / «репетитор»;
+- владелец не хранится как Firestore-роль;
+- непроверенный репетитор не виден в каталоге;
+- не возвращать LMS-курсы, тесты, сертификаты и фиктивный прогресс;
+- интерфейс должен оставаться рабочим и на ПК, и на телефоне;
+- сердце продукта — MedStart Live и совместная умная доска;
+- видеокомната не должна открывать Zoom или другой внешний сервис;
+- материал репетитора не может получать отметку «Официальный источник»;
+- публикации репетиторов не видны студентам до ручной модерации;
+- не добавлять демонстрационные данные в production-контур.

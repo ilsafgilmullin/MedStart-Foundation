@@ -1,21 +1,15 @@
 import {
   createUserWithEmailAndPassword,
   deleteUser,
-  GoogleAuthProvider,
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
-  signInWithPopup,
   signOut,
-  type User,
   type UserCredential,
 } from 'firebase/auth'
 import { auth } from './firebase'
 import { createUserProfile, getUserProfile } from './firestore'
 import type { UserProfile } from './user-profile'
-
-const googleProvider = new GoogleAuthProvider()
-googleProvider.setCustomParameters({ prompt: 'select_account' })
 
 export interface StudentRegistrationInput {
   firstName: string
@@ -32,30 +26,41 @@ export interface TutorRegistrationInput {
   email: string
   password: string
   specialization: string
+  subjects?: string[]
   institution?: string
   experience?: string
   bio?: string
+  city?: string
+  lessonPrice?: number
+  lessonDuration?: number
+  lessonFormats?: Array<'online' | 'in_person'>
 }
 
-export interface AuthSession { credential: UserCredential; profile: UserProfile }
-
-function nameFromUser(user: User) {
-  const parts = user.displayName?.trim().split(/\s+/) ?? []
-  return {
-    firstName: parts[0] || user.email?.split('@')[0] || 'Пользователь',
-    lastName: parts.slice(1).join(' '),
-  }
+export interface AuthSession {
+  credential: UserCredential
+  profile: UserProfile
 }
 
 async function assertAccess(profile: UserProfile) {
   if (profile.status === 'blocked' || profile.status === 'deleted') {
     await signOut(auth)
-    throw new Error(profile.status === 'blocked' ? 'Аккаунт заблокирован.' : 'Аккаунт удалён.')
+    throw new Error(
+      profile.status === 'blocked'
+        ? 'Аккаунт заблокирован.'
+        : 'Аккаунт удалён.',
+    )
   }
 }
 
-export async function login(email: string, password: string): Promise<AuthSession> {
-  const credential = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password)
+export async function login(
+  email: string,
+  password: string,
+): Promise<AuthSession> {
+  const credential = await signInWithEmailAndPassword(
+    auth,
+    email.trim().toLowerCase(),
+    password,
+  )
   const profile = await getUserProfile(credential.user.uid)
   if (!profile) {
     await signOut(auth)
@@ -70,7 +75,11 @@ async function registerWithProfile(
   password: string,
   createProfile: (uid: string) => Promise<UserProfile>,
 ): Promise<AuthSession> {
-  const credential = await createUserWithEmailAndPassword(auth, email.trim().toLowerCase(), password)
+  const credential = await createUserWithEmailAndPassword(
+    auth,
+    email.trim().toLowerCase(),
+    password,
+  )
   try {
     const profile = await createProfile(credential.user.uid)
     await sendEmailVerification(credential.user).catch(() => undefined)
@@ -107,35 +116,25 @@ export function registerTutor(input: TutorRegistrationInput) {
       role: 'tutor',
       status: 'pending',
       specialization: input.specialization,
+      subjects: input.subjects,
       institution: input.institution,
       experience: input.experience,
       bio: input.bio,
+      city: input.city,
+      lessonPrice: input.lessonPrice,
+      lessonDuration: input.lessonDuration,
+      lessonFormats: input.lessonFormats,
       onboardingCompleted: true,
       isPublic: false,
     }),
   )
 }
 
-export async function loginWithGoogle(): Promise<AuthSession> {
-  const credential = await signInWithPopup(auth, googleProvider)
-  let profile = await getUserProfile(credential.user.uid)
-  if (!profile) {
-    const { firstName, lastName } = nameFromUser(credential.user)
-    profile = await createUserProfile({
-      uid: credential.user.uid,
-      firstName,
-      lastName,
-      email: credential.user.email ?? '',
-      avatar: credential.user.photoURL ?? '',
-      role: 'student',
-      status: 'active',
-      onboardingCompleted: true,
-    })
-  }
-  await assertAccess(profile)
-  return { credential, profile }
-}
-
 export const logout = () => signOut(auth)
-export const resetPassword = (email: string) => sendPasswordResetEmail(auth, email.trim().toLowerCase())
-export const isOwnerUid = (uid: string) => Boolean(process.env.NEXT_PUBLIC_OWNER_UID) && uid === process.env.NEXT_PUBLIC_OWNER_UID
+export const resetPassword = (email: string) =>
+  sendPasswordResetEmail(auth, email.trim().toLowerCase())
+export async function resendEmailVerification(): Promise<void> {
+  if (!auth.currentUser) throw new Error('Сначала войдите в аккаунт.')
+  await sendEmailVerification(auth.currentUser)
+}
+export { isOwnerUid } from './access-control'

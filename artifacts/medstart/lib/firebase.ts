@@ -1,30 +1,56 @@
-import { getApp, getApps, initializeApp } from 'firebase/app'
+import { initializeApp, getApps, getApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
-import { getStorage } from 'firebase/storage'
+import {
+  getFirestore,
+  initializeFirestore,
+  memoryLocalCache,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore'
 
+/**
+ * Firebase's web configuration is public client metadata. Keeping it here
+ * makes local builds, Replit previews, and deployments use the same project
+ * without depending on when Replit injects environment variables.
+ */
 const firebaseConfig = {
   apiKey:
-    process.env.NEXT_PUBLIC_FIREBASE_API_KEY ??
+    process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
     'AIzaSyAt4F5JQAdQPw8kmY-0dorxcaT_JX2d3v0',
   authDomain:
-    process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ??
+    process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ||
     'medstart-e9bfe.firebaseapp.com',
-  projectId:
-    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? 'medstart-e9bfe',
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'medstart-e9bfe',
   storageBucket:
-    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ??
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ||
     'medstart-e9bfe.firebasestorage.app',
   messagingSenderId:
-    process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? '291392319493',
+    process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '291392319493',
   appId:
-    process.env.NEXT_PUBLIC_FIREBASE_APP_ID ??
+    process.env.NEXT_PUBLIC_FIREBASE_APP_ID ||
     '1:291392319493:web:694c330899fd86c312ec6c',
 }
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
 
 export const auth = getAuth(app)
-export const db = getFirestore(app)
-export const storage = getStorage(app)
+
+function createFirestore() {
+  try {
+    return initializeFirestore(app, {
+      localCache:
+        typeof window === 'undefined'
+          ? memoryLocalCache()
+          : persistentLocalCache({
+              tabManager: persistentMultipleTabManager(),
+            }),
+    })
+  } catch {
+    // Hot reload can initialize the same Firebase app more than once.
+    return getFirestore(app)
+  }
+}
+
+export const db = createFirestore()
+
 export default app

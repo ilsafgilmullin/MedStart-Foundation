@@ -1,0 +1,4 @@
+MedStart v5 source update completed.
+Updated: 2026-07-26T09:12:50.621Z
+Backup: .medstart-backups/before-v5-2026-07-26T09-12-50-295Z
+Archive SHA-256: 9367eb88efbff7775bb80d0b5fd9a428e47b5e2ea7cdd6ee23685591bfc6ea27

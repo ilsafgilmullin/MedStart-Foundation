@@ -1,10 +1,27 @@
 'use client'
 
-import { useEffect, useState, type FormEvent } from 'react'
-import { Save, UserRound } from 'lucide-react'
-
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
+import {
+  AlertCircle,
+  Camera,
+  CheckCircle2,
+  LoaderCircle,
+  Save,
+  Send,
+} from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-import { updateUserProfile } from '@/lib/firestore'
+import ProfilePhoto from '@/components/dashboard/ProfilePhoto'
+import {
+  getTutorPrivateProfile,
+  resubmitTutorProfile,
+  updateTutorPrivateProfile,
+  updateUserProfile,
+} from '@/lib/firestore'
+import { uploadAvatar } from '@/lib/storage'
+import type { LessonFormat, UserProfile } from '@/lib/user-profile'
+
+const inputClass =
+  'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100'
 
 const roleNames = {
   student: 'Студент',
@@ -13,80 +30,218 @@ const roleNames = {
   owner: 'Владелец',
 } as const
 
+const statusNames = {
+  pending: 'На проверке',
+  active: 'Активен',
+  rejected: 'Требуется доработка',
+  blocked: 'Заблокирован',
+  deleted: 'Удалён',
+} as const
+
+interface ProfileForm {
+  firstName: string
+  lastName: string
+  avatar: string
+  fieldOfStudy: string
+  studyYear: string
+  title: string
+  specialization: string
+  subjects: string
+  institution: string
+  experience: string
+  licenceNumber: string
+  bio: string
+  city: string
+  lessonPrice: string
+  lessonDuration: string
+  lessonFormats: LessonFormat[]
+  timezone: string
+}
+
+const emptyForm: ProfileForm = {
+  firstName: '',
+  lastName: '',
+  avatar: '',
+  fieldOfStudy: '',
+  studyYear: '',
+  title: '',
+  specialization: '',
+  subjects: '',
+  institution: '',
+  experience: '',
+  licenceNumber: '',
+  bio: '',
+  city: '',
+  lessonPrice: '',
+  lessonDuration: '60',
+  lessonFormats: ['online'],
+  timezone: 'Europe/Moscow',
+}
+
+function formFromProfile(profile: UserProfile): ProfileForm {
+  return {
+    firstName: profile.firstName || '',
+    lastName: profile.lastName || '',
+    avatar: profile.avatar || '',
+    fieldOfStudy: profile.fieldOfStudy || '',
+    studyYear: profile.studyYear || '',
+    title: profile.title || '',
+    specialization: profile.specialization || '',
+    subjects: (profile.subjects ?? []).join(', '),
+    institution: profile.institution || '',
+    experience: profile.experience || '',
+    licenceNumber: '',
+    bio: profile.bio || '',
+    city: profile.city || '',
+    lessonPrice: profile.lessonPrice ? String(profile.lessonPrice) : '',
+    lessonDuration: String(profile.lessonDuration ?? 60),
+    lessonFormats: profile.lessonFormats?.length
+      ? profile.lessonFormats
+      : ['online'],
+    timezone: profile.timezone || 'Europe/Moscow',
+  }
+}
+
 export default function ProfilePage() {
-  const { profile, role, refreshProfile } = useAuth()
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
-  const [fieldOfStudy, setFieldOfStudy] = useState('')
-  const [studyYear, setStudyYear] = useState('')
-  const [specialization, setSpecialization] = useState('')
-  const [institution, setInstitution] = useState('')
-  const [experience, setExperience] = useState('')
-  const [bio, setBio] = useState('')
-  const [lessonPrice, setLessonPrice] = useState('')
+  const { user, profile, role } = useAuth()
+  const [form, setForm] = useState<ProfileForm>(emptyForm)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const fileInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (!profile) return
-
-    setFirstName(profile.firstName ?? '')
-    setLastName(profile.lastName ?? '')
-    setFieldOfStudy(profile.fieldOfStudy ?? '')
-    setStudyYear(profile.studyYear ?? '')
-    setSpecialization(profile.specialization ?? '')
-    setInstitution(profile.institution ?? '')
-    setExperience(profile.experience ?? '')
-    setBio(profile.bio ?? '')
-    setLessonPrice(
-      profile.lessonPrice && profile.lessonPrice > 0
-        ? String(profile.lessonPrice)
-        : '',
-    )
+    if (profile) setForm(formFromProfile(profile))
   }, [profile])
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setMessage('')
-    setError('')
+  useEffect(() => {
+    if (!user || profile?.role !== 'tutor') return
+    let active = true
+    void getTutorPrivateProfile(user.uid).then((privateProfile) => {
+      if (active && privateProfile) {
+        setForm((current) => ({
+          ...current,
+          licenceNumber: privateProfile.qualificationReference,
+        }))
+      }
+    })
+    return () => {
+      active = false
+    }
+  }, [user, profile?.role])
 
-    if (!profile) return
-    if (!firstName.trim() || !lastName.trim()) {
+  function field<K extends keyof ProfileForm>(key: K, value: ProfileForm[K]) {
+    setForm((current) => ({ ...current, [key]: value }))
+  }
+
+  function toggleFormat(format: LessonFormat) {
+    setForm((current) => {
+      const selected = current.lessonFormats.includes(format)
+      const next = selected
+        ? current.lessonFormats.filter((item) => item !== format)
+        : [...current.lessonFormats, format]
+      return {
+        ...current,
+        lessonFormats: next.length ? next : [format],
+      }
+    })
+  }
+
+  async function saveProfile(): Promise<boolean> {
+    if (!user || !profile) return false
+    const firstName = form.firstName.trim()
+    const lastName = form.lastName.trim()
+    if (!firstName || !lastName) {
       setError('Укажите имя и фамилию.')
-      return
+      return false
+    }
+    if (profile.role === 'tutor' && !form.specialization.trim()) {
+      setError('Укажите специализацию репетитора.')
+      return false
     }
 
-    const parsedPrice = Number(lessonPrice.replace(/\s/g, '').replace(',', '.'))
-
-    if (role === 'tutor' && lessonPrice && (!Number.isFinite(parsedPrice) || parsedPrice < 0)) {
-      setError('Укажите корректную стоимость занятия.')
-      return
-    }
-
+    setSaving(true)
+    setError('')
+    setMessage('')
     try {
-      setSaving(true)
-      await updateUserProfile(profile.uid, {
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        displayName: `${firstName.trim()} ${lastName.trim()}`.trim(),
-        fieldOfStudy: fieldOfStudy.trim(),
-        studyYear: studyYear.trim(),
-        specialization: specialization.trim(),
-        institution: institution.trim(),
-        experience: experience.trim(),
-        bio: bio.trim(),
-        lessonPrice:
-          role === 'tutor' && Number.isFinite(parsedPrice) ? parsedPrice : 0,
-        onboardingCompleted: true,
+      await updateUserProfile(user.uid, {
+        firstName,
+        lastName,
+        displayName: `${firstName} ${lastName}`.trim(),
+        avatar: form.avatar,
+        fieldOfStudy: form.fieldOfStudy.trim(),
+        studyYear: form.studyYear.trim(),
+        title: form.title.trim(),
+        specialization: form.specialization.trim(),
+        subjects: form.subjects
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean),
+        institution: form.institution.trim(),
+        experience: form.experience.trim(),
+        bio: form.bio.trim(),
+        city: form.city.trim(),
+        lessonPrice: Math.max(0, Number(form.lessonPrice) || 0),
+        lessonDuration: Math.max(30, Number(form.lessonDuration) || 60),
+        lessonFormats: form.lessonFormats,
+        timezone: form.timezone.trim() || 'Europe/Moscow',
       })
-      await refreshProfile()
+      if (profile.role === 'tutor') {
+        await updateTutorPrivateProfile(user.uid, form.licenceNumber)
+      }
       setMessage('Профиль сохранён.')
+      return true
     } catch (caught) {
       setError(
         caught instanceof Error
           ? caught.message
           : 'Не удалось сохранить профиль.',
+      )
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleAvatar(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file || !user) return
+    setUploading(true)
+    setError('')
+    setMessage('')
+    try {
+      const avatar = await uploadAvatar(user.uid, file)
+      await updateUserProfile(user.uid, { avatar })
+      field('avatar', avatar)
+      setMessage('Фотография профиля обновлена.')
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Не удалось загрузить фотографию.',
+      )
+    } finally {
+      setUploading(false)
+      event.target.value = ''
+    }
+  }
+
+  async function resubmit() {
+    if (!user) return
+    setSaving(true)
+    setError('')
+    setMessage('')
+    try {
+      const saved = await saveProfile()
+      if (!saved) return
+      await resubmitTutorProfile(user.uid)
+      setMessage('Анкета повторно отправлена на проверку.')
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Не удалось отправить анкету.',
       )
     } finally {
       setSaving(false)
@@ -94,163 +249,371 @@ export default function ProfilePage() {
   }
 
   if (!profile) return null
-
-  const isTutor = role === 'tutor'
+  const initials = `${form.firstName.slice(0, 1)}${form.lastName.slice(0, 1)}`
+    .toUpperCase()
+    .trim()
+  const isTutor = profile.role === 'tutor'
+  const isStudent = profile.role === 'student' && role === 'student'
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900">Профиль</h1>
-        <p className="mt-2 text-slate-500">
-          Актуальные данные помогают корректно работать с платформой.
-        </p>
+    <div className="mx-auto max-w-5xl space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Профиль</h1>
+          <p className="mt-2 text-slate-500">
+            Управляйте данными, которые используются в вашем кабинете.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 text-sm font-semibold">
+          <span className="rounded-full bg-violet-100 px-3 py-1.5 text-violet-700">
+            {role ? roleNames[role] : 'Пользователь'}
+          </span>
+          <span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-600">
+            {statusNames[profile.status]}
+          </span>
+        </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[300px_1fr]">
-        <aside className="h-fit rounded-[32px] border border-slate-200 bg-white p-7 text-center shadow-sm">
-          <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-3xl bg-violet-100 text-violet-700">
-            <UserRound className="h-10 w-10" />
-          </div>
-          <h2 className="mt-5 text-xl font-bold text-slate-900">
-            {profile.displayName || profile.email}
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">{profile.email}</p>
-          <div className="mt-5 rounded-2xl bg-slate-50 p-4">
-            <p className="text-sm text-slate-500">Роль</p>
-            <p className="mt-1 font-semibold text-slate-900">
-              {role ? roleNames[role] : 'Пользователь'}
+      {profile.status === 'pending' && isTutor && (
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+          <div>
+            <p className="font-semibold">Анкета находится на проверке</p>
+            <p className="mt-1 text-sm">
+              Вы можете дополнить профиль. Публикация произойдёт после
+              одобрения.
             </p>
           </div>
-          {isTutor && (
-            <div className="mt-3 rounded-2xl bg-violet-50 p-4">
-              <p className="text-sm text-slate-500">Статус анкеты</p>
-              <p className="mt-1 font-semibold text-violet-700">
-                {profile.status === 'active' ? 'Опубликована' : 'На проверке'}
-              </p>
-            </div>
-          )}
-        </aside>
+        </div>
+      )}
 
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-6 rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm lg:p-9"
-        >
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Имя" value={firstName} onChange={setFirstName} required />
-            <Field label="Фамилия" value={lastName} onChange={setLastName} required />
+      {profile.status === 'rejected' && (
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+          <div>
+            <p className="font-semibold">Анкета требует доработки</p>
+            <p className="mt-1 text-sm">
+              {profile.moderationNote ||
+                'Добавьте недостающую информацию и отправьте анкету повторно.'}
+            </p>
           </div>
+        </div>
+      )}
 
-          {!isTutor && role === 'student' && (
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field
-                label="Направление подготовки"
-                value={fieldOfStudy}
-                onChange={setFieldOfStudy}
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+          {error}
+        </div>
+      )}
+      {message && (
+        <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          <CheckCircle2 className="h-5 w-5" />
+          {message}
+        </div>
+      )}
+
+      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+          <div className="relative">
+            {form.avatar ? (
+              <ProfilePhoto
+                src={form.avatar}
+                size={96}
+                className="h-24 w-24 rounded-3xl object-cover"
               />
-              <Field
-                label="Курс обучения"
-                value={studyYear}
-                onChange={setStudyYear}
+            ) : (
+              <div className="flex h-24 w-24 items-center justify-center rounded-3xl bg-violet-100 text-2xl font-bold text-violet-700">
+                {initials || 'MS'}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => fileInput.current?.click()}
+              disabled={uploading}
+              className="absolute -bottom-2 -right-2 flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-600 text-white shadow-lg disabled:opacity-60"
+              aria-label="Изменить фотографию"
+            >
+              {uploading ? (
+                <LoaderCircle className="h-5 w-5 animate-spin" />
+              ) : (
+                <Camera className="h-5 w-5" />
+              )}
+            </button>
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleAvatar}
+              className="hidden"
+            />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">
+              Фотография профиля
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              JPG, PNG или WebP до 5 МБ. Репетиторы видны с этой фотографией в
+              каталоге.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+        <h2 className="text-xl font-bold text-slate-900">Основные данные</h2>
+        <div className="mt-6 grid gap-5 sm:grid-cols-2">
+          <label className="space-y-2 text-sm font-medium text-slate-700">
+            Имя
+            <input
+              className={inputClass}
+              value={form.firstName}
+              onChange={(event) => field('firstName', event.target.value)}
+            />
+          </label>
+          <label className="space-y-2 text-sm font-medium text-slate-700">
+            Фамилия
+            <input
+              className={inputClass}
+              value={form.lastName}
+              onChange={(event) => field('lastName', event.target.value)}
+            />
+          </label>
+          <label className="space-y-2 text-sm font-medium text-slate-700">
+            Электронная почта
+            <input
+              className={`${inputClass} bg-slate-50 text-slate-500`}
+              value={profile.email}
+              disabled
+            />
+          </label>
+          <label className="space-y-2 text-sm font-medium text-slate-700">
+            Город
+            <input
+              className={inputClass}
+              value={form.city}
+              onChange={(event) => field('city', event.target.value)}
+              placeholder="Например: Казань"
+            />
+          </label>
+        </div>
+      </section>
+
+      {isStudent && (
+        <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+          <h2 className="text-xl font-bold text-slate-900">Обучение</h2>
+          <div className="mt-6 grid gap-5 sm:grid-cols-2">
+            <label className="space-y-2 text-sm font-medium text-slate-700">
+              Направление
+              <input
+                className={inputClass}
+                value={form.fieldOfStudy}
+                onChange={(event) => field('fieldOfStudy', event.target.value)}
+                placeholder="Например: лечебное дело"
               />
-            </div>
-          )}
+            </label>
+            <label className="space-y-2 text-sm font-medium text-slate-700">
+              Курс обучения
+              <input
+                className={inputClass}
+                value={form.studyYear}
+                onChange={(event) => field('studyYear', event.target.value)}
+                placeholder="Например: 4"
+              />
+            </label>
+          </div>
+          <label className="mt-5 block space-y-2 text-sm font-medium text-slate-700">
+            О себе и цели обучения
+            <textarea
+              className={`${inputClass} min-h-32 resize-y`}
+              value={form.bio}
+              onChange={(event) => field('bio', event.target.value)}
+              placeholder="Какие темы хотите разобрать и к чему готовитесь?"
+            />
+          </label>
+        </section>
+      )}
 
-          {isTutor && (
-            <>
-              <div className="grid gap-5 sm:grid-cols-2">
-                <Field
-                  label="Специализация"
-                  value={specialization}
-                  onChange={setSpecialization}
-                  required
-                />
-                <Field
-                  label="Организация или вуз"
-                  value={institution}
-                  onChange={setInstitution}
-                />
-              </div>
-              <div className="grid gap-5 sm:grid-cols-2">
-                <Field
-                  label="Опыт"
-                  value={experience}
-                  onChange={setExperience}
-                  placeholder="Например: 7 лет"
-                />
-                <Field
-                  label="Стоимость занятия, ₽"
-                  value={lessonPrice}
-                  onChange={setLessonPrice}
-                  inputMode="decimal"
-                />
-              </div>
-              <label className="block">
-                <span className="text-sm font-semibold text-slate-700">О себе</span>
-                <textarea
-                  value={bio}
-                  onChange={(event) => setBio(event.target.value)}
-                  rows={6}
-                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-violet-500"
-                  placeholder="Расскажите об образовании, опыте и формате занятий"
-                />
-              </label>
-            </>
-          )}
-
-          {error && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-              {error}
+      {isTutor && (
+        <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">
+              Анкета репетитора
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Эти данные увидят студенты в каталоге.
+            </p>
+          </div>
+          <div className="mt-6 grid gap-5 sm:grid-cols-2">
+            <label className="space-y-2 text-sm font-medium text-slate-700">
+              Специализация
+              <input
+                className={inputClass}
+                value={form.specialization}
+                onChange={(event) =>
+                  field('specialization', event.target.value)
+                }
+                placeholder="Например: анатомия и физиология"
+              />
+            </label>
+            <label className="space-y-2 text-sm font-medium text-slate-700">
+              Профессиональный статус
+              <input
+                className={inputClass}
+                value={form.title}
+                onChange={(event) => field('title', event.target.value)}
+                placeholder="Например: врач, ординатор, студент 6 курса"
+              />
+            </label>
+            <label className="space-y-2 text-sm font-medium text-slate-700 sm:col-span-2">
+              Предметы
+              <input
+                className={inputClass}
+                value={form.subjects}
+                onChange={(event) => field('subjects', event.target.value)}
+                placeholder="Анатомия, физиология, биология"
+              />
+              <span className="block text-xs font-normal text-slate-400">
+                Перечислите через запятую.
+              </span>
+            </label>
+            <label className="space-y-2 text-sm font-medium text-slate-700">
+              Учреждение
+              <input
+                className={inputClass}
+                value={form.institution}
+                onChange={(event) => field('institution', event.target.value)}
+                placeholder="Вуз или место работы"
+              />
+            </label>
+            <label className="space-y-2 text-sm font-medium text-slate-700">
+              Опыт
+              <input
+                className={inputClass}
+                value={form.experience}
+                onChange={(event) => field('experience', event.target.value)}
+                placeholder="Например: 3 года"
+              />
+            </label>
+            <label className="space-y-2 text-sm font-medium text-slate-700">
+              Номер диплома или сертификата
+              <input
+                className={inputClass}
+                value={form.licenceNumber}
+                onChange={(event) => field('licenceNumber', event.target.value)}
+                placeholder="Не публикуется в каталоге"
+              />
+            </label>
+            <label className="space-y-2 text-sm font-medium text-slate-700">
+              Стоимость занятия, ₽
+              <input
+                type="number"
+                min="0"
+                step="100"
+                className={inputClass}
+                value={form.lessonPrice}
+                onChange={(event) => field('lessonPrice', event.target.value)}
+                placeholder="1500"
+              />
+            </label>
+            <label className="space-y-2 text-sm font-medium text-slate-700">
+              Продолжительность
+              <select
+                className={inputClass}
+                value={form.lessonDuration}
+                onChange={(event) =>
+                  field('lessonDuration', event.target.value)
+                }
+              >
+                <option value="30">30 минут</option>
+                <option value="45">45 минут</option>
+                <option value="60">60 минут</option>
+                <option value="90">90 минут</option>
+                <option value="120">120 минут</option>
+              </select>
+            </label>
+            <label className="space-y-2 text-sm font-medium text-slate-700">
+              Часовой пояс
+              <select
+                className={inputClass}
+                value={form.timezone}
+                onChange={(event) => field('timezone', event.target.value)}
+              >
+                <option value="Europe/Moscow">Москва (UTC+3)</option>
+                <option value="Europe/Samara">Самара (UTC+4)</option>
+                <option value="Asia/Yekaterinburg">Екатеринбург (UTC+5)</option>
+                <option value="Asia/Omsk">Омск (UTC+6)</option>
+                <option value="Asia/Krasnoyarsk">Красноярск (UTC+7)</option>
+                <option value="Asia/Irkutsk">Иркутск (UTC+8)</option>
+                <option value="Asia/Yakutsk">Якутск (UTC+9)</option>
+                <option value="Asia/Vladivostok">Владивосток (UTC+10)</option>
+              </select>
+            </label>
+          </div>
+          <div className="mt-5">
+            <p className="text-sm font-medium text-slate-700">Формат занятий</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {[
+                { value: 'online' as const, label: 'Онлайн' },
+                { value: 'in_person' as const, label: 'Очно' },
+              ].map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => toggleFormat(item.value)}
+                  className={`rounded-2xl border px-4 py-3 text-left font-semibold transition ${
+                    form.lessonFormats.includes(item.value)
+                      ? 'border-violet-500 bg-violet-50 text-violet-700'
+                      : 'border-slate-200 text-slate-600'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
             </div>
-          )}
-          {message && (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
-              {message}
-            </div>
-          )}
+          </div>
+          <label className="mt-5 block space-y-2 text-sm font-medium text-slate-700">
+            О себе
+            <textarea
+              className={`${inputClass} min-h-40 resize-y`}
+              value={form.bio}
+              onChange={(event) => field('bio', event.target.value)}
+              placeholder="Расскажите об образовании, опыте и подходе к занятиям."
+            />
+          </label>
+        </section>
+      )}
 
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+        {profile.status === 'rejected' && isTutor ? (
           <button
-            type="submit"
+            type="button"
+            onClick={() => void resubmit()}
             disabled={saving}
-            className="inline-flex items-center gap-2 rounded-2xl bg-violet-600 px-6 py-3 font-semibold text-white disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-6 py-3.5 font-semibold text-white disabled:opacity-60"
           >
-            <Save className="h-4 w-4" />
-            {saving ? 'Сохраняем…' : 'Сохранить изменения'}
+            {saving ? (
+              <LoaderCircle className="h-5 w-5 animate-spin" />
+            ) : (
+              <Send className="h-5 w-5" />
+            )}
+            Сохранить и отправить повторно
           </button>
-        </form>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void saveProfile()}
+            disabled={saving}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-6 py-3.5 font-semibold text-white disabled:opacity-60"
+          >
+            {saving ? (
+              <LoaderCircle className="h-5 w-5 animate-spin" />
+            ) : (
+              <Save className="h-5 w-5" />
+            )}
+            Сохранить профиль
+          </button>
+        )}
       </div>
     </div>
-  )
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  required = false,
-  placeholder,
-  inputMode,
-}: {
-  label: string
-  value: string
-  onChange: (value: string) => void
-  required?: boolean
-  placeholder?: string
-  inputMode?: 'text' | 'decimal' | 'numeric'
-}) {
-  return (
-    <label className="block">
-      <span className="text-sm font-semibold text-slate-700">
-        {label}
-        {required && <span className="text-red-500"> *</span>}
-      </span>
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        required={required}
-        placeholder={placeholder}
-        inputMode={inputMode}
-        className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-violet-500"
-      />
-    </label>
   )
 }

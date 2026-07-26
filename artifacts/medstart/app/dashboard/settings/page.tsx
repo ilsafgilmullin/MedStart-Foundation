@@ -1,116 +1,274 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { KeyRound, LogOut, Mail, ShieldCheck } from 'lucide-react'
-
+import { useEffect, useState } from 'react'
+import {
+  Bell,
+  CheckCircle2,
+  KeyRound,
+  LoaderCircle,
+  MailCheck,
+  Save,
+  ShieldCheck,
+} from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-import { resetPassword } from '@/lib/auth'
+import { resendEmailVerification, resetPassword } from '@/lib/auth'
+import { updateUserProfile } from '@/lib/firestore'
+import type { NotificationPreferences } from '@/lib/user-profile'
+
+const defaults: NotificationPreferences = {
+  bookingUpdates: true,
+  newMessages: true,
+  lessonReminders: true,
+  productNews: false,
+}
+
+const switches: Array<{
+  key: keyof NotificationPreferences
+  title: string
+  description: string
+}> = [
+  {
+    key: 'bookingUpdates',
+    title: 'Заявки и изменения занятий',
+    description: 'Принятие, отклонение и отмена записи.',
+  },
+  {
+    key: 'newMessages',
+    title: 'Новые сообщения',
+    description: 'Уведомления о сообщениях в личных диалогах.',
+  },
+  {
+    key: 'lessonReminders',
+    title: 'Напоминания о занятиях',
+    description: 'Напомнить перед подтверждённым занятием.',
+  },
+  {
+    key: 'productNews',
+    title: 'Новости MedStart',
+    description: 'Редкие сообщения о новых возможностях платформы.',
+  },
+]
 
 export default function SettingsPage() {
-  const router = useRouter()
-  const { profile, logout } = useAuth()
-  const [sending, setSending] = useState(false)
+  const { user, profile } = useAuth()
+  const [preferences, setPreferences] =
+    useState<NotificationPreferences>(defaults)
+  const [saving, setSaving] = useState(false)
+  const [busyAction, setBusyAction] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
-  async function sendReset() {
-    if (!profile?.email) return
+  useEffect(() => {
+    if (profile?.notificationPreferences) {
+      setPreferences({ ...defaults, ...profile.notificationPreferences })
+    }
+  }, [profile])
 
-    setMessage('')
+  async function save() {
+    if (!user) return
+    setSaving(true)
     setError('')
-
+    setMessage('')
     try {
-      setSending(true)
-      await resetPassword(profile.email)
-      setMessage('Письмо для смены пароля отправлено на вашу почту.')
+      await updateUserProfile(user.uid, {
+        notificationPreferences: preferences,
+      })
+      setMessage('Настройки уведомлений сохранены.')
     } catch (caught) {
       setError(
         caught instanceof Error
           ? caught.message
-          : 'Не удалось отправить письмо для смены пароля.',
+          : 'Не удалось сохранить настройки.',
       )
     } finally {
-      setSending(false)
+      setSaving(false)
     }
   }
 
-  async function exit() {
-    await logout()
-    router.replace('/login')
+  async function verifyEmail() {
+    setBusyAction('verify')
+    setError('')
+    setMessage('')
+    try {
+      await resendEmailVerification()
+      setMessage('Письмо для подтверждения отправлено повторно.')
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Не удалось отправить письмо.',
+      )
+    } finally {
+      setBusyAction('')
+    }
+  }
+
+  async function requestPasswordReset() {
+    if (!profile?.email) return
+    setBusyAction('password')
+    setError('')
+    setMessage('')
+    try {
+      await resetPassword(profile.email)
+      setMessage('Ссылка для смены пароля отправлена на вашу почту.')
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Не удалось отправить письмо.',
+      )
+    } finally {
+      setBusyAction('')
+    }
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-slate-900">Настройки</h1>
         <p className="mt-2 text-slate-500">
-          Управление безопасностью и доступом к аккаунту.
+          Управляйте уведомлениями и безопасностью аккаунта.
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
-            <Mail className="h-6 w-6" />
-          </div>
-          <h2 className="mt-5 text-xl font-bold text-slate-900">
-            Электронная почта
-          </h2>
-          <p className="mt-2 text-slate-500">
-            {profile?.email || 'Адрес не указан'}
-          </p>
-          <p className="mt-4 text-sm leading-6 text-slate-500">
-            Адрес связан с Firebase Authentication. Его изменение будет подключено отдельным безопасным сценарием.
-          </p>
-        </section>
-
-        <section className="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
-            <ShieldCheck className="h-6 w-6" />
-          </div>
-          <h2 className="mt-5 text-xl font-bold text-slate-900">
-            Безопасность
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            Для смены пароля отправим официальную ссылку Firebase на электронную почту аккаунта.
-          </p>
-          <button
-            type="button"
-            onClick={sendReset}
-            disabled={sending || !profile?.email}
-            className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-violet-600 px-5 py-3 font-semibold text-white disabled:opacity-60"
-          >
-            <KeyRound className="h-4 w-4" />
-            {sending ? 'Отправляем…' : 'Сменить пароль'}
-          </button>
-        </section>
-      </div>
-
-      {message && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-700">
-          {message}
-        </div>
-      )}
       {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
           {error}
         </div>
       )}
+      {message && (
+        <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          <CheckCircle2 className="h-5 w-5" />
+          {message}
+        </div>
+      )}
 
-      <section className="rounded-[32px] border border-red-100 bg-white p-7 shadow-sm">
-        <h2 className="text-xl font-bold text-slate-900">Завершить сеанс</h2>
-        <p className="mt-2 text-sm text-slate-500">
-          На этом устройстве потребуется снова ввести данные для входа.
-        </p>
+      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+        <div className="flex items-center gap-3">
+          <div className="rounded-2xl bg-violet-100 p-3 text-violet-700">
+            <Bell className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Уведомления</h2>
+            <p className="text-sm text-slate-500">
+              Предпочтения сохраняются в вашем профиле.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6 divide-y divide-slate-100">
+          {switches.map((item) => (
+            <div
+              key={item.key}
+              className="flex items-center justify-between gap-5 py-4 first:pt-0 last:pb-0"
+            >
+              <div>
+                <p className="font-semibold text-slate-800">{item.title}</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  {item.description}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={preferences[item.key]}
+                onClick={() =>
+                  setPreferences((current) => ({
+                    ...current,
+                    [item.key]: !current[item.key],
+                  }))
+                }
+                className={`relative h-7 w-12 shrink-0 rounded-full transition ${
+                  preferences[item.key] ? 'bg-violet-600' : 'bg-slate-200'
+                }`}
+              >
+                <span
+                  className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition ${
+                    preferences[item.key] ? 'left-6' : 'left-1'
+                  }`}
+                />
+              </button>
+            </div>
+          ))}
+        </div>
+
         <button
           type="button"
-          onClick={exit}
-          className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-red-200 px-5 py-3 font-semibold text-red-600 hover:bg-red-50"
+          onClick={() => void save()}
+          disabled={saving}
+          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-3 font-semibold text-white disabled:opacity-60 sm:w-auto"
         >
-          <LogOut className="h-4 w-4" />
-          Выйти из аккаунта
+          {saving ? (
+            <LoaderCircle className="h-5 w-5 animate-spin" />
+          ) : (
+            <Save className="h-5 w-5" />
+          )}
+          Сохранить настройки
         </button>
+      </section>
+
+      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+        <div className="flex items-center gap-3">
+          <div className="rounded-2xl bg-sky-100 p-3 text-sky-700">
+            <ShieldCheck className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">
+              Безопасность аккаунта
+            </h2>
+            <p className="text-sm text-slate-500">
+              {profile?.email || 'Электронная почта не указана'}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 p-4">
+            <div className="flex items-center gap-2">
+              <MailCheck className="h-5 w-5 text-violet-600" />
+              <h3 className="font-bold text-slate-800">Подтверждение почты</h3>
+            </div>
+            <p className="mt-2 text-sm text-slate-500">
+              {user?.emailVerified
+                ? 'Электронная почта подтверждена.'
+                : 'Подтвердите почту по ссылке из письма.'}
+            </p>
+            {!user?.emailVerified && (
+              <button
+                type="button"
+                onClick={() => void verifyEmail()}
+                disabled={Boolean(busyAction)}
+                className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-violet-700 disabled:opacity-60"
+              >
+                {busyAction === 'verify' && (
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                )}
+                Отправить письмо снова
+              </button>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 p-4">
+            <div className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-violet-600" />
+              <h3 className="font-bold text-slate-800">Пароль</h3>
+            </div>
+            <p className="mt-2 text-sm text-slate-500">
+              Смена пароля выполняется через защищённую ссылку из письма.
+            </p>
+            <button
+              type="button"
+              onClick={() => void requestPasswordReset()}
+              disabled={Boolean(busyAction)}
+              className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-violet-700 disabled:opacity-60"
+            >
+              {busyAction === 'password' && (
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+              )}
+              Отправить ссылку
+            </button>
+          </div>
+        </div>
       </section>
     </div>
   )

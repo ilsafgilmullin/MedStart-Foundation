@@ -2,57 +2,86 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-
 import Sidebar from '@/components/dashboard/Sidebar'
 import MobileSidebar from '@/components/dashboard/MobileSidebar'
 import Header from '@/components/dashboard/Header'
+import { getNavigation } from '@/components/dashboard/Navigation'
 import { useAuth } from '@/hooks/useAuth'
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const router = useRouter()
-  const { user, profile, loading, error } = useAuth()
+  const { user, profile, role, loading, logout } = useAuth()
+  useEffect(() => {
+    if (loading) return
+    if (!user || !profile) {
+      router.replace('/login')
+      return
+    }
+    if (profile.status === 'blocked' || profile.status === 'deleted') {
+      void logout().finally(() => router.replace('/login'))
+    }
+  }, [loading, user, profile, logout, router])
 
   useEffect(() => {
-    if (!loading && (!user || !profile)) {
-      router.replace('/login')
+    if (!role) return
+    const connection = (
+      navigator as Navigator & {
+        connection?: { saveData?: boolean; effectiveType?: string }
+      }
+    ).connection
+    if (
+      connection?.saveData ||
+      connection?.effectiveType?.toLowerCase().includes('2g')
+    ) {
+      return
     }
-  }, [loading, user, profile, router])
 
-  if (loading) {
+    let cancelled = false
+    const warmRoleRoutes = () => {
+      if (cancelled) return
+      for (const item of getNavigation(role)) {
+        router.prefetch(item.href)
+      }
+    }
+
+    const idleWindow = window as unknown as {
+      requestIdleCallback?: (
+        callback: IdleRequestCallback,
+        options?: IdleRequestOptions,
+      ) => number
+      cancelIdleCallback?: (handle: number) => void
+    }
+    if (idleWindow.requestIdleCallback && idleWindow.cancelIdleCallback) {
+      const idleId = idleWindow.requestIdleCallback(warmRoleRoutes, {
+        timeout: 2_500,
+      })
+      return () => {
+        cancelled = true
+        idleWindow.cancelIdleCallback?.(idleId)
+      }
+    }
+
+    const timer = window.setTimeout(warmRoleRoutes, 1_200)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [role, router])
+
+  if (loading || !user || !profile)
     return (
       <div className="flex min-h-dvh items-center justify-center bg-slate-50 text-slate-500">
         Загрузка аккаунта…
       </div>
     )
-  }
-
-  if (error) {
-    return (
-      <div className="flex min-h-dvh items-center justify-center bg-slate-50 px-4">
-        <div className="max-w-md rounded-3xl border border-red-200 bg-white p-8 text-center shadow-sm">
-          <h1 className="text-xl font-bold text-slate-900">
-            Не удалось открыть кабинет
-          </h1>
-          <p className="mt-3 text-sm leading-6 text-red-700">{error}</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!user || !profile) {
-    return null
-  }
-
   return (
     <div className="min-h-screen bg-slate-50">
       <MobileSidebar open={open} onClose={() => setOpen(false)} />
       <Sidebar />
       <div className="lg:ml-72">
         <Header onMenuClick={() => setOpen(true)} />
-        <main className="min-h-[calc(100vh-64px)] p-5 lg:p-8">
-          {children}
-        </main>
+        <main className="min-h-[calc(100vh-64px)] p-5 lg:p-8">{children}</main>
       </div>
     </div>
   )

@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
-
 import { getNavigation } from './Navigation'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -39,23 +38,18 @@ export default function Sidebar() {
           </div>
         </Link>
       </div>
-
       <nav className="flex-1 space-y-1 overflow-y-auto p-5">
         {getNavigation(role).map((item) => {
           const Icon = item.icon
           const active =
             pathname === item.href ||
             (item.href !== '/dashboard' && pathname.startsWith(item.href))
-
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 rounded-2xl px-4 py-3 font-medium transition ${
-                active
-                  ? 'bg-violet-600 text-white'
-                  : 'text-slate-700 hover:bg-violet-50 hover:text-violet-700'
-              }`}
+              prefetch={false}
+              className={`flex items-center gap-3 rounded-2xl px-4 py-3 font-medium transition ${active ? 'bg-violet-600 text-white' : 'text-slate-700 hover:bg-violet-50 hover:text-violet-700'}`}
             >
               <Icon className="h-5 w-5" />
               {item.name}
@@ -63,7 +57,6 @@ export default function Sidebar() {
           )
         })}
       </nav>
-
       <div className="border-t border-slate-200 p-5">
         <div className="mb-4 flex items-center gap-3 rounded-2xl bg-slate-50 p-4">
           <div className="flex h-11 w-11 items-center justify-center rounded-full bg-violet-600 font-semibold text-white">
@@ -77,7 +70,6 @@ export default function Sidebar() {
           </div>
         </div>
         <button
-          type="button"
           onClick={exit}
           className="flex w-full items-center justify-center gap-3 rounded-2xl border border-red-100 py-3 font-medium text-red-600 hover:bg-red-50"
         >

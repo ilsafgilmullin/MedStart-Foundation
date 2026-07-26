@@ -29,6 +29,8 @@ Thumbs.db
 # logs and coverage
 coverage/
 *.log
+firebase-debug.log
+.firebase/
 npm-debug.log*
 yarn-error.log*
 
@@ -40,3 +42,5 @@ artifacts/medstart_backup/
 artifacts/mockup-sandbox/
 MedStart-Foundation/
 *.zip
+**/before-v5-*/
+artifacts/medstart/v5.mjs
