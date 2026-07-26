@@ -2,12 +2,13 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   onSnapshot,
+  runTransaction,
   serverTimestamp,
-  setDoc,
   type Unsubscribe,
 } from 'firebase/firestore'
-import { deleteObject, getBlob, ref, uploadBytes } from 'firebase/storage'
+import { deleteObject, getBlob, ref } from 'firebase/storage'
 import { db } from './firebase'
 import { storage } from './firebase-storage'
 
@@ -136,6 +137,25 @@ const EMPTY_BACKGROUND: MedicalBoardBackground = {
   anatomyRegion: 'thorax',
 }
 
+const workspaceVersionByBooking = new Map<string, number>()
+
+function timestampToMillis(value: unknown): number {
+  if (!value || typeof value !== 'object') return 0
+  const candidate = value as {
+    toMillis?: () => number
+    seconds?: number
+    nanoseconds?: number
+  }
+  if (typeof candidate.toMillis === 'function') return candidate.toMillis()
+  if (typeof candidate.seconds === 'number') {
+    return (
+      candidate.seconds * 1000 +
+      Math.floor((candidate.nanoseconds ?? 0) / 1_000_000)
+    )
+  }
+  return 0
+}
+
 export function emptyMedicalWorkspace(bookingId: string): MedicalWorkspaceData {
   return {
     bookingId,
@@ -177,14 +197,11 @@ export function subscribeToMedicalWorkspace(
     doc(db, 'medicalWorkspaces', bookingId),
     { includeMetadataChanges: true },
     (snapshot) => {
-      onChange(
-        normalizeWorkspace(
-          bookingId,
-          snapshot.exists()
-            ? (snapshot.data() as Partial<MedicalWorkspaceData>)
-            : undefined,
-        ),
-      )
+      const data = snapshot.exists()
+        ? (snapshot.data() as Partial<MedicalWorkspaceData>)
+        : undefined
+      workspaceVersionByBooking.set(bookingId, timestampToMillis(data?.updatedAt))
+      onChange(normalizeWorkspace(bookingId, data))
     },
     onError,
   )
@@ -200,16 +217,41 @@ export async function saveMedicalWorkspacePatch(
     >
   >,
 ): Promise<void> {
-  await setDoc(
-    doc(db, 'medicalWorkspaces', bookingId),
-    {
-      bookingId,
-      ...patch,
-      updatedByUid: userUid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
+  const workspaceRef = doc(db, 'medicalWorkspaces', bookingId)
+  const expectedVersion = workspaceVersionByBooking.get(bookingId) ?? 0
+
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(workspaceRef)
+    const current = snapshot.exists()
+      ? (snapshot.data() as Partial<MedicalWorkspaceData>)
+      : undefined
+    const currentVersion = timestampToMillis(current?.updatedAt)
+
+    if (currentVersion !== expectedVersion) {
+      throw new Error(
+        'Данные занятия изменились у второго участника. Обновите раздел и повторите сохранение.',
+      )
+    }
+
+    transaction.set(
+      workspaceRef,
+      {
+        bookingId,
+        ...patch,
+        updatedByUid: userUid,
+        createdAt: snapshot.exists()
+          ? current?.createdAt ?? serverTimestamp()
+          : serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    )
+  })
+
+  const saved = await getDoc(workspaceRef)
+  workspaceVersionByBooking.set(
+    bookingId,
+    saved.exists() ? timestampToMillis(saved.data().updatedAt) : 0,
   )
 }
 
@@ -242,20 +284,7 @@ function randomId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-function safeFileName(name: string) {
-  const cleaned = name
-    .normalize('NFKC')
-    .replace(/[^a-zA-Z0-9а-яА-ЯёЁ._-]+/g, '-')
-    .replace(/-+/g, '-')
-    .slice(-120)
-  return cleaned || 'medical-image'
-}
-
-function isDicom(file: File) {
-  return file.name.toLowerCase().endsWith('.dcm') || file.type === 'application/dicom'
-}
-
-export async function uploadMedicalAsset(input: {
+export async function uploadMedicalAsset(_input: {
   bookingId: string
   uploaderUid: string
   uploaderName: string
@@ -263,51 +292,9 @@ export async function uploadMedicalAsset(input: {
   file: File
   deidentified: boolean
 }): Promise<string> {
-  const { bookingId, uploaderUid, uploaderName, modality, file, deidentified } =
-    input
-  const allowedImage = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
-  if (!allowedImage && !isDicom(file)) {
-    throw new Error('Поддерживаются JPG, PNG, WebP и DICOM (.dcm).')
-  }
-  if (!deidentified) {
-    throw new Error('Перед загрузкой подтвердите обезличивание данных.')
-  }
-  if (file.size <= 0 || file.size > 20 * 1024 * 1024) {
-    throw new Error('Размер медицинского файла должен быть не более 20 МБ.')
-  }
-
-  const assetId = randomId()
-  const fileName = safeFileName(file.name)
-  const storagePath = `medical-workspaces/${bookingId}/${uploaderUid}/${assetId}-${fileName}`
-  const storageRef = ref(storage, storagePath)
-  const mimeType = isDicom(file) ? 'application/dicom' : file.type
-
-  await uploadBytes(storageRef, file, {
-    contentType: mimeType,
-    cacheControl: 'private,max-age=300',
-    customMetadata: {
-      bookingId,
-      uploaderUid,
-      deidentified: 'true',
-      educationalUseOnly: 'true',
-    },
-  })
-
-  await setDoc(doc(assetsCollection(bookingId), assetId), {
-    id: assetId,
-    bookingId,
-    uploaderUid,
-    uploaderName: uploaderName.slice(0, 160),
-    modality,
-    storagePath,
-    fileName,
-    mimeType,
-    fileSize: file.size,
-    deidentified: true,
-    createdAt: serverTimestamp(),
-  })
-
-  return assetId
+  throw new Error(
+    'Загрузка медицинских файлов временно отключена до подключения серверного обезличивания и антивирусной проверки.',
+  )
 }
 
 export async function loadMedicalAssetObjectUrl(asset: MedicalAsset) {
