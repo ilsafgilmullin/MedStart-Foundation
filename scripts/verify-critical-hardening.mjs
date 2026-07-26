@@ -40,20 +40,19 @@ requireText(
   'memoryLocalCache()',
   'Firestore не переведён на память',
 )
-requireText(
-  'artifacts/medstart/lib/firebase.ts',
-  /persistentLocalCache|persistentMultipleTabManager/,
-  'MARKER_SHOULD_NOT_EXIST',
-)
 
 const firebaseClient = read('artifacts/medstart/lib/firebase.ts')
 if (/persistentLocalCache|persistentMultipleTabManager/.test(firebaseClient)) {
-  throw new Error('artifacts/medstart/lib/firebase.ts: приватные данные всё ещё сохраняются в IndexedDB')
+  throw new Error(
+    'artifacts/medstart/lib/firebase.ts: приватные данные всё ещё сохраняются в IndexedDB',
+  )
 }
 
 const whiteboard = read('artifacts/medstart/components/live/ServerlessWhiteboard.tsx')
 if (whiteboard.includes('localStorage.')) {
-  throw new Error('ServerlessWhiteboard.tsx: доска всё ещё сохраняется в localStorage')
+  throw new Error(
+    'ServerlessWhiteboard.tsx: доска всё ещё сохраняется в localStorage',
+  )
 }
 
 requireText(
