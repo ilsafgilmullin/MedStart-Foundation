@@ -108,20 +108,10 @@ service firebase.storage {
     }
 
     match /medical-workspaces/{bookingId}/{userId}/{fileName} {
-      allow read: if canReadMedicalAsset(bookingId);
-
-      // До появления серверного обезличивания, удаления DICOM/EXIF-метаданных,
-      // карантина и антивирусной проверки новые медицинские файлы запрещены.
-      allow create: if false;
-
-      allow update: if false;
-
-      allow delete: if hasUsableAccount()
-        && (
-          request.auth.uid == userId
-          || medicalBooking(bookingId).tutorUid == request.auth.uid
-          || isModerator()
-        );
+      // Все ранее загруженные медицинские файлы помещены в карантин.
+      allow read: if isModerator();
+      allow create, update: if false;
+      allow delete: if isModerator();
     }
   }
 }

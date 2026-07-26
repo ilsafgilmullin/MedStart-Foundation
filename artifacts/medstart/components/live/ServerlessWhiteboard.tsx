@@ -302,38 +302,18 @@ export default function ServerlessWhiteboard({
     elementsRef.current = elements
   }, [elements])
 
-  useEffect(() => {
-    const cacheKey = `medstart-board-${bookingId}`
-    try {
-      const cached = sessionStorage.getItem(cacheKey)
-      if (cached) {
-        const parsed = JSON.parse(cached) as unknown
-        if (Array.isArray(parsed)) setElements(parsed.filter(isBoardElement))
-      }
-    } catch {
-      // Private mode can disable session storage.
-    }
-
-    return subscribeToWhiteboard(
-      bookingId,
-      (next) => {
-        setElements(next.filter(isBoardElement))
-        setSyncState(navigator.onLine ? 'saved' : 'offline')
-      },
-      () => setSyncState(navigator.onLine ? 'error' : 'offline'),
-    )
-  }, [bookingId])
-
-  useEffect(() => {
-    try {
-      sessionStorage.setItem(
-        `medstart-board-${bookingId}`,
-        JSON.stringify(elements.slice(-CACHE_LIMIT)),
-      )
-    } catch {
-      // Private mode can disable session storage.
-    }
-  }, [bookingId, elements])
+  useEffect(
+    () =>
+      subscribeToWhiteboard(
+        bookingId,
+        (next) => {
+          setElements(next.filter(isBoardElement))
+          setSyncState(navigator.onLine ? 'saved' : 'offline')
+        },
+        () => setSyncState(navigator.onLine ? 'error' : 'offline'),
+      ),
+    [bookingId],
+  )
 
   useEffect(() => {
     const update = () => {

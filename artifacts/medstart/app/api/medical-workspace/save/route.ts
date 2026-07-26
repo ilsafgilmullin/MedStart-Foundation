@@ -20,6 +20,7 @@ type WorkspaceKey = (typeof ALLOWED_KEYS)[number]
 
 interface SaveRequestBody {
   bookingId?: unknown
+  expectedVersion?: unknown
   patch?: unknown
 }
 
@@ -40,6 +41,44 @@ function text(value: unknown, maxLength: number) {
 
 function bool(value: unknown) {
   return value === true
+}
+
+const IDENTIFIER_PATTERNS = [
+  /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
+  /(?:\+7|8)[\s()-]*\d{3}[\s()-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}/g,
+  /\b\d{3}[- ]?\d{3}[- ]?\d{3}[- ]?\d{2}\b/g,
+  /\b[А-ЯЁ][а-яё]+\s+[А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+)?\b/g,
+  /\b(?:0?[1-9]|[12]\d|3[01])[./-](?:0?[1-9]|1[0-2])[./-](?:19|20)\d{2}\b/g,
+]
+
+function containsPotentialIdentifier(value: unknown) {
+  const serialized = JSON.stringify(value)
+  return IDENTIFIER_PATTERNS.some((pattern) => {
+    pattern.lastIndex = 0
+    return pattern.test(serialized)
+  })
+}
+
+function privacyConfirmed(value: unknown) {
+  return (
+    isRecord(value) &&
+    value.deidentified === true &&
+    value.identifiersRemoved === true &&
+    value.consentConfirmed === true &&
+    value.educationalUseOnly === true
+  )
+}
+
+function hasProtectedContent(value: Record<string, unknown>) {
+  const clinicalCase = isRecord(value.clinicalCase) ? value.clinicalCase : {}
+  const hasCase = Object.values(clinicalCase).some(
+    (item) => typeof item === 'string' && item.trim().length > 0,
+  )
+  const hasLabs = Array.isArray(value.labs) && value.labs.length > 0
+  const ecg = isRecord(value.ecg) ? value.ecg : {}
+  const hasEcgConclusion =
+    typeof ecg.conclusion === 'string' && ecg.conclusion.trim().length > 0
+  return hasCase || hasLabs || hasEcgConclusion
 }
 
 function sanitizeClinicalCase(value: unknown) {
@@ -177,12 +216,25 @@ export async function POST(request: Request) {
   if (!/^[A-Za-z0-9_-]{6,160}$/.test(bookingId)) {
     return jsonError('Некорректный идентификатор занятия.', 400)
   }
+  const expectedVersion = Number(body.expectedVersion)
+  if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 0) {
+    return jsonError('Некорректная версия медицинского пространства.', 400)
+  }
 
   let sanitized: { key: WorkspaceKey; value: unknown }
   try {
     sanitized = sanitizePatch(body.patch)
   } catch {
     return jsonError('Медицинские данные имеют некорректную структуру.', 400)
+  }
+  if (
+    ['clinicalCase', 'labs', 'ecg', 'privacy'].includes(sanitized.key) &&
+    containsPotentialIdentifier(sanitized.value)
+  ) {
+    return jsonError(
+      'Обнаружены возможные персональные данные пациента. Удалите ФИО, контакты, номера документов и точные даты.',
+      422,
+    )
   }
 
   try {
@@ -196,7 +248,7 @@ export async function POST(request: Request) {
     const workspaceRef = database.collection('medicalWorkspaces').doc(bookingId)
     const revisionRef = workspaceRef.collection('revisions').doc()
 
-    await database.runTransaction(async (transaction) => {
+    const nextVersion = await database.runTransaction(async (transaction) => {
       const [userSnapshot, bookingSnapshot, workspaceSnapshot] = await Promise.all([
         transaction.get(userRef),
         transaction.get(bookingRef),
@@ -215,6 +267,25 @@ export async function POST(request: Request) {
       if (booking.status !== 'accepted') throw new Error('BOOKING_INACTIVE')
 
       const previous = workspaceSnapshot.exists ? workspaceSnapshot.data() || {} : {}
+      const currentVersion = Number(previous.version) || 0
+      if (currentVersion !== expectedVersion) {
+        throw new Error('WORKSPACE_CONFLICT')
+      }
+      const effectivePrivacy =
+        sanitized.key === 'privacy' ? sanitized.value : previous.privacy
+      if (
+        ['clinicalCase', 'labs', 'ecg'].includes(sanitized.key) &&
+        !privacyConfirmed(effectivePrivacy)
+      ) {
+        throw new Error('PRIVACY_REQUIRED')
+      }
+      if (
+        sanitized.key === 'privacy' &&
+        !privacyConfirmed(sanitized.value) &&
+        hasProtectedContent(previous)
+      ) {
+        throw new Error('PRIVACY_DOWNGRADE')
+      }
       const beforeValue = previous[sanitized.key] ?? null
       const afterValue = mergeValue(
         sanitized.key,
@@ -238,17 +309,18 @@ export async function POST(request: Request) {
           bookingId,
           [sanitized.key]: afterValue,
           updatedByUid: decoded.uid,
-          version: FieldValue.increment(1),
+          version: currentVersion + 1,
           lastRevisionId: revisionRef.id,
           updatedAt: now,
           ...(workspaceSnapshot.exists ? {} : { createdAt: now }),
         },
         { merge: true },
       )
+      return currentVersion + 1
     })
 
     return NextResponse.json(
-      { ok: true },
+      { ok: true, version: nextVersion },
       { headers: { 'Cache-Control': 'no-store' } },
     )
   } catch (error) {
@@ -258,6 +330,9 @@ export async function POST(request: Request) {
       BOOKING_NOT_FOUND: ['Занятие не найдено.', 404],
       FORBIDDEN: ['У вас нет доступа к этому занятию.', 403],
       BOOKING_INACTIVE: ['Изменять данные можно только во время подтверждённого занятия.', 409],
+      WORKSPACE_CONFLICT: ['Данные занятия уже изменены другим участником. Дождитесь синхронизации и повторите сохранение.', 409],
+      PRIVACY_REQUIRED: ['Сначала подтвердите все пункты обезличивания и законного учебного использования.', 409],
+      PRIVACY_DOWNGRADE: ['Нельзя снять подтверждение безопасности, пока в занятии сохранены медицинские сведения.', 409],
     }
     if (known[code]) return jsonError(known[code][0], known[code][1])
 

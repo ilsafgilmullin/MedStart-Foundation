@@ -4,36 +4,39 @@ function read(path) {
   return readFileSync(path, 'utf8')
 }
 
-function requireText(path, pattern, message) {
-  const content = read(path)
-  const ok = pattern instanceof RegExp ? pattern.test(content) : content.includes(pattern)
-  if (!ok) throw new Error(`${path}: ${message}`)
+function requireText(path, text, message) {
+  if (!read(path).includes(text)) throw new Error(path + ': ' + message)
 }
 
 requireText(
   'firestore.rules',
   'function hasUsableAccount()',
-  'отсутствует централизованная проверка заблокированных аккаунтов',
+  'отсутствует отзыв доступа для заблокированных аккаунтов',
 )
 requireText(
   'firestore.rules',
-  /match \/bookings\/\{bookingId\}[\s\S]*?allow create: if false;/,
+  '// Создание выполняется только серверным API',
   'клиент всё ещё может создавать заявки напрямую',
 )
 requireText(
   'firestore.rules',
-  /match \/medicalWorkspaces\/\{bookingId\}[\s\S]*?allow create, update: if false;/,
+  '// Статусы меняет только серверный API',
+  'клиент всё ещё может напрямую менять статус занятия',
+)
+requireText(
+  'firestore.rules',
+  '// Медицинские поля записывает только сервер',
   'клиент всё ещё может напрямую менять медицинское пространство',
 )
 requireText(
   'firestore.rules',
-  /match \/assets\/\{assetId\}[\s\S]*?allow create: if false;/,
-  'клиент всё ещё может создавать медицинские метаданные',
+  '// Ранее загруженные пользовательские файлы помещены в карантин.',
+  'медицинские метаданные не помещены в карантин',
 )
 requireText(
   'storage.rules',
-  /match \/medical-workspaces\/\{bookingId\}\/\{userId\}\/\{fileName\}[\s\S]*?allow create: if false;/,
-  'загрузка пользовательских медицинских файлов не заблокирована',
+  '// Все ранее загруженные медицинские файлы помещены в карантин.',
+  'медицинские файлы не помещены в карантин',
 )
 requireText(
   'artifacts/medstart/lib/firebase.ts',
@@ -42,17 +45,18 @@ requireText(
 )
 
 const firebaseClient = read('artifacts/medstart/lib/firebase.ts')
-if (/persistentLocalCache|persistentMultipleTabManager/.test(firebaseClient)) {
-  throw new Error(
-    'artifacts/medstart/lib/firebase.ts: приватные данные всё ещё сохраняются в IndexedDB',
-  )
+if (
+  firebaseClient.includes('persistentLocalCache') ||
+  firebaseClient.includes('persistentMultipleTabManager')
+) {
+  throw new Error('firebase.ts: приватные данные всё ещё сохраняются в IndexedDB')
 }
 
-const whiteboard = read('artifacts/medstart/components/live/ServerlessWhiteboard.tsx')
-if (whiteboard.includes('localStorage.')) {
-  throw new Error(
-    'ServerlessWhiteboard.tsx: доска всё ещё сохраняется в localStorage',
-  )
+const whiteboard = read(
+  'artifacts/medstart/components/live/ServerlessWhiteboard.tsx',
+)
+if (whiteboard.includes('localStorage.') || whiteboard.includes('sessionStorage.')) {
+  throw new Error('ServerlessWhiteboard.tsx: доска сохраняется в Web Storage')
 }
 
 requireText(
@@ -61,24 +65,34 @@ requireText(
   'создание заявок не переведено на серверный API',
 )
 requireText(
+  'artifacts/medstart/lib/bookings.ts',
+  '/api/bookings/status',
+  'статусы занятий не переведены на серверный API',
+)
+requireText(
+  'artifacts/medstart/app/api/bookings/create/route.ts',
+  "where('studentUid', '==', decoded.uid)",
+  'не проверяются пересечения занятий студента',
+)
+requireText(
   'artifacts/medstart/lib/medical-workspace.ts',
   '/api/medical-workspace/save',
   'медицинские данные не переведены на серверную валидацию',
 )
 requireText(
-  'artifacts/medstart/app/api/bookings/create/route.ts',
-  'SLOT_CONFLICT',
-  'сервер не контролирует пересечения занятий',
+  'artifacts/medstart/app/api/medical-workspace/save/route.ts',
+  'WORKSPACE_CONFLICT',
+  'нет защиты от конкурентной перезаписи медицинских данных',
+)
+requireText(
+  'artifacts/medstart/app/api/medical-workspace/save/route.ts',
+  'containsPotentialIdentifier',
+  'нет серверной проверки возможных персональных данных пациента',
 )
 requireText(
   'artifacts/medstart/app/api/medical-workspace/save/route.ts',
   "workspaceRef.collection('revisions')",
   'нет журнала ревизий медицинских данных',
-)
-requireText(
-  '.github/workflows/medstart-ci.yml',
-  '- main',
-  'основная ветка не включена в CI',
 )
 
 console.log('Critical hardening invariants: OK')

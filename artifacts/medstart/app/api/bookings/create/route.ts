@@ -286,27 +286,34 @@ export async function POST(request: Request) {
         throw new Error('OUTSIDE_AVAILABILITY')
       }
 
-      const existingSnapshot = await transaction.get(
-        database.collection('bookings').where('tutorUid', '==', tutorUid),
-      )
+      const [tutorBookings, studentBookings] = await Promise.all([
+        transaction.get(
+          database.collection('bookings').where('tutorUid', '==', tutorUid),
+        ),
+        transaction.get(
+          database.collection('bookings').where('studentUid', '==', decoded.uid),
+        ),
+      ])
       const requestedEnd = startsAtMs + durationMinutes * 60_000
-      const hasConflict = existingSnapshot.docs.some((document) => {
-        const existing = document.data() as Record<string, unknown>
-        if (!['pending', 'accepted'].includes(String(existing.status))) return false
-        const existingStart =
-          timestampMillis(existing.startsAt) ||
-          zonedDateTimeToMillis(
-            String(existing.requestedDate || ''),
-            String(existing.requestedTime || ''),
-            String(existing.timezone || 'Europe/Moscow'),
+      const hasConflict = [...tutorBookings.docs, ...studentBookings.docs].some(
+        (document) => {
+          const existing = document.data() as Record<string, unknown>
+          if (!['pending', 'accepted'].includes(String(existing.status))) return false
+          const existingStart =
+            timestampMillis(existing.startsAt) ||
+            zonedDateTimeToMillis(
+              String(existing.requestedDate || ''),
+              String(existing.requestedTime || ''),
+              String(existing.timezone || 'Europe/Moscow'),
+            )
+          const existingDuration = Math.min(
+            180,
+            Math.max(30, Number(existing.durationMinutes) || 60),
           )
-        const existingDuration = Math.min(
-          180,
-          Math.max(30, Number(existing.durationMinutes) || 60),
-        )
-        const existingEnd = existingStart + existingDuration * 60_000
-        return existingStart < requestedEnd && startsAtMs < existingEnd
-      })
+          const existingEnd = existingStart + existingDuration * 60_000
+          return existingStart < requestedEnd && startsAtMs < existingEnd
+        },
+      )
       if (hasConflict) throw new Error('SLOT_CONFLICT')
 
       const rate = rateSnapshot.data() as
@@ -329,6 +336,12 @@ export async function POST(request: Request) {
         `Здравствуйте! Хочу записаться на занятие по теме «${subject}».`
       const nowValue = FieldValue.serverTimestamp()
 
+      const rawPrice = Number(tutor.lessonPrice)
+      const lessonPrice =
+        Number.isFinite(rawPrice) && rawPrice >= 0 && rawPrice <= 1_000_000
+          ? rawPrice
+          : 0
+
       transaction.set(bookingRef, {
         studentUid: decoded.uid,
         studentName,
@@ -344,7 +357,7 @@ export async function POST(request: Request) {
         startsAt: Timestamp.fromMillis(startsAtMs),
         durationMinutes,
         format,
-        price: Math.max(0, Number(tutor.lessonPrice) || 0),
+        price: lessonPrice,
         status: 'pending',
         studentMessage: messageText,
         tutorResponse: '',
@@ -417,7 +430,7 @@ export async function POST(request: Request) {
       DATETIME_PAST: ['Нельзя записаться на прошедшее или слишком близкое время.', 409],
       DATETIME_TOO_FAR: ['Запись доступна не более чем на 180 дней вперёд.', 409],
       OUTSIDE_AVAILABILITY: ['Выбранное время находится вне рабочих часов репетитора.', 409],
-      SLOT_CONFLICT: ['Это время уже занято другой заявкой или занятием.', 409],
+      SLOT_CONFLICT: ['В это время у репетитора или студента уже есть заявка либо занятие.', 409],
       RATE_FAST: ['Подождите несколько секунд перед следующей заявкой.', 429],
       RATE_DAILY: ['Достигнут дневной лимит заявок.', 429],
       CONVERSATION_CONFLICT: ['Не удалось безопасно создать диалог.', 409],

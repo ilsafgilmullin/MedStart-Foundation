@@ -129,6 +129,8 @@ const EMPTY_PRIVACY: PrivacyChecklist = {
   patientLabel: 'Учебный пациент',
 }
 
+const workspaceVersions = new Map<string, number>()
+
 const EMPTY_BACKGROUND: MedicalBoardBackground = {
   kind: 'none',
   assetId: '',
@@ -181,14 +183,14 @@ export function subscribeToMedicalWorkspace(
     doc(db, 'medicalWorkspaces', bookingId),
     { includeMetadataChanges: true },
     (snapshot) => {
-      onChange(
-        normalizeWorkspace(
-          bookingId,
-          snapshot.exists()
-            ? (snapshot.data() as Partial<MedicalWorkspaceData>)
-            : undefined,
-        ),
+      const workspace = normalizeWorkspace(
+        bookingId,
+        snapshot.exists()
+          ? (snapshot.data() as Partial<MedicalWorkspaceData>)
+          : undefined,
       )
+      workspaceVersions.set(bookingId, workspace.version ?? 0)
+      onChange(workspace)
     },
     onError,
   )
@@ -216,13 +218,21 @@ export async function saveMedicalWorkspacePatch(
       'Content-Type': 'application/json',
     },
     cache: 'no-store',
-    body: JSON.stringify({ bookingId, patch }),
+    body: JSON.stringify({
+      bookingId,
+      expectedVersion: workspaceVersions.get(bookingId) ?? 0,
+      patch,
+    }),
   })
   const payload = (await response.json().catch(() => ({}))) as {
     error?: string
+    version?: number
   }
   if (!response.ok) {
     throw new Error(payload.error || 'Не удалось сохранить медицинские данные.')
+  }
+  if (Number.isSafeInteger(payload.version)) {
+    workspaceVersions.set(bookingId, payload.version!)
   }
 }
 
@@ -231,21 +241,12 @@ function assetsCollection(bookingId: string) {
 }
 
 export function subscribeToMedicalAssets(
-  bookingId: string,
+  _bookingId: string,
   onChange: (assets: MedicalAsset[]) => void,
-  onError?: (error: Error) => void,
+  _onError?: (error: Error) => void,
 ): Unsubscribe {
-  return onSnapshot(
-    assetsCollection(bookingId),
-    { includeMetadataChanges: true },
-    (snapshot) => {
-      const assets = snapshot.docs
-        .map((item) => ({ id: item.id, ...item.data() }) as MedicalAsset)
-        .sort((left, right) => left.fileName.localeCompare(right.fileName, 'ru'))
-      onChange(assets)
-    },
-    onError,
-  )
+  onChange([])
+  return () => undefined
 }
 
 function randomId() {
@@ -281,16 +282,17 @@ export async function uploadMedicalAsset(_input: {
   )
 }
 
-export async function loadMedicalAssetObjectUrl(asset: MedicalAsset) {
-  if (asset.mimeType === 'application/dicom') return ''
-  const blob = await getBlob(ref(storage, asset.storagePath), 20 * 1024 * 1024)
-  return URL.createObjectURL(blob)
+export async function loadMedicalAssetObjectUrl(
+  _asset: MedicalAsset,
+): Promise<string> {
+  throw new Error(
+    'Ранее загруженные медицинские файлы помещены в карантин и недоступны участникам занятия.',
+  )
 }
 
-export async function deleteMedicalAsset(asset: MedicalAsset): Promise<void> {
-  await deleteObject(ref(storage, asset.storagePath)).catch(() => undefined)
-  await deleteDoc(
-    doc(db, 'medicalWorkspaces', asset.bookingId, 'assets', asset.id),
+export async function deleteMedicalAsset(_asset: MedicalAsset): Promise<void> {
+  throw new Error(
+    'Удаление карантинных медицинских файлов выполняется только администрацией.',
   )
 }
 

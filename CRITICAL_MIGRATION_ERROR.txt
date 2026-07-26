@@ -1,9 +1,0 @@
-Critical hardening stage 2 applied successfully.
-file:///home/runner/work/MedStart-Foundation/MedStart-Foundation/scripts/run-critical-stage2.mjs:65
-  throw new Error('medical-workspace stage 2 produced a duplicate function')
-        ^
-
-Error: medical-workspace stage 2 produced a duplicate function
-    at file:///home/runner/work/MedStart-Foundation/MedStart-Foundation/scripts/run-critical-stage2.mjs:65:9
-
-Node.js v22.23.1
