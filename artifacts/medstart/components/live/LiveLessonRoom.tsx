@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   UsersRound,
 } from 'lucide-react'
+import DemoLessonRoom from './DemoLessonRoom'
 import LessonChat from './LessonChat'
 import LessonControls from './LessonControls'
 import MedicalWorkspace from './MedicalWorkspace'
@@ -213,6 +214,18 @@ export default function LiveLessonRoom({
   onLeave,
   onConnectionError,
 }: LiveLessonRoomProps) {
+  if (credentials.serverUrl === 'demo://local') {
+    return (
+      <DemoLessonRoom
+        booking={booking}
+        userUid={userUid}
+        userName={userName}
+        participantRole={participantRole}
+        onLeave={onLeave}
+      />
+    )
+  }
+
   return (
     <LiveKitRoom
       token={credentials.participantToken}
