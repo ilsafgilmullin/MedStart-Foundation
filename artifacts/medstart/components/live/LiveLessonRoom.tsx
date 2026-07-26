@@ -25,8 +25,8 @@ import {
 } from 'lucide-react'
 import LessonChat from './LessonChat'
 import LessonControls from './LessonControls'
+import MedicalBoardWorkbench from './MedicalBoardWorkbench'
 import VideoStage from './VideoStage'
-import Whiteboard from './Whiteboard'
 import { bookingDateTime, formatBookingDate, type Booking } from '@/lib/domain'
 
 export interface LiveSessionCredentials {
@@ -119,7 +119,7 @@ function Workspace({
                 {booking.subject}
               </h1>
               <span className="hidden rounded-full bg-violet-500/20 px-2 py-1 text-[10px] font-semibold text-violet-200 sm:inline">
-                MedStart Live
+                MedStart Live · Medical Board V6
               </span>
             </div>
             <p className="mt-0.5 flex items-center gap-2 truncate text-[11px] text-slate-400">
@@ -168,7 +168,7 @@ function Workspace({
         <div
           className={`min-h-0 ${mobileView === 'board' ? 'block' : 'hidden'} lg:block`}
         >
-          <Whiteboard
+          <MedicalBoardWorkbench
             bookingId={booking.id}
             userUid={userUid}
             userName={userName}
