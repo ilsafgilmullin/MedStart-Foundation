@@ -1,0 +1,72 @@
+name: Patch critical whiteboard resize fallback
+
+on:
+  push:
+    branches:
+      - fix/critical-audit-v1
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: patch-critical-whiteboard-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  patch-and-validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout hardening branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/critical-audit-v1
+          fetch-depth: 0
+
+      - name: Replace unreachable resize fallback
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('artifacts/medstart/components/live/ServerlessWhiteboard.tsx')
+          source = path.read_text(encoding='utf-8')
+          old = """    if ('ResizeObserver' in window) {
+                const observer = new ResizeObserver(render)
+                observer.observe(container)
+                return () => observer.disconnect()
+              }
+
+              window.addEventListener('resize', render)
+              return () => window.removeEventListener('resize', render)
+          """
+          # Keep an unindented fallback because formatters may normalize spaces.
+          old = """    if ('ResizeObserver' in window) {
+                const observer = new ResizeObserver(render)
+                observer.observe(container)
+                return () => observer.disconnect()
+              }
+
+              window.addEventListener('resize', render)
+              return () => window.removeEventListener('resize', render)
+          """.replace('              ', '    ')
+          new = """    const observer = new ResizeObserver(render)
+              observer.observe(container)
+              return () => observer.disconnect()
+          """.replace('              ', '    ')
+
+          if old not in source:
+              raise SystemExit('Expected ResizeObserver block was not found')
+
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          PY
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/medstart/components/live/ServerlessWhiteboard.tsx
+          git commit -m "fix: remove unreachable resize fallback"
+          git push origin HEAD:fix/critical-audit-v1
