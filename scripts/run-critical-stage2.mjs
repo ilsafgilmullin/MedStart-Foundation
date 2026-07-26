@@ -7,6 +7,7 @@ const bookingsPath = 'artifacts/medstart/lib/bookings.ts'
 const medicalLibPath = 'artifacts/medstart/lib/medical-workspace.ts'
 
 const bookingsBefore = readFileSync(bookingsPath, 'utf8')
+const medicalBefore = readFileSync(medicalLibPath, 'utf8')
 const statusStart = bookingsBefore.indexOf(
   'export async function changeBookingStatus(',
 )
@@ -49,21 +50,54 @@ const statusFunction = `export async function changeBookingStatus(
 `
 writeFileSync(bookingsPath, bookingsPrefix + statusFunction)
 
-let medicalLib = readFileSync(medicalLibPath, 'utf8')
-medicalLib = medicalLib.replace(
-  'function randomId()\n}\n\nfunction randomId() {',
-  'function randomId() {',
+const generatedMedical = readFileSync(medicalLibPath, 'utf8')
+const subscribeStart = generatedMedical.indexOf(
+  'export function subscribeToMedicalAssets(',
 )
-medicalLib = medicalLib.replace(
-  'export function newLabRow()\n}\n\nexport function newLabRow() {',
-  'export function newLabRow() {',
-)
-if (
-  medicalLib.includes('function randomId()\n}') ||
-  medicalLib.includes('export function newLabRow()\n}')
-) {
-  throw new Error('medical-workspace stage 2 produced a duplicate function')
+const originalRandomStart = medicalBefore.indexOf('function randomId()')
+if (subscribeStart < 0 || originalRandomStart < 0) {
+  throw new Error('medical asset subscription boundaries not found')
 }
+
+const quarantinedSubscription = `export function subscribeToMedicalAssets(
+  _bookingId: string,
+  onChange: (assets: MedicalAsset[]) => void,
+  _onError?: (error: Error) => void,
+): Unsubscribe {
+  onChange([])
+  return () => undefined
+}
+
+`
+let medicalLib =
+  generatedMedical.slice(0, subscribeStart) +
+  quarantinedSubscription +
+  medicalBefore.slice(originalRandomStart)
+
+const loadStart = medicalLib.indexOf(
+  'export async function loadMedicalAssetObjectUrl(',
+)
+const newLabStart = medicalLib.indexOf('export function newLabRow()', loadStart)
+if (loadStart < 0 || newLabStart < 0) {
+  throw new Error('medical asset loader boundaries not found')
+}
+const quarantinedLoaders = `export async function loadMedicalAssetObjectUrl(_asset: MedicalAsset) {
+  throw new Error(
+    'Ранее загруженные медицинские файлы помещены в карантин и недоступны участникам занятия.',
+  )
+}
+
+export async function deleteMedicalAsset(_asset: MedicalAsset): Promise<void> {
+  throw new Error(
+    'Удаление карантинных медицинских файлов выполняется только администрацией.',
+  )
+}
+
+`
+medicalLib =
+  medicalLib.slice(0, loadStart) +
+  quarantinedLoaders +
+  medicalLib.slice(newLabStart)
 writeFileSync(medicalLibPath, medicalLib)
 
 console.log('Critical hardening stage 2 runner completed successfully.')
