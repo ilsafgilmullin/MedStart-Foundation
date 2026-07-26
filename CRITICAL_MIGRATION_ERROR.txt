@@ -1,11 +1,9 @@
-Error: firestore.rules: fragment not found:
-    function isOwner() {
-      return signedIn()
-        && request.auth.uid == 'm8JbbeeXMmZzywUwHboOyMm9MnG2';
-    }
+Critical hardening stage 2 applied successfully.
+file:///home/runner/work/MedStart-Foundation/MedStart-Foundation/scripts/run-critical-stage2.mjs:65
+  throw new Error('medical-workspace stage 2 produced a duplicate function')
+        ^
 
-    at replaceOnce (file:///tmp/medstart-apply-critical-hardening.mjs:14:24)
-    at file:///tmp/medstart-apply-critical-hardening.mjs:64:1
-    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)
-    at async file:///home/runner/work/MedStart-Foundation/MedStart-Foundation/scripts/run-critical-hardening.mjs:26:3
+Error: medical-workspace stage 2 produced a duplicate function
+    at file:///home/runner/work/MedStart-Foundation/MedStart-Foundation/scripts/run-critical-stage2.mjs:65:9
+
+Node.js v22.23.1
