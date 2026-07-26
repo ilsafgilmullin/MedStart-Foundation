@@ -1,0 +1,9 @@
+
+> @workspace/medstart@0.1.0 typecheck /home/runner/work/MedStart-Foundation/MedStart-Foundation/artifacts/medstart
+> tsc --noEmit
+
+components/live/MedicalWorkspace.tsx(372,9): error TS2322: Type 'void' is not assignable to type 'string'.
+components/live/MedicalWorkspace.tsx(373,39): error TS2345: Argument of type 'void' is not assignable to parameter of type 'SetStateAction<string>'.
+/home/runner/work/MedStart-Foundation/MedStart-Foundation/artifacts/medstart:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/medstart@0.1.0 typecheck: `tsc --noEmit`
+Exit status 2
