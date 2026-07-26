@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/medical-workspace-v6
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -35,6 +38,7 @@ jobs:
         run: node scripts/apply-v6-rules.mjs
 
       - name: Commit generated rules
+        if: github.event_name == 'push'
         id: rules
         shell: bash
         run: |
