@@ -111,6 +111,30 @@ verify = verify.replace(
   "'ServerlessWhiteboard.tsx: доска всё ещё сохраняется в Web Storage'",
 )
 verify = verify.replace(
+  `requireText(
+  'firestore.rules',
+  /match \/assets\/\{assetId\}[\s\S]*?allow create: if false;/,
+  'клиент всё ещё может создавать медицинские метаданные',
+)`,
+  `requireText(
+  'firestore.rules',
+  '// Ранее загруженные пользовательские файлы помещены в карантин.',
+  'клиент всё ещё может создавать или читать медицинские метаданные',
+)`,
+)
+verify = verify.replace(
+  `requireText(
+  'storage.rules',
+  /match \/medical-workspaces\/\{bookingId\}\/\{userId\}\/\{fileName\}[\s\S]*?allow create: if false;/,
+  'загрузка пользовательских медицинских файлов не заблокирована',
+)`,
+  `requireText(
+  'storage.rules',
+  '// Все ранее загруженные медицинские файлы помещены в карантин.',
+  'медицинские файлы не помещены в карантин',
+)`,
+)
+verify = verify.replace(
   "console.log('Critical hardening invariants: OK')",
   `requireText(
   'firestore.rules',
