@@ -5,9 +5,11 @@ const stagePath = 'scripts/apply-critical-stage2.mjs'
 const runtimePath = '/tmp/medstart-critical-stage2.mjs'
 const bookingsPath = 'artifacts/medstart/lib/bookings.ts'
 const medicalLibPath = 'artifacts/medstart/lib/medical-workspace.ts'
+const verifyPath = 'scripts/verify-critical-hardening.mjs'
 
 const bookingsBefore = readFileSync(bookingsPath, 'utf8')
 const medicalBefore = readFileSync(medicalLibPath, 'utf8')
+const verifyBefore = readFileSync(verifyPath, 'utf8')
 const statusStart = bookingsBefore.indexOf(
   'export async function changeBookingStatus(',
 )
@@ -99,5 +101,45 @@ medicalLib =
   quarantinedLoaders +
   medicalLib.slice(newLabStart)
 writeFileSync(medicalLibPath, medicalLib)
+
+let verify = verifyBefore.replace(
+  "if (whiteboard.includes('localStorage.')) {",
+  "if (/localStorage\\.|sessionStorage\\./.test(whiteboard)) {",
+)
+verify = verify.replace(
+  "'ServerlessWhiteboard.tsx: доска всё ещё сохраняется в localStorage'",
+  "'ServerlessWhiteboard.tsx: доска всё ещё сохраняется в Web Storage'",
+)
+verify = verify.replace(
+  "console.log('Critical hardening invariants: OK')",
+  `requireText(
+  'firestore.rules',
+  '// Статусы меняет только серверный API',
+  'клиент всё ещё может напрямую менять статус занятия',
+)
+requireText(
+  'artifacts/medstart/lib/bookings.ts',
+  '/api/bookings/status',
+  'статусы занятий не переведены на серверный API',
+)
+requireText(
+  'artifacts/medstart/app/api/medical-workspace/save/route.ts',
+  'WORKSPACE_CONFLICT',
+  'нет защиты от конкурентной перезаписи медицинских данных',
+)
+requireText(
+  'artifacts/medstart/app/api/medical-workspace/save/route.ts',
+  'containsPotentialIdentifier',
+  'нет серверной проверки возможных персональных данных пациента',
+)
+requireText(
+  'storage.rules',
+  '// Все ранее загруженные медицинские файлы помещены в карантин.',
+  'ранее загруженные медицинские файлы не помещены в карантин',
+)
+
+console.log('Critical hardening invariants: OK')`,
+)
+writeFileSync(verifyPath, verify)
 
 console.log('Critical hardening stage 2 runner completed successfully.')
