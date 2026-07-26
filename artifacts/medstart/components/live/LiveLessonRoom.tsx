@@ -25,8 +25,8 @@ import {
 } from 'lucide-react'
 import LessonChat from './LessonChat'
 import LessonControls from './LessonControls'
+import MedicalWorkspace from './MedicalWorkspace'
 import VideoStage from './VideoStage'
-import Whiteboard from './Whiteboard'
 import { bookingDateTime, formatBookingDate, type Booking } from '@/lib/domain'
 
 export interface LiveSessionCredentials {
@@ -119,7 +119,7 @@ function Workspace({
                 {booking.subject}
               </h1>
               <span className="hidden rounded-full bg-violet-500/20 px-2 py-1 text-[10px] font-semibold text-violet-200 sm:inline">
-                MedStart Live
+                MedStart Medical Live
               </span>
             </div>
             <p className="mt-0.5 flex items-center gap-2 truncate text-[11px] text-slate-400">
@@ -142,7 +142,7 @@ function Workspace({
         <nav className="mt-3 grid grid-cols-3 gap-1 rounded-xl bg-white/5 p-1 lg:hidden">
           {(
             [
-              ['board', 'Доска', LayoutDashboard],
+              ['board', 'Меддоска', LayoutDashboard],
               ['video', 'Видео', UsersRound],
               ['chat', 'Чат', MessageCircle],
             ] as const
@@ -168,12 +168,13 @@ function Workspace({
         <div
           className={`min-h-0 ${mobileView === 'board' ? 'block' : 'hidden'} lg:block`}
         >
-          <Whiteboard
+          <MedicalWorkspace
             bookingId={booking.id}
             userUid={userUid}
             userName={userName}
             tutorUid={booking.tutorUid}
             canClear={participantRole === 'tutor'}
+            participantRole={participantRole}
           />
         </div>
 

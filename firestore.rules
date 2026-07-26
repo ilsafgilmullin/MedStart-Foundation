@@ -811,5 +811,96 @@ service cloud.firestore {
           );
       }
     }
+
+    // MEDSTART_V6_MEDICAL_WORKSPACE_RULES
+    function validMedicalWorkspace(data, bookingId) {
+      return data.keys().hasOnly([
+          'bookingId',
+          'clinicalCase',
+          'labs',
+          'ecg',
+          'privacy',
+          'boardBackground',
+          'updatedByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.bookingId == bookingId
+        && data.clinicalCase is map
+        && data.labs is list
+        && data.labs.size() <= 100
+        && data.ecg is map
+        && data.privacy is map
+        && data.boardBackground is map
+        && data.updatedByUid == request.auth.uid
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function validMedicalAsset(data, bookingId, assetId) {
+      return data.keys().hasOnly([
+          'id',
+          'bookingId',
+          'uploaderUid',
+          'uploaderName',
+          'modality',
+          'storagePath',
+          'fileName',
+          'mimeType',
+          'fileSize',
+          'deidentified',
+          'createdAt'
+        ])
+        && data.id == assetId
+        && data.bookingId == bookingId
+        && data.uploaderUid == request.auth.uid
+        && data.uploaderName is string
+        && data.uploaderName.size() <= 160
+        && data.modality in ['xray', 'ct', 'mri', 'ultrasound', 'ecg', 'other']
+        && data.storagePath is string
+        && data.storagePath.matches(
+          'medical-workspaces/'
+            + bookingId
+            + '/'
+            + request.auth.uid
+            + '/.+'
+        )
+        && data.fileName is string
+        && data.fileName.size() > 0
+        && data.fileName.size() <= 160
+        && data.mimeType in [
+          'image/jpeg',
+          'image/png',
+          'image/webp',
+          'application/dicom'
+        ]
+        && data.fileSize is int
+        && data.fileSize > 0
+        && data.fileSize <= 20 * 1024 * 1024
+        && data.deidentified == true
+        && data.createdAt is timestamp;
+    }
+
+    match /medicalWorkspaces/{bookingId} {
+      allow read: if canReadWhiteboard(bookingId);
+      allow create, update: if canWriteWhiteboard(bookingId)
+        && validMedicalWorkspace(request.resource.data, bookingId);
+      allow delete: if isOwner();
+
+      match /assets/{assetId} {
+        allow read: if canReadWhiteboard(bookingId);
+        allow create: if canWriteWhiteboard(bookingId)
+          && validMedicalAsset(request.resource.data, bookingId, assetId);
+        allow update: if false;
+        allow delete: if isOwner()
+          || (
+            canWriteWhiteboard(bookingId)
+            && (
+              resource.data.uploaderUid == request.auth.uid
+              || isWhiteboardTutor(bookingId)
+            )
+          );
+      }
+    }
   }
 }

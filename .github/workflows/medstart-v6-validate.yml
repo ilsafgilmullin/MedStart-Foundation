@@ -1,0 +1,52 @@
+name: MedStart v6 validation
+
+on:
+  push:
+    branches:
+      - agent/medical-workspace-v6
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: medstart-v6-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Verify Firebase rules
+        shell: bash
+        run: |
+          node scripts/apply-v6-rules.mjs
+          git diff --exit-code -- firestore.rules storage.rules
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck MedStart
+        run: pnpm --filter @workspace/medstart typecheck
+
+      - name: Build MedStart
+        run: pnpm --filter @workspace/medstart build
