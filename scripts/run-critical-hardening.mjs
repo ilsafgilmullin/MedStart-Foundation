@@ -12,6 +12,14 @@ source = source.replace(
   "      Authorization: 'Bearer ' + token,",
 )
 
+// Two Storage sections intentionally use the same delete guard. For this one
+// exact fragment both occurrences must be hardened instead of treated as an
+// ambiguous migration error.
+source = source.replace(
+  "  if (content.indexOf(search, first + search.length) >= 0) {\n    throw new Error(`${path}: fragment occurs more than once`)\n  }",
+  "  if (content.indexOf(search, first + search.length) >= 0) {\n    if (path === 'storage.rules' && search.includes('allow delete: if signedIn()')) {\n      write(path, content.split(search).join(replacement))\n      return\n    }\n    throw new Error(`${path}: fragment occurs more than once`)\n  }",
+)
+
 writeFileSync(runtimePath, source)
 
 try {
