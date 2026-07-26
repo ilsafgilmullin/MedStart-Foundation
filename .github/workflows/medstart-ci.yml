@@ -73,7 +73,19 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck MedStart
-        run: pnpm --filter @workspace/medstart typecheck
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm --filter @workspace/medstart typecheck 2>&1 | tee typecheck.log
+
+      - name: Upload typecheck report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: medstart-critical-typecheck
+          path: typecheck.log
+          if-no-files-found: warn
+          retention-days: 3
 
       - name: Build MedStart
         env:
