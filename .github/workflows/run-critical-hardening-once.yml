@@ -37,22 +37,22 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Apply deterministic migration
+      - name: Apply critical hardening stage two
         id: migration
         continue-on-error: true
         shell: bash
-        run: node scripts/run-critical-hardening.mjs > /tmp/critical-migration.log 2>&1
+        run: node scripts/run-critical-stage2.mjs > /tmp/critical-migration.log 2>&1
 
       - name: Persist migration failure
         if: steps.migration.outcome == 'failure'
         shell: bash
         run: |
-          tail -120 /tmp/critical-migration.log > CRITICAL_MIGRATION_ERROR.txt
+          tail -160 /tmp/critical-migration.log > CRITICAL_MIGRATION_ERROR.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add CRITICAL_MIGRATION_ERROR.txt
           if ! git diff --cached --quiet; then
-            git commit -m "debug: capture critical migration failure"
+            git commit -m "debug: capture critical stage two failure"
             git push origin HEAD:fix/critical-hardening-v1
           fi
 
@@ -77,12 +77,12 @@ jobs:
         if: steps.typecheck.outcome == 'failure'
         shell: bash
         run: |
-          tail -160 /tmp/critical-typecheck.log > CRITICAL_TYPECHECK_ERROR.txt
+          tail -200 /tmp/critical-typecheck.log > CRITICAL_TYPECHECK_ERROR.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add CRITICAL_TYPECHECK_ERROR.txt
           if ! git diff --cached --quiet; then
-            git commit -m "debug: capture critical typecheck failure"
+            git commit -m "debug: capture critical stage two typecheck failure"
             git push origin HEAD:fix/critical-hardening-v1
           fi
 
@@ -109,8 +109,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           rm -f CRITICAL_MIGRATION_ERROR.txt CRITICAL_TYPECHECK_ERROR.txt
-          git add -A
+          git add -A -- firestore.rules storage.rules artifacts/medstart scripts CRITICAL_MIGRATION_ERROR.txt CRITICAL_TYPECHECK_ERROR.txt
           if ! git diff --cached --quiet; then
-            git commit -m "security: fix critical MedStart vulnerabilities"
+            git commit -m "security: complete critical MedStart hardening"
             git push origin HEAD:fix/critical-hardening-v1
           fi
