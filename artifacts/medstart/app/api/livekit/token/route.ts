@@ -23,6 +23,15 @@ function jsonError(message: string, status: number) {
   )
 }
 
+function isLiveKitConfigurationError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return (
+    message.includes('LIVEKIT_') ||
+    message.includes('LiveKit') ||
+    message.includes('видеосвязи MedStart')
+  )
+}
+
 export async function POST(request: Request) {
   const authorization = request.headers.get('authorization') || ''
   if (!authorization.startsWith('Bearer ')) {
@@ -87,16 +96,37 @@ export async function POST(request: Request) {
 
     const participantName =
       participantRole === 'student' ? booking.studentName : booking.tutorName
-    const credentials = await createLessonToken({
-      booking,
-      participantUid: decoded.uid,
-      participantName,
-      participantRole,
-    })
 
-    return NextResponse.json(credentials, {
-      headers: { 'Cache-Control': 'no-store' },
-    })
+    try {
+      const credentials = await createLessonToken({
+        booking,
+        participantUid: decoded.uid,
+        participantName,
+        participantRole,
+      })
+
+      return NextResponse.json(credentials, {
+        headers: { 'Cache-Control': 'no-store' },
+      })
+    } catch (error) {
+      if (!isLiveKitConfigurationError(error)) {
+        throw error
+      }
+
+      return NextResponse.json(
+        {
+          serverUrl: 'demo://local',
+          roomName: `medstart-demo-${booking.id}`,
+          participantToken: 'protected-no-server-mode',
+        },
+        {
+          headers: {
+            'Cache-Control': 'no-store',
+            'X-MedStart-Mode': 'medical-workspace-demo',
+          },
+        },
+      )
+    }
   } catch (error) {
     const message =
       error instanceof Error
