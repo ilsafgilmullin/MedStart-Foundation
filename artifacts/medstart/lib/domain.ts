@@ -16,6 +16,8 @@ export interface Booking {
   requestedDate: string
   requestedTime: string
   timezone: string
+  requestedStartAt?: unknown
+  requestedEndAt?: unknown
   durationMinutes: number
   format: LessonFormat
   price: number
@@ -191,172 +193,22 @@ export interface KnowledgeSubmission {
   updatedAt?: unknown
 }
 
-interface TimestampLike {
-  toMillis?: () => number
-  toDate?: () => Date
-  seconds?: number
+export interface KnowledgeBookmark {
+  resourceId: string
+  createdAt?: unknown
 }
 
-export function timestampToMillis(value: unknown): number {
-  if (!value || typeof value !== 'object') return 0
-  const timestamp = value as TimestampLike
-  if (typeof timestamp.toMillis === 'function') return timestamp.toMillis()
-  if (typeof timestamp.toDate === 'function') {
-    return timestamp.toDate().getTime()
-  }
-  if (typeof timestamp.seconds === 'number') return timestamp.seconds * 1_000
-  return 0
-}
-
-function zonedDateTimeToMillis(
-  date: string,
-  time: string,
-  timeZone: string,
-): number {
-  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
-  const timeMatch = /^(\d{2}):(\d{2})$/.exec(time || '00:00')
-  if (!dateMatch || !timeMatch) return 0
-
-  const year = Number(dateMatch[1])
-  const month = Number(dateMatch[2])
-  const day = Number(dateMatch[3])
-  const hour = Number(timeMatch[1])
-  const minute = Number(timeMatch[2])
-  const utcGuess = Date.UTC(year, month - 1, day, hour, minute)
-  const guessedDate = new Date(utcGuess)
-  if (
-    month < 1 ||
-    month > 12 ||
-    day < 1 ||
-    day > 31 ||
-    hour > 23 ||
-    minute > 59 ||
-    guessedDate.getUTCFullYear() !== year ||
-    guessedDate.getUTCMonth() !== month - 1 ||
-    guessedDate.getUTCDate() !== day
-  ) {
-    return 0
-  }
-
-  try {
-    const formatter = new Intl.DateTimeFormat('en-US-u-ca-gregory-nu-latn', {
-      timeZone: timeZone || 'Europe/Moscow',
-      hourCycle: 'h23',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    })
-
-    const offsetAt = (millis: number) => {
-      const parts = Object.fromEntries(
-        formatter
-          .formatToParts(new Date(millis))
-          .filter((part) => part.type !== 'literal')
-          .map((part) => [part.type, Number(part.value)]),
-      )
-      return (
-        Date.UTC(
-          parts.year,
-          parts.month - 1,
-          parts.day,
-          parts.hour,
-          parts.minute,
-          parts.second,
-        ) - millis
-      )
-    }
-
-    const firstPass = utcGuess - offsetAt(utcGuess)
-    return utcGuess - offsetAt(firstPass)
-  } catch {
-    const localFallback = Date.parse(`${date}T${time || '00:00'}:00`)
-    return Number.isNaN(localFallback) ? 0 : localFallback
-  }
-}
-
-export function bookingDateTime(booking: Booking): number {
-  return zonedDateTimeToMillis(
-    booking.requestedDate,
-    booking.requestedTime,
-    booking.timezone || 'Europe/Moscow',
-  )
-}
-
-export function sortBookings(items: Booking[]): Booking[] {
-  return [...items].sort((left, right) => {
-    const leftDate = bookingDateTime(left)
-    const rightDate = bookingDateTime(right)
-    return (
-      rightDate - leftDate ||
-      timestampToMillis(right.createdAt) - timestampToMillis(left.createdAt)
-    )
-  })
-}
-
-export function formatLessonDate(
-  date: string,
-  time: string,
-  options: Intl.DateTimeFormatOptions = {},
-  timeZone = 'Europe/Moscow',
-): string {
-  const millis = zonedDateTimeToMillis(date, time, timeZone)
-  if (!millis) return `${date} ${time}`.trim()
-
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone,
-    ...options,
-  }).format(new Date(millis))
-}
-
-export function formatBookingDate(
-  booking: Booking,
-  options: Intl.DateTimeFormatOptions = {},
-): string {
-  return formatLessonDate(
-    booking.requestedDate,
-    booking.requestedTime,
-    options,
-    booking.timezone || 'Europe/Moscow',
-  )
-}
-
-export function formatMessageTime(value: unknown): string {
-  const millis = timestampToMillis(value)
-  if (!millis) return 'сейчас'
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(millis))
-}
-
-export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
-  pending: 'Ожидает ответа',
-  accepted: 'Подтверждено',
-  declined: 'Отклонено',
-  cancelled: 'Отменено',
-  completed: 'Завершено',
-}
-
-export const WEEKDAYS: Array<{ key: Weekday; label: string; short: string }> = [
-  { key: 'monday', label: 'Понедельник', short: 'Пн' },
-  { key: 'tuesday', label: 'Вторник', short: 'Вт' },
-  { key: 'wednesday', label: 'Среда', short: 'Ср' },
-  { key: 'thursday', label: 'Четверг', short: 'Чт' },
-  { key: 'friday', label: 'Пятница', short: 'Пт' },
-  { key: 'saturday', label: 'Суббота', short: 'Сб' },
-  { key: 'sunday', label: 'Воскресенье', short: 'Вс' },
+export const WEEKDAYS: Array<{ key: Weekday; label: string; shortLabel: string }> = [
+  { key: 'monday', label: 'Понедельник', shortLabel: 'Пн' },
+  { key: 'tuesday', label: 'Вторник', shortLabel: 'Вт' },
+  { key: 'wednesday', label: 'Среда', shortLabel: 'Ср' },
+  { key: 'thursday', label: 'Четверг', shortLabel: 'Чт' },
+  { key: 'friday', label: 'Пятница', shortLabel: 'Пт' },
+  { key: 'saturday', label: 'Суббота', shortLabel: 'Сб' },
+  { key: 'sunday', label: 'Воскресенье', shortLabel: 'Вс' },
 ]
 
-export const DEFAULT_AVAILABILITY: TutorAvailability['days'] = {
+export const DEFAULT_AVAILABILITY_DAYS: TutorAvailability['days'] = {
   monday: { enabled: true, start: '10:00', end: '19:00' },
   tuesday: { enabled: true, start: '10:00', end: '19:00' },
   wednesday: { enabled: true, start: '10:00', end: '19:00' },
@@ -368,4 +220,20 @@ export const DEFAULT_AVAILABILITY: TutorAvailability['days'] = {
 
 export function conversationIdFor(firstUid: string, secondUid: string): string {
   return [firstUid, secondUid].sort().join('__')
+}
+
+export function bookingDateTime(booking: Booking): Date {
+  const value = `${booking.requestedDate}T${booking.requestedTime}:00`
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? new Date(0) : date
+}
+
+export function sortBookings(bookings: Booking[]): Booking[] {
+  return [...bookings].sort(
+    (left, right) => bookingDateTime(left).getTime() - bookingDateTime(right).getTime(),
+  )
+}
+
+export function knowledgeResourceId(resource: OfficialKnowledgeResource | KnowledgeSubmission) {
+  return resource.origin === 'official' ? `official:${resource.id}` : `tutor:${resource.id}`
 }
