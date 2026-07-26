@@ -374,14 +374,9 @@ export default function ServerlessWhiteboard({
 
     render()
 
-    if ('ResizeObserver' in window) {
-      const observer = new ResizeObserver(render)
-      observer.observe(container)
-      return () => observer.disconnect()
-    }
-
-    window.addEventListener('resize', render)
-    return () => window.removeEventListener('resize', render)
+    const observer = new ResizeObserver(render)
+    observer.observe(container)
+    return () => observer.disconnect()
   }, [draft, elements])
 
   const status = useMemo(() => {
