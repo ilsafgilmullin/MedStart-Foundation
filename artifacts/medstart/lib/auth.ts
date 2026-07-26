@@ -130,7 +130,40 @@ export function registerTutor(input: TutorRegistrationInput) {
   )
 }
 
-export const logout = () => signOut(auth)
+async function clearSensitiveClientState() {
+  if (typeof window === 'undefined') return
+
+  for (const storage of [window.localStorage, window.sessionStorage]) {
+    try {
+      const keys: string[] = []
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index)
+        if (key?.startsWith('medstart-')) keys.push(key)
+      }
+      keys.forEach((key) => storage.removeItem(key))
+    } catch {
+      // Storage can be unavailable in private mode.
+    }
+  }
+
+  if ('caches' in window) {
+    try {
+      const names = await window.caches.keys()
+      await Promise.all(
+        names
+          .filter((name) => name.startsWith('medstart-'))
+          .map((name) => window.caches.delete(name)),
+      )
+    } catch {
+      // Cache cleanup must not prevent sign-out.
+    }
+  }
+}
+
+export async function logout() {
+  await signOut(auth)
+  await clearSensitiveClientState()
+}
 export const resetPassword = (email: string) =>
   sendPasswordResetEmail(auth, email.trim().toLowerCase())
 export async function resendEmailVerification(): Promise<void> {

@@ -305,13 +305,13 @@ export default function ServerlessWhiteboard({
   useEffect(() => {
     const cacheKey = `medstart-board-${bookingId}`
     try {
-      const cached = localStorage.getItem(cacheKey)
+      const cached = sessionStorage.getItem(cacheKey)
       if (cached) {
         const parsed = JSON.parse(cached) as unknown
         if (Array.isArray(parsed)) setElements(parsed.filter(isBoardElement))
       }
     } catch {
-      // Private mode can disable local storage.
+      // Private mode can disable session storage.
     }
 
     return subscribeToWhiteboard(
@@ -326,12 +326,12 @@ export default function ServerlessWhiteboard({
 
   useEffect(() => {
     try {
-      localStorage.setItem(
+      sessionStorage.setItem(
         `medstart-board-${bookingId}`,
         JSON.stringify(elements.slice(-CACHE_LIMIT)),
       )
     } catch {
-      // Private mode can disable local storage.
+      // Private mode can disable session storage.
     }
   }, [bookingId, elements])
 
@@ -374,8 +374,11 @@ export default function ServerlessWhiteboard({
 
     render()
 
-    if ('ResizeObserver' in window) {
-      const observer = new ResizeObserver(render)
+    const ResizeObserverCtor = (
+      window as Window & { ResizeObserver?: typeof ResizeObserver }
+    ).ResizeObserver
+    if (ResizeObserverCtor) {
+      const observer = new ResizeObserverCtor(render)
       observer.observe(container)
       return () => observer.disconnect()
     }

@@ -12,8 +12,14 @@ service firebase.storage {
       ).data;
     }
 
-    function isOwner() {
+    function hasUsableAccount() {
       return signedIn()
+        && userProfile(request.auth.uid).status != 'blocked'
+        && userProfile(request.auth.uid).status != 'deleted';
+    }
+
+    function isOwner() {
+      return hasUsableAccount()
         && request.auth.uid == 'm8JbbeeXMmZzywUwHboOyMm9MnG2';
     }
 
@@ -42,14 +48,14 @@ service firebase.storage {
 
     match /avatars/{userId}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null
+      allow write: if hasUsableAccount()
         && request.auth.uid == userId
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/(jpeg|png|webp)');
     }
 
     match /knowledge-submissions/{userId}/{submissionId}/{fileName} {
-      allow read: if signedIn()
+      allow read: if hasUsableAccount()
         && (
           request.auth.uid == userId
           || isModerator()
@@ -64,7 +70,7 @@ service firebase.storage {
 
       allow update: if false;
 
-      allow delete: if signedIn()
+      allow delete: if hasUsableAccount()
         && (
           request.auth.uid == userId
           || isModerator()
@@ -83,7 +89,7 @@ service firebase.storage {
     }
 
     function canReadMedicalAsset(bookingId) {
-      return signedIn()
+      return hasUsableAccount()
         && medicalBooking(bookingId).status in ['accepted', 'completed']
         && (
           medicalBooking(bookingId).studentUid == request.auth.uid
@@ -93,7 +99,7 @@ service firebase.storage {
     }
 
     function canWriteMedicalAsset(bookingId) {
-      return signedIn()
+      return hasUsableAccount()
         && medicalBooking(bookingId).status == 'accepted'
         && (
           medicalBooking(bookingId).studentUid == request.auth.uid
@@ -104,28 +110,13 @@ service firebase.storage {
     match /medical-workspaces/{bookingId}/{userId}/{fileName} {
       allow read: if canReadMedicalAsset(bookingId);
 
-      allow create: if canWriteMedicalAsset(bookingId)
-        && request.auth.uid == userId
-        && request.resource.size > 0
-        && request.resource.size <= 20 * 1024 * 1024
-        && request.resource.metadata.bookingId == bookingId
-        && request.resource.metadata.uploaderUid == request.auth.uid
-        && request.resource.metadata.deidentified == 'true'
-        && request.resource.metadata.educationalUseOnly == 'true'
-        && (
-          request.resource.contentType.matches('image/(jpeg|png|webp)')
-          || (
-            fileName.matches('.+[.]dcm')
-            && request.resource.contentType in [
-              'application/dicom',
-              'application/octet-stream'
-            ]
-          )
-        );
+      // До появления серверного обезличивания, удаления DICOM/EXIF-метаданных,
+      // карантина и антивирусной проверки новые медицинские файлы запрещены.
+      allow create: if false;
 
       allow update: if false;
 
-      allow delete: if signedIn()
+      allow delete: if hasUsableAccount()
         && (
           request.auth.uid == userId
           || medicalBooking(bookingId).tutorUid == request.auth.uid

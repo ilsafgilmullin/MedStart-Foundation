@@ -1,8 +1,0 @@
-
-> @workspace/medstart@0.1.0 typecheck /home/runner/work/MedStart-Foundation/MedStart-Foundation/artifacts/medstart
-> tsc --noEmit
-
-components/live/ServerlessWhiteboard.tsx(383,12): error TS2339: Property 'addEventListener' does not exist on type 'never'.
-/home/runner/work/MedStart-Foundation/MedStart-Foundation/artifacts/medstart:
- ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/medstart@0.1.0 typecheck: `tsc --noEmit`
-Exit status 2

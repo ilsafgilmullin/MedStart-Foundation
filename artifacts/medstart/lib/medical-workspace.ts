@@ -7,8 +7,8 @@ import {
   setDoc,
   type Unsubscribe,
 } from 'firebase/firestore'
-import { deleteObject, getBlob, ref, uploadBytes } from 'firebase/storage'
-import { db } from './firebase'
+import { deleteObject, getBlob, ref } from 'firebase/storage'
+import { auth, db } from './firebase'
 import { storage } from './firebase-storage'
 
 export type MedicalModule =
@@ -80,6 +80,8 @@ export interface MedicalWorkspaceData {
   privacy: PrivacyChecklist
   boardBackground: MedicalBoardBackground
   updatedByUid: string
+  version?: number
+  lastRevisionId?: string
   createdAt?: unknown
   updatedAt?: unknown
 }
@@ -145,6 +147,8 @@ export function emptyMedicalWorkspace(bookingId: string): MedicalWorkspaceData {
     privacy: { ...EMPTY_PRIVACY },
     boardBackground: { ...EMPTY_BACKGROUND },
     updatedByUid: '',
+    version: 0,
+    lastRevisionId: '',
   }
 }
 
@@ -200,17 +204,26 @@ export async function saveMedicalWorkspacePatch(
     >
   >,
 ): Promise<void> {
-  await setDoc(
-    doc(db, 'medicalWorkspaces', bookingId),
-    {
-      bookingId,
-      ...patch,
-      updatedByUid: userUid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+  const currentUser = auth.currentUser
+  if (!currentUser || currentUser.uid !== userUid) {
+    throw new Error('Сессия устарела. Войдите в MedStart ещё раз.')
+  }
+  const token = await currentUser.getIdToken()
+  const response = await fetch('/api/medical-workspace/save', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + token,
+      'Content-Type': 'application/json',
     },
-    { merge: true },
-  )
+    cache: 'no-store',
+    body: JSON.stringify({ bookingId, patch }),
+  })
+  const payload = (await response.json().catch(() => ({}))) as {
+    error?: string
+  }
+  if (!response.ok) {
+    throw new Error(payload.error || 'Не удалось сохранить медицинские данные.')
+  }
 }
 
 function assetsCollection(bookingId: string) {
@@ -255,7 +268,7 @@ function isDicom(file: File) {
   return file.name.toLowerCase().endsWith('.dcm') || file.type === 'application/dicom'
 }
 
-export async function uploadMedicalAsset(input: {
+export async function uploadMedicalAsset(_input: {
   bookingId: string
   uploaderUid: string
   uploaderName: string
@@ -263,51 +276,9 @@ export async function uploadMedicalAsset(input: {
   file: File
   deidentified: boolean
 }): Promise<string> {
-  const { bookingId, uploaderUid, uploaderName, modality, file, deidentified } =
-    input
-  const allowedImage = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
-  if (!allowedImage && !isDicom(file)) {
-    throw new Error('Поддерживаются JPG, PNG, WebP и DICOM (.dcm).')
-  }
-  if (!deidentified) {
-    throw new Error('Перед загрузкой подтвердите обезличивание данных.')
-  }
-  if (file.size <= 0 || file.size > 20 * 1024 * 1024) {
-    throw new Error('Размер медицинского файла должен быть не более 20 МБ.')
-  }
-
-  const assetId = randomId()
-  const fileName = safeFileName(file.name)
-  const storagePath = `medical-workspaces/${bookingId}/${uploaderUid}/${assetId}-${fileName}`
-  const storageRef = ref(storage, storagePath)
-  const mimeType = isDicom(file) ? 'application/dicom' : file.type
-
-  await uploadBytes(storageRef, file, {
-    contentType: mimeType,
-    cacheControl: 'private,max-age=300',
-    customMetadata: {
-      bookingId,
-      uploaderUid,
-      deidentified: 'true',
-      educationalUseOnly: 'true',
-    },
-  })
-
-  await setDoc(doc(assetsCollection(bookingId), assetId), {
-    id: assetId,
-    bookingId,
-    uploaderUid,
-    uploaderName: uploaderName.slice(0, 160),
-    modality,
-    storagePath,
-    fileName,
-    mimeType,
-    fileSize: file.size,
-    deidentified: true,
-    createdAt: serverTimestamp(),
-  })
-
-  return assetId
+  throw new Error(
+    'Загрузка пользовательских медицинских файлов временно отключена до внедрения серверного обезличивания и проверки метаданных. Используйте только встроенные учебные модели.',
+  )
 }
 
 export async function loadMedicalAssetObjectUrl(asset: MedicalAsset) {

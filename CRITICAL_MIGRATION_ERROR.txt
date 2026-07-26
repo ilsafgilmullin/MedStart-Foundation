@@ -1,6 +1,0 @@
-Error: storage.rules: fragment occurs more than once
-    at replaceOnce (file:///tmp/medstart-apply-critical-hardening.mjs:16:11)
-    at file:///tmp/medstart-apply-critical-hardening.mjs:340:1
-    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)
-    at async file:///home/runner/work/MedStart-Foundation/MedStart-Foundation/scripts/run-critical-hardening.mjs:18:3

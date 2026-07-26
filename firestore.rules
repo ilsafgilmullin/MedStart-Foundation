@@ -18,8 +18,15 @@ service cloud.firestore {
       ).data;
     }
 
-    function isOwner() {
+    function hasUsableAccount() {
       return signedIn()
+        && userExists(request.auth.uid)
+        && userProfile(request.auth.uid).status != 'blocked'
+        && userProfile(request.auth.uid).status != 'deleted';
+    }
+
+    function isOwner() {
+      return hasUsableAccount()
         && request.auth.uid == 'm8JbbeeXMmZzywUwHboOyMm9MnG2';
     }
 
@@ -172,8 +179,8 @@ service cloud.firestore {
     }
 
     match /users/{userId}/knowledgeBookmarks/{resourceId} {
-      allow read: if isOwnProfile(userId);
-      allow create: if isOwnProfile(userId)
+      allow read: if isOwnProfile(userId) && hasUsableAccount();
+      allow create: if isOwnProfile(userId) && hasUsableAccount()
         && resourceId.size() > 0
         && resourceId.size() <= 220
         && request.resource.data.keys().hasOnly([
@@ -183,7 +190,7 @@ service cloud.firestore {
         && request.resource.data.resourceId == resourceId
         && request.resource.data.createdAt is timestamp;
       allow update: if false;
-      allow delete: if isOwnProfile(userId);
+      allow delete: if isOwnProfile(userId) && hasUsableAccount();
     }
 
     function validTutorPrivateProfile(tutorId) {
@@ -261,7 +268,7 @@ service cloud.firestore {
     }
 
     function isBookingParticipant() {
-      return signedIn()
+      return hasUsableAccount()
         && (
           resource.data.studentUid == request.auth.uid
           || resource.data.tutorUid == request.auth.uid
@@ -311,11 +318,13 @@ service cloud.firestore {
     }
 
     match /bookings/{bookingId} {
-      allow create: if signedIn() && validBookingCreate();
+      // Создание выполняется только серверным API после сверки цены,
+      // расписания, статуса аккаунтов и пересечений занятий.
+      allow create: if false;
       allow read: if isModerator() || isBookingParticipant();
       allow update: if isOwner()
         || (
-          signedIn()
+          hasUsableAccount()
           && (
             validTutorBookingDecision()
             || validStudentBookingCancellation()
@@ -326,14 +335,14 @@ service cloud.firestore {
     }
 
     function conversationParticipant(conversationId) {
-      return signedIn()
+      return hasUsableAccount()
         && request.auth.uid in get(
           /databases/$(database)/documents/conversations/$(conversationId)
         ).data.participantUids;
     }
 
     function conversationParticipantAfter(conversationId) {
-      return signedIn()
+      return hasUsableAccount()
         && request.auth.uid in getAfter(
           /databases/$(database)/documents/conversations/$(conversationId)
         ).data.participantUids;
@@ -390,14 +399,14 @@ service cloud.firestore {
     }
 
     match /conversations/{conversationId} {
-      allow create: if signedIn() && validConversationCreate();
+      allow create: if false;
       allow read: if isModerator()
         || (
-          signedIn()
+          hasUsableAccount()
           && request.auth.uid in resource.data.participantUids
         );
       allow update: if isOwner()
-        || (signedIn() && validConversationUpdate());
+        || (hasUsableAccount() && validConversationUpdate());
       allow delete: if isOwner();
 
       match /messages/{messageId} {
@@ -433,8 +442,8 @@ service cloud.firestore {
     }
 
     match /availability/{tutorId} {
-      allow read: if signedIn();
-      allow create, update: if signedIn()
+      allow read: if hasUsableAccount();
+      allow create, update: if hasUsableAccount()
         && request.auth.uid == tutorId
         && userExists(tutorId)
         && userProfile(tutorId).role == 'tutor'
@@ -487,16 +496,16 @@ service cloud.firestore {
     }
 
     match /materials/{materialId} {
-      allow create: if signedIn() && validMaterialCreate();
+      allow create: if hasUsableAccount() && validMaterialCreate();
       allow read: if isModerator()
         || (
-          signedIn()
+          hasUsableAccount()
           && (
             resource.data.tutorUid == request.auth.uid
             || resource.data.studentUid == request.auth.uid
           )
         );
-      allow update: if signedIn()
+      allow update: if hasUsableAccount()
         && resource.data.tutorUid == request.auth.uid
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -508,7 +517,7 @@ service cloud.firestore {
         ]);
       allow delete: if isOwner()
         || (
-          signedIn()
+          hasUsableAccount()
           && resource.data.tutorUid == request.auth.uid
         );
     }
@@ -669,12 +678,12 @@ service cloud.firestore {
     }
 
     match /knowledgeSubmissions/{submissionId} {
-      allow create: if signedIn()
+      allow create: if hasUsableAccount()
         && validKnowledgeSubmissionCreate(submissionId);
 
       allow read: if isModerator()
         || (
-          signedIn()
+          hasUsableAccount()
           && (
             resource.data.status == 'published'
             || resource.data.submittedByUid == request.auth.uid
@@ -685,7 +694,7 @@ service cloud.firestore {
 
       allow delete: if isModerator()
         || (
-          signedIn()
+          hasUsableAccount()
           && resource.data.submittedByUid == request.auth.uid
           && resource.data.status in ['pending', 'rejected']
         );
@@ -698,7 +707,7 @@ service cloud.firestore {
     }
 
     function canReadWhiteboard(bookingId) {
-      return signedIn()
+      return hasUsableAccount()
         && exists(
           /databases/$(database)/documents/bookings/$(bookingId)
         )
@@ -711,7 +720,7 @@ service cloud.firestore {
     }
 
     function canWriteWhiteboard(bookingId) {
-      return signedIn()
+      return hasUsableAccount()
         && exists(
           /databases/$(database)/documents/bookings/$(bookingId)
         )
@@ -883,14 +892,15 @@ service cloud.firestore {
 
     match /medicalWorkspaces/{bookingId} {
       allow read: if canReadWhiteboard(bookingId);
-      allow create, update: if canWriteWhiteboard(bookingId)
-        && validMedicalWorkspace(request.resource.data, bookingId);
+      // Медицинские поля записывает только сервер с валидацией и ревизиями.
+      allow create, update: if false;
       allow delete: if isOwner();
 
       match /assets/{assetId} {
         allow read: if canReadWhiteboard(bookingId);
-        allow create: if canWriteWhiteboard(bookingId)
-          && validMedicalAsset(request.resource.data, bookingId, assetId);
+        // Пользовательские медицинские файлы отключены до внедрения
+        // серверного обезличивания, карантина и проверки метаданных.
+        allow create: if false;
         allow update: if false;
         allow delete: if isOwner()
           || (

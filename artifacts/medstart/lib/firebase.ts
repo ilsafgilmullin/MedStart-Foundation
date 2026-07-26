@@ -4,8 +4,6 @@ import {
   getFirestore,
   initializeFirestore,
   memoryLocalCache,
-  persistentLocalCache,
-  persistentMultipleTabManager,
 } from 'firebase/firestore'
 
 /**
@@ -37,16 +35,13 @@ export const auth = getAuth(app)
 
 function createFirestore() {
   try {
+    // Medical and lesson data stay in memory. Persistent browser storage is
+    // intentionally disabled until encrypted device storage and remote logout
+    // are implemented.
     return initializeFirestore(app, {
-      localCache:
-        typeof window === 'undefined'
-          ? memoryLocalCache()
-          : persistentLocalCache({
-              tabManager: persistentMultipleTabManager(),
-            }),
+      localCache: memoryLocalCache(),
     })
   } catch {
-    // Hot reload can initialize the same Firebase app more than once.
     return getFirestore(app)
   }
 }

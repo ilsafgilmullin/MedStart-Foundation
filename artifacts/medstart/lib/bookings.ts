@@ -7,17 +7,13 @@ import {
   runTransaction,
   serverTimestamp,
   where,
-  writeBatch,
   type Unsubscribe,
 } from 'firebase/firestore'
-import { db } from './firebase'
+import { auth, db } from './firebase'
 import {
-  conversationIdFor,
   sortBookings,
   type Booking,
   type BookingStatus,
-  type ChatMessage,
-  type Conversation,
 } from './domain'
 import type {
   EffectiveUserRole,
@@ -50,22 +46,15 @@ function clean(value: string) {
   return value.trim()
 }
 
-function defaultTimezone(profile: UserProfile) {
-  return profile.timezone || 'Europe/Moscow'
-}
-
 export async function createBooking(
   input: CreateBookingInput,
 ): Promise<{ bookingId: string; conversationId: string }> {
+  const currentUser = auth.currentUser
+  if (!currentUser || currentUser.uid !== input.student.uid) {
+    throw new Error('Сессия устарела. Войдите в MedStart ещё раз.')
+  }
   if (input.student.role !== 'student' || input.student.status !== 'active') {
     throw new Error('Запись доступна только активному аккаунту студента.')
-  }
-  if (
-    input.tutor.role !== 'tutor' ||
-    input.tutor.status !== 'active' ||
-    !input.tutor.isPublic
-  ) {
-    throw new Error('Этот репетитор пока недоступен для записи.')
   }
 
   const subject = clean(input.subject)
@@ -75,77 +64,39 @@ export async function createBooking(
     throw new Error('Укажите предмет, дату и время занятия.')
   }
 
-  const bookingRef = doc(collection(db, 'bookings'))
-  const conversationId = conversationIdFor(input.student.uid, input.tutor.uid)
-  const conversationRef = doc(db, 'conversations', conversationId)
-  const conversationSnapshot = await getDoc(conversationRef)
-  const messageText =
-    clean(input.message) ||
-    `Здравствуйте! Хочу записаться на занятие по теме «${subject}».`
-  const messageRef = doc(collection(conversationRef, 'messages'))
-  const batch = writeBatch(db)
-
-  const booking: Omit<Booking, 'id'> = {
-    studentUid: input.student.uid,
-    studentName: input.student.displayName,
-    studentAvatar: input.student.avatar || '',
-    tutorUid: input.tutor.uid,
-    tutorName: input.tutor.displayName,
-    tutorAvatar: input.tutor.avatar || '',
-    subject,
-    goal: clean(input.goal),
-    requestedDate,
-    requestedTime,
-    timezone: defaultTimezone(input.student),
-    durationMinutes: Math.max(30, input.tutor.lessonDuration ?? 60),
-    format: input.format,
-    price: Math.max(0, input.tutor.lessonPrice ?? 0),
-    status: 'pending',
-    studentMessage: messageText,
-    tutorResponse: '',
-    conversationId,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+  const token = await currentUser.getIdToken()
+  const response = await fetch('/api/bookings/create', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + token,
+      'Content-Type': 'application/json',
+    },
+    cache: 'no-store',
+    body: JSON.stringify({
+      tutorUid: input.tutor.uid,
+      subject,
+      goal: clean(input.goal),
+      requestedDate,
+      requestedTime,
+      format: input.format,
+      message: clean(input.message),
+    }),
+  })
+  const payload = (await response.json().catch(() => ({}))) as {
+    error?: string
+    bookingId?: string
+    conversationId?: string
   }
-
-  batch.set(bookingRef, booking)
-
-  const conversationUpdate = {
-    latestBookingId: bookingRef.id,
-    lastMessage: messageText,
-    lastSenderUid: input.student.uid,
-    lastMessageAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+  if (!response.ok) {
+    throw new Error(payload.error || 'Не удалось создать заявку.')
   }
-
-  if (conversationSnapshot.exists()) {
-    batch.update(conversationRef, conversationUpdate)
-  } else {
-    const conversation: Omit<Conversation, 'id'> = {
-      participantUids: [input.student.uid, input.tutor.uid],
-      participantNames: {
-        [input.student.uid]: input.student.displayName,
-        [input.tutor.uid]: input.tutor.displayName,
-      },
-      participantAvatars: {
-        [input.student.uid]: input.student.avatar || '',
-        [input.tutor.uid]: input.tutor.avatar || '',
-      },
-      ...conversationUpdate,
-      createdAt: serverTimestamp(),
-    }
-    batch.set(conversationRef, conversation)
+  if (!payload.bookingId || !payload.conversationId) {
+    throw new Error('Сервер вернул неполные данные заявки.')
   }
-
-  const firstMessage: Omit<ChatMessage, 'id'> = {
-    senderUid: input.student.uid,
-    text: messageText,
-    createdAt: serverTimestamp(),
+  return {
+    bookingId: payload.bookingId,
+    conversationId: payload.conversationId,
   }
-  batch.set(messageRef, firstMessage)
-  await batch.commit()
-
-  return { bookingId: bookingRef.id, conversationId }
 }
 
 export function subscribeToBookingsForUser(
