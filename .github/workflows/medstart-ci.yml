@@ -46,7 +46,7 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -62,12 +62,27 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - name: Set up Java for Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Verify hardened Firebase configuration
         run: |
           test -f firestore.secure.rules
           test -f storage.rules
           grep -q '"rules": "firestore.secure.rules"' firebase.json
           grep -q 'allow create, update: if false;' storage.rules
+
+      - name: Compile Firebase security rules
+        env:
+          CI: 'true'
+        run: >-
+          pnpm dlx firebase-tools@15.24.0 emulators:exec
+          --only firestore,storage
+          --project demo-medstart
+          "echo Firebase security rules compiled"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
