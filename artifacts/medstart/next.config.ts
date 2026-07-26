@@ -3,7 +3,13 @@ import type { NextConfig } from 'next'
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   compress: true,
-  allowedDevOrigins: ['*.replit.dev', '*.repl.co', '*.replit.app'],
+  allowedDevOrigins: [
+    '*.replit.dev',
+    '*.kirk.replit.dev',
+    'kirk.replit.dev',
+    '*.repl.co',
+    '*.replit.app',
+  ],
   experimental: {
     optimizePackageImports: [
       'lucide-react',
