@@ -40,6 +40,32 @@ service firebase.storage {
       ).data.status == 'published';
     }
 
+    function lessonBooking(bookingId) {
+      return firestore.get(
+        /databases/(default)/documents/bookings/$(bookingId)
+      ).data;
+    }
+
+    function canReadLessonAsset(bookingId) {
+      return signedIn()
+        && lessonBooking(bookingId).status in ['accepted', 'completed']
+        && (
+          lessonBooking(bookingId).studentUid == request.auth.uid
+          || lessonBooking(bookingId).tutorUid == request.auth.uid
+          || isModerator()
+        );
+    }
+
+    function canWriteLessonAsset(bookingId, userId) {
+      return signedIn()
+        && request.auth.uid == userId
+        && lessonBooking(bookingId).status == 'accepted'
+        && (
+          lessonBooking(bookingId).studentUid == request.auth.uid
+          || lessonBooking(bookingId).tutorUid == request.auth.uid
+        );
+    }
+
     match /avatars/{userId}/{fileName} {
       allow read: if true;
       allow write: if request.auth != null
@@ -69,6 +95,21 @@ service firebase.storage {
           request.auth.uid == userId
           || isModerator()
         );
+    }
+
+    match /lesson-assets/{bookingId}/{userId}/{fileName} {
+      allow read: if canReadLessonAsset(bookingId);
+
+      allow create: if canWriteLessonAsset(bookingId, userId)
+        && fileName.matches('.+[.]webp')
+        && request.resource.size > 0
+        && request.resource.size <= 15 * 1024 * 1024
+        && request.resource.contentType == 'image/webp';
+
+      allow update: if false;
+
+      allow delete: if isModerator()
+        || canWriteLessonAsset(bookingId, userId);
     }
 
     match /{allPaths=**} {
