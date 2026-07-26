@@ -69,7 +69,28 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck MedStart
-        run: pnpm --filter @workspace/medstart typecheck
+        id: typecheck
+        continue-on-error: true
+        run: pnpm --filter @workspace/medstart typecheck > /tmp/critical-typecheck.log 2>&1
+
+      - name: Persist typecheck failure
+        if: steps.typecheck.outcome == 'failure'
+        shell: bash
+        run: |
+          tail -160 /tmp/critical-typecheck.log > CRITICAL_TYPECHECK_ERROR.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CRITICAL_TYPECHECK_ERROR.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "debug: capture critical typecheck failure"
+            git push origin HEAD:fix/critical-hardening-v1
+          fi
+
+      - name: Stop after typecheck failure
+        if: steps.typecheck.outcome == 'failure'
+        run: |
+          cat CRITICAL_TYPECHECK_ERROR.txt
+          exit 1
 
       - name: Build MedStart
         env:
@@ -86,9 +107,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          rm -f CRITICAL_MIGRATION_ERROR.txt
+          rm -f CRITICAL_MIGRATION_ERROR.txt CRITICAL_TYPECHECK_ERROR.txt
           if ! git diff --quiet; then
-            git add firestore.rules storage.rules artifacts/medstart scripts .github/workflows CRITICAL_MIGRATION_ERROR.txt
+            git add firestore.rules storage.rules artifacts/medstart scripts .github/workflows CRITICAL_MIGRATION_ERROR.txt CRITICAL_TYPECHECK_ERROR.txt
             git commit -m "security: fix critical MedStart vulnerabilities"
             git push origin HEAD:fix/critical-hardening-v1
           fi
