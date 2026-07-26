@@ -103,21 +103,14 @@ jobs:
           NEXT_PUBLIC_OWNER_UID: test-owner
         run: pnpm --filter @workspace/medstart build
 
-      - name: Commit validated branch changes
+      - name: Commit validated hardening branch
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           rm -f CRITICAL_MIGRATION_ERROR.txt CRITICAL_TYPECHECK_ERROR.txt
-          if ! git diff --quiet; then
-            git add firestore.rules storage.rules artifacts/medstart scripts .github/workflows CRITICAL_MIGRATION_ERROR.txt CRITICAL_TYPECHECK_ERROR.txt
+          git add -A -- firestore.rules storage.rules artifacts/medstart scripts CRITICAL_MIGRATION_ERROR.txt CRITICAL_TYPECHECK_ERROR.txt
+          if ! git diff --cached --quiet; then
             git commit -m "security: fix critical MedStart vulnerabilities"
             git push origin HEAD:fix/critical-hardening-v1
           fi
-
-      - name: Remove bootstrap workflow from main
-        run: |
-          git fetch origin main
-          git checkout -B main origin/main
-          git rm .github/workflows/run-critical-hardening-once.yml
-          git commit -m "ci: remove critical hardening bootstrap"
-          git push origin main
