@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - agent/medical-workspace-v6
+      - 'fix/**'
   pull_request:
     branches:
       - main
@@ -19,6 +20,7 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout branch
         uses: actions/checkout@v4
@@ -33,14 +35,16 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
 
-      - name: Verify Firebase rules
+      - name: Verify hardened Firebase rules
         shell: bash
         run: |
-          node scripts/apply-v6-rules.mjs
-          git diff --exit-code -- firestore.rules storage.rules
+          test -f firestore.secure.rules
+          grep -q '"rules": "firestore.secure.rules"' firebase.json
+          grep -q 'Direct medical-file uploads are disabled' firestore.secure.rules
+          grep -q 'allow create, update: if false;' storage.rules
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -49,4 +53,12 @@ jobs:
         run: pnpm --filter @workspace/medstart typecheck
 
       - name: Build MedStart
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: test-api-key
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: example.firebaseapp.com
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: example
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: example.appspot.com
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '123456789'
+          NEXT_PUBLIC_FIREBASE_APP_ID: 1:123456789:web:test
+          NEXT_PUBLIC_OWNER_UID: test-owner
         run: pnpm --filter @workspace/medstart build
