@@ -1,9 +1,9 @@
 name: Firebase account audit
 
 on:
-  push:
+  pull_request:
     branches:
-      - fix/auth-account-audit-v1
+      - main
     paths:
       - artifacts/medstart/scripts/audit-auth-users.mjs
       - .github/workflows/auth-account-audit.yml
