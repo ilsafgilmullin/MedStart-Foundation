@@ -41,6 +41,9 @@ export interface AuthSession {
   profile: UserProfile
 }
 
+const VERIFY_EMAIL_MESSAGE =
+  'Подтвердите электронную почту по ссылке из письма MedStart. Новое письмо отправлено повторно.'
+
 function clearSensitiveBrowserState() {
   if (typeof window === 'undefined') return
 
@@ -79,6 +82,15 @@ async function assertAccess(profile: UserProfile) {
   }
 }
 
+async function assertVerifiedEmail(credential: UserCredential) {
+  await credential.user.reload()
+  if (credential.user.emailVerified) return
+
+  await sendEmailVerification(credential.user).catch(() => undefined)
+  await secureSignOut()
+  throw new Error(VERIFY_EMAIL_MESSAGE)
+}
+
 export async function login(
   email: string,
   password: string,
@@ -88,6 +100,8 @@ export async function login(
     email.trim().toLowerCase(),
     password,
   )
+  await assertVerifiedEmail(credential)
+
   const profile = await getUserProfile(credential.user.uid)
   if (!profile) {
     await secureSignOut()
@@ -107,15 +121,18 @@ async function registerWithProfile(
     email.trim().toLowerCase(),
     password,
   )
+  let profile: UserProfile
   try {
-    const profile = await createProfile(credential.user.uid)
-    await sendEmailVerification(credential.user).catch(() => undefined)
-    return { credential, profile }
+    profile = await createProfile(credential.user.uid)
   } catch (error) {
     await deleteUser(credential.user).catch(() => undefined)
     clearSensitiveBrowserState()
     throw error
   }
+
+  await sendEmailVerification(credential.user).catch(() => undefined)
+  await secureSignOut()
+  return { credential, profile }
 }
 
 export function registerStudent(input: StudentRegistrationInput) {
