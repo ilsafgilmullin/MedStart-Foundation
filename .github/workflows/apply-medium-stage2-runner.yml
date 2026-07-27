@@ -22,7 +22,18 @@ jobs:
       - name: Extract and apply stage two migration
         shell: bash
         run: |
-          awk '/^[[:space:]]*python <<'"'"'PY'"'"'/{capture=1; next} /^[[:space:]]*PY$/{capture=0} capture{sub(/^[[:space:]]{10}/, ""); print}' .github/workflows/apply-medium-stage2-once.yml > /tmp/apply-medium-stage2.py
+          python <<'EXTRACT'
+          from pathlib import Path
+
+          source = Path('.github/workflows/apply-medium-stage2-once.yml').read_text()
+          start_marker = "          python <<'PY'\n"
+          end_marker = "\n          PY"
+          start = source.index(start_marker) + len(start_marker)
+          end = source.index(end_marker, start)
+          embedded = source[start:end]
+          lines = [line[10:] if line.startswith('          ') else line for line in embedded.splitlines()]
+          Path('/tmp/apply-medium-stage2.py').write_text('\n'.join(lines) + '\n')
+          EXTRACT
           python /tmp/apply-medium-stage2.py
       - uses: pnpm/action-setup@v4
         with:
