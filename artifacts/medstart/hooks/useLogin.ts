@@ -26,7 +26,9 @@ export function useLogin() {
       setVerificationNotice('Пароль изменён. Теперь войдите с новым паролем.')
     } else if (params.get('registered') === '1') {
       setVerificationNotice(
-        'Аккаунт создан. Подтвердите почту по ссылке из письма, затем войдите.',
+        params.get('verificationSent') === '0'
+          ? 'Аккаунт создан, но первое письмо не отправилось. Введите ту же почту и пароль и нажмите «Войти» — MedStart безопасно отправит письмо повторно.'
+          : 'Аккаунт создан. Подтвердите почту по ссылке из письма, затем войдите.',
       )
     } else if (params.get('loggedOut') === '1') {
       setVerificationNotice('Вы безопасно вышли из аккаунта.')
