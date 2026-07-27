@@ -1,0 +1,30 @@
+name: Medium audit diagnostics
+
+on:
+  push:
+    branches:
+      - fix/medium-audit-v1
+    paths:
+      - '.github/workflows/medium-diagnostics.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate medium audit targets
+        shell: bash
+        run: |
+          echo '=== medical UI files ==='
+          grep -RIl --include='*.ts' --include='*.tsx' 'В пределах диапазона\|учебная схема\|DICOM\|3D-анатом' artifacts/medstart || true
+          echo '=== message subscription files ==='
+          grep -RIl --include='*.ts' --include='*.tsx' "conversations.*messages\|subscribeToMessages\|lastMessageAt" artifacts/medstart || true
+          echo '=== local and blob storage readers ==='
+          grep -RIl --include='*.ts' --include='*.tsx' 'getBlob\|localStorage\|getDownloadURL' artifacts/medstart || true
+          echo '=== timer files ==='
+          grep -RIl --include='*.ts' --include='*.tsx' 'elapsedMinutes\|Подключаем защищённую комнату\|DemoLessonRoom' artifacts/medstart || true
+          echo '=== source snippets ==='
+          grep -RIn --include='*.ts' --include='*.tsx' -C 8 'В пределах диапазона\|Number(.*value\|subscribeToMessages\|getBlob\|elapsedMinutes' artifacts/medstart || true
