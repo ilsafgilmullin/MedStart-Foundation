@@ -1,9 +1,9 @@
 name: Apply medium audit fixes once
 
 on:
-  push:
+  pull_request:
     branches:
-      - fix/medium-audit-v1
+      - main
     paths:
       - '.github/workflows/apply-medium-fixes-once.yml'
 
