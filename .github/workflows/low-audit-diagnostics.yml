@@ -58,6 +58,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: low-audit-typecheck
-          path: low-audit-typecheck.txt
+          name: low-audit-diagnostics
+          path: |
+            low-audit-typecheck.txt
+            artifacts/medstart/components/live/MedicalWorkspace.tsx
           retention-days: 3
