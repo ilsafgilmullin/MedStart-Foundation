@@ -14,7 +14,11 @@ import {
   getUserProfile,
   subscribeToUserProfile,
 } from '@/lib/firestore'
-import { isOwnerUid, logout as performLogout } from '@/lib/auth'
+import {
+  isAuthTransitionInProgress,
+  isOwnerUid,
+  logout as performLogout,
+} from '@/lib/auth'
 import type { EffectiveUserRole, UserProfile } from '@/lib/user-profile'
 
 interface AuthContextValue {
@@ -64,14 +68,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!currentUser) {
         setProfile(null)
         setLoading(false)
+        revokingAccess = false
         return
       }
 
       if (!currentUser.emailVerified) {
-        revokeSession()
+        setProfile(null)
+        setUser(null)
+        setLoading(false)
+
+        // Login and registration temporarily create an unverified Firebase
+        // session so they can send the verification email and create the
+        // initial profile. Interrupting that transition here races the form,
+        // signs the user out too early and makes both flows fail.
+        if (!isAuthTransitionInProgress()) revokeSession()
         return
       }
 
+      revokingAccess = false
       unsubscribeProfile = subscribeToUserProfile(
         currentUser.uid,
         (nextProfile) => {
