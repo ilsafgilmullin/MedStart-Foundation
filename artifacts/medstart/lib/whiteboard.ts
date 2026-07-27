@@ -3,7 +3,10 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  limit,
   onSnapshot,
+  orderBy,
+  query,
   serverTimestamp,
   setDoc,
   writeBatch,
@@ -11,6 +14,8 @@ import {
 } from 'firebase/firestore'
 import { db } from './firebase'
 import type { WhiteboardElement } from './domain'
+
+const MAX_REALTIME_ELEMENTS = 1_200
 
 function elementsCollection(bookingId: string) {
   return collection(db, 'whiteboards', bookingId, 'elements')
@@ -21,8 +26,14 @@ export function subscribeToWhiteboard(
   onChange: (elements: WhiteboardElement[]) => void,
   onError?: (error: Error) => void,
 ): Unsubscribe {
-  return onSnapshot(
+  const source = query(
     elementsCollection(bookingId),
+    orderBy('createdAtMs', 'asc'),
+    limit(MAX_REALTIME_ELEMENTS),
+  )
+
+  return onSnapshot(
+    source,
     { includeMetadataChanges: true },
     (snapshot) => {
       const elements = snapshot.docs
