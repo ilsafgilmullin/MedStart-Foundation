@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
-import { getFirebaseAdminAuth, getFirebaseAdminDb } from '@/lib/server/firebase-admin'
+import {
+  FirebaseAdminConfigurationError,
+  getFirebaseAdminAuth,
+  getFirebaseAdminDb,
+} from '@/lib/server/firebase-admin'
 import { firebaseIdentityRequest } from '@/lib/server/firebase-identity'
 import {
   clientAddress,
@@ -133,7 +137,13 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('MedStart server login failed', error)
     return NextResponse.json(
-      { ok: false, code: 'AUTH_SERVICE_UNAVAILABLE' },
+      {
+        ok: false,
+        code:
+          error instanceof FirebaseAdminConfigurationError
+            ? 'AUTH_CONFIGURATION_ERROR'
+            : 'AUTH_SERVICE_UNAVAILABLE',
+      },
       { status: 503, headers: noStoreHeaders() },
     )
   }
