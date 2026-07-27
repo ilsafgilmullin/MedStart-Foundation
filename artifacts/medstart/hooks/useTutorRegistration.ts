@@ -6,6 +6,30 @@ import { FirebaseError } from 'firebase/app'
 import { registerTutor } from '@/lib/auth'
 import { ROUTES } from '@/lib/constants'
 
+function messageFor(error: unknown) {
+  if (error instanceof FirebaseError) {
+    switch (error.code) {
+      case 'auth/email-already-in-use':
+        return 'Аккаунт с такой почтой уже существует. Войдите или восстановите пароль.'
+      case 'auth/invalid-email':
+        return 'Проверьте адрес электронной почты.'
+      case 'auth/weak-password':
+        return 'Пароль должен содержать не менее 8 символов.'
+      case 'auth/network-request-failed':
+        return 'Не удалось связаться с сервером. Проверьте интернет и повторите.'
+      case 'auth/operation-not-allowed':
+        return 'Регистрация по почте временно недоступна. Обратитесь в поддержку MedStart.'
+      case 'auth/too-many-requests':
+        return 'Слишком много попыток. Подождите и повторите позже.'
+      default:
+        return `Не удалось создать профиль репетитора (${error.code}).`
+    }
+  }
+  return error instanceof Error
+    ? error.message
+    : 'Не удалось создать профиль репетитора.'
+}
+
 export function useTutorRegistration() {
   const router = useRouter()
   const [firstName, setFirstName] = useState('')
@@ -42,42 +66,39 @@ export function useTutorRegistration() {
     if (password !== confirmPassword) return setError('Пароли не совпадают.')
     if (!online && !inPerson)
       return setError('Выберите хотя бы один формат занятий.')
+
     try {
       setLoading(true)
-      await registerTutor({
-        firstName,
-        lastName,
-        email,
-        specialization,
+      const result = await registerTutor({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim().toLowerCase(),
+        specialization: specialization.trim(),
         subjects: subjects
           .split(',')
           .map((item) => item.trim())
           .filter(Boolean),
-        institution,
-        experience,
-        city,
+        institution: institution.trim(),
+        experience: experience.trim(),
+        city: city.trim(),
         lessonPrice: Math.max(0, Number(lessonPrice) || 0),
-        lessonDuration: Math.max(30, Number(lessonDuration) || 60),
+        lessonDuration: Math.min(
+          180,
+          Math.max(30, Number(lessonDuration) || 60),
+        ),
         lessonFormats: [
           ...(online ? (['online'] as const) : []),
           ...(inPerson ? (['in_person'] as const) : []),
         ],
-        bio,
+        bio: bio.trim(),
         password,
       })
-      router.replace(`${ROUTES.LOGIN}?registered=1&tutor=1`)
-    } catch (caught) {
-      if (
-        caught instanceof FirebaseError &&
-        caught.code === 'auth/email-already-in-use'
+      router.replace(
+        `${ROUTES.LOGIN}?registered=1&tutor=1&verificationSent=${result.verificationSent ? '1' : '0'}`,
       )
-        setError('Аккаунт с такой почтой уже существует.')
-      else
-        setError(
-          caught instanceof Error
-            ? caught.message
-            : 'Не удалось создать профиль репетитора.',
-        )
+      router.refresh()
+    } catch (caught) {
+      setError(messageFor(caught))
     } finally {
       setLoading(false)
     }
