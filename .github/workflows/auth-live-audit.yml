@@ -13,6 +13,9 @@ on:
       - 'artifacts/medstart/app/login/page.tsx'
       - 'artifacts/medstart/app/forgot-password/page.tsx'
       - 'artifacts/medstart/scripts/live-auth-audit.mjs'
+      - 'firestore.secure.rules'
+      - 'storage.rules'
+      - 'firebase.json'
       - '.github/workflows/auth-live-audit.yml'
   workflow_dispatch:
 
@@ -58,6 +61,15 @@ jobs:
           fi
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/firebase-service-account.json"
           chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
+
+      - name: Reconcile deployed Firebase rules with audited repository rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+        run: >-
+          npx --yes firebase-tools@15.24.0 deploy
+          --project medstart-e9bfe
+          --only firestore:rules,storage
+          --non-interactive
 
       - name: Audit live Firebase authentication and request owner reset
         id: live_audit
