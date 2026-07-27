@@ -26,7 +26,7 @@ jobs:
           path = Path('scripts/apply-low-audit.py')
           text = path.read_text()
           old = '"                <input\\n                  className={inputClass}\\n                  placeholder=\\"Например: анатомия и физиология\\""'
-          new = '"              <input\\n                  className={inputClass}\\n                  placeholder=\\"Например: анатомия и физиология\\""'
+          new = '"<input\\n                className={inputClass}\\n                placeholder=\\"Например: анатомия и физиология\\""'
           if old in text:
               text = text.replace(old, new, 1)
           path.write_text(text)
