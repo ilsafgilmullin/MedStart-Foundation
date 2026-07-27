@@ -27,11 +27,13 @@ jobs:
           ref: agent/unified-button-system-v11
           fetch-depth: 0
 
-      - name: Verify encoded payload size
-        run: test "$(wc -c < .github/button-system.patch.gz.b64)" -eq 22256
-
-      - name: Decode reviewed patch
-        run: base64 --decode --ignore-garbage .github/button-system.patch.gz.b64 | gzip --decompress > /tmp/medstart-button-system.patch
+      - name: Assemble reviewed patch batches
+        run: |
+          : > /tmp/medstart-button-system.patch
+          for batch in .github/button-patches/0{0..8}.b64; do
+            test -s "$batch"
+            base64 --decode "$batch" | gzip --decompress >> /tmp/medstart-button-system.patch
+          done
 
       - name: Verify patch checksum
         run: test "$(sha256sum /tmp/medstart-button-system.patch | cut -d' ' -f1)" = '97274e4f9a3211fff0f87b7f89832f22ae8d67f049c9d01e616e4ca9fecf591f'
