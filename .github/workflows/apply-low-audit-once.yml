@@ -1,9 +1,9 @@
 name: Apply low-level audit fixes once
 
 on:
-  push:
+  pull_request:
     branches:
-      - fix/low-audit-v1
+      - main
     paths:
       - '.github/workflows/apply-low-audit-once.yml'
 
