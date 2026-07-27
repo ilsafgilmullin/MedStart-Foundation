@@ -29,7 +29,7 @@ jobs:
           path = Path('scripts/apply-low-audit.py')
           text = path.read_text()
           old = '"                <input\\n                  className={inputClass}\\n                  placeholder=\\"Например: анатомия и физиология\\""'
-          new = '"<input\\n                  className={inputClass}\\n                  placeholder=\\"Например: анатомия и физиология\\""'
+          new = '"<input\\n                className={inputClass}\\n                placeholder=\\"Например: анатомия и физиология\\""'
           if old not in text:
               raise SystemExit('low-audit tutor specialization selector not found')
           path.write_text(text.replace(old, new, 1))
