@@ -14,6 +14,8 @@ function messageFor(error: unknown) {
         return 'Проверьте заполненные данные и требования к паролю.'
       case 'TOO_MANY_REQUESTS':
         return 'Слишком много попыток регистрации. Подождите и повторите позже.'
+      case 'AUTH_CONFIGURATION_ERROR':
+        return 'Сервер MedStart не подключён к Firebase Admin. Администратору необходимо проверить Secret FIREBASE_SERVICE_ACCOUNT_JSON. Введённые данные сохранены.'
       case 'AUTH_SERVICE_UNAVAILABLE':
         return 'Сервис регистрации временно недоступен. Введённые данные сохранены — повторите попытку позже.'
       default:
