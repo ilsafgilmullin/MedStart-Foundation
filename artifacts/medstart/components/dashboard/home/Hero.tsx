@@ -39,7 +39,7 @@ export default function Hero() {
           {isModerator && (
             <Link
               href="/dashboard/admin"
-              className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 font-semibold text-violet-700"
+              className="ms-btn ms-btn-white"
             >
               Открыть модерацию
               <ArrowRight className="h-4 w-4" />
@@ -48,7 +48,7 @@ export default function Hero() {
           {role === 'student' && (
             <Link
               href="/dashboard/tutors"
-              className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 font-semibold text-violet-700"
+              className="ms-btn ms-btn-white"
             >
               Найти репетитора
               <ArrowRight className="h-4 w-4" />
@@ -57,7 +57,7 @@ export default function Hero() {
           {role === 'tutor' && profile?.status === 'active' && (
             <Link
               href="/dashboard/requests"
-              className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 font-semibold text-violet-700"
+              className="ms-btn ms-btn-white"
             >
               Проверить заявки
               <ArrowRight className="h-4 w-4" />
@@ -65,7 +65,7 @@ export default function Hero() {
           )}
           <Link
             href="/dashboard/profile"
-            className="rounded-2xl border border-white/25 bg-white/10 px-6 py-3 font-semibold"
+            className="ms-btn ms-btn-on-dark"
           >
             Открыть профиль
           </Link>

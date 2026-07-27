@@ -44,10 +44,10 @@ function ControlButton({
   icon: Icon,
 }: ControlButtonProps) {
   const color = danger
-    ? 'bg-red-600 text-white hover:bg-red-700'
+    ? 'ms-btn-danger'
     : active
-      ? 'bg-white text-slate-950 hover:bg-slate-100'
-      : 'bg-white/10 text-white hover:bg-white/15'
+      ? 'ms-btn-white'
+      : 'ms-btn-on-dark'
 
   return (
     <button
@@ -56,7 +56,7 @@ function ControlButton({
       aria-label={label}
       disabled={disabled || busy}
       onClick={onClick}
-      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition disabled:cursor-not-allowed disabled:opacity-40 sm:h-auto sm:w-auto sm:gap-2 sm:px-4 sm:py-3 ${color}`}
+      className={`ms-btn ms-btn-live ${color}`}
     >
       {busy ? (
         <LoaderCircle className="h-5 w-5 animate-spin" />
@@ -220,7 +220,7 @@ export default function LessonControls({
         <button
           type="button"
           onClick={useAudioOnly}
-          className="mx-auto mb-3 flex max-w-xl items-center justify-center gap-2 rounded-xl bg-amber-500/15 px-4 py-2 text-center text-xs font-semibold text-amber-200"
+          className="mx-auto mb-3 ms-btn ms-btn-on-dark ms-btn-sm max-w-xl text-center"
         >
           <AudioLines className="h-4 w-4" />
           Связь слабая — перейти на голос и доску

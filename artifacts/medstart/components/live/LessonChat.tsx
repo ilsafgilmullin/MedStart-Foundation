@@ -139,13 +139,13 @@ export default function LessonChat({ booking, userUid }: LessonChatProps) {
           disabled={!hydrated || sending}
           onChange={(event) => setText(event.target.value)}
           placeholder={hydrated ? 'Сообщение…' : 'Подключаем чат…'}
-          className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-base text-white outline-none placeholder:text-slate-500 focus:border-violet-400 disabled:cursor-wait disabled:opacity-60 sm:text-xs"
+          className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-base text-white outline-none placeholder:text-slate-500 focus:border-teal-400 disabled:cursor-wait disabled:opacity-60 sm:text-xs"
         />
         <button
           type="submit"
           disabled={!hydrated || !text.trim() || sending}
           aria-label="Отправить сообщение"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white disabled:opacity-40 sm:h-10 sm:w-10"
+          className="ms-icon-btn ms-icon-btn-primary sm:h-10 sm:w-10"
         >
           {sending ? (
             <LoaderCircle className="h-4 w-4 animate-spin" />

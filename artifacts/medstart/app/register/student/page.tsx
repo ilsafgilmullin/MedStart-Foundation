@@ -28,7 +28,7 @@ export default function RegisterStudentPage() {
           <Link href={ROUTES.LOGIN} className="font-semibold text-teal-700 hover:text-teal-900">
             Уже есть аккаунт
           </Link>
-          <Link href={ROUTES.REGISTER.TUTOR} className="font-semibold text-violet-700 hover:text-violet-900">
+          <Link href={ROUTES.REGISTER.TUTOR} className="font-semibold text-teal-700 hover:text-teal-900">
             Зарегистрироваться как репетитор
           </Link>
         </div>

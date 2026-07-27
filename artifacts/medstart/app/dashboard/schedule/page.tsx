@@ -203,7 +203,7 @@ export default function SchedulePage() {
         {role === 'student' && (
           <Link
             href="/dashboard/tutors"
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-3 font-semibold text-white"
+            className="ms-btn ms-btn-primary"
           >
             <Search className="h-5 w-5" />
             Найти репетитора
@@ -212,7 +212,7 @@ export default function SchedulePage() {
         {role === 'tutor' && pendingCount > 0 && (
           <Link
             href="/dashboard/requests"
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-amber-500 px-5 py-3 font-semibold text-white"
+            className="ms-btn ms-btn-soft"
           >
             Новые заявки
             <span className="rounded-full bg-white/20 px-2 py-0.5">
@@ -240,22 +240,16 @@ export default function SchedulePage() {
           <button
             type="button"
             onClick={() => setTab('lessons')}
-            className={`rounded-xl px-4 py-2.5 text-sm font-semibold ${
-              tab === 'lessons'
-                ? 'bg-white text-violet-700 shadow-sm'
-                : 'text-slate-500'
-            }`}
+            aria-pressed={tab === 'lessons'}
+            className="ms-choice ms-choice-block"
           >
             Занятия
           </button>
           <button
             type="button"
             onClick={() => setTab('availability')}
-            className={`rounded-xl px-4 py-2.5 text-sm font-semibold ${
-              tab === 'availability'
-                ? 'bg-white text-violet-700 shadow-sm'
-                : 'text-slate-500'
-            }`}
+            aria-pressed={tab === 'availability'}
+            className="ms-choice ms-choice-block"
           >
             Рабочие часы
           </button>
@@ -294,7 +288,7 @@ export default function SchedulePage() {
                         onChange={(event) =>
                           updateDay(day.key, { enabled: event.target.checked })
                         }
-                        className="h-5 w-5 accent-violet-600"
+                        className="h-5 w-5 accent-teal-700"
                       />
                       {day.label}
                     </label>
@@ -328,7 +322,7 @@ export default function SchedulePage() {
                 type="button"
                 onClick={() => void saveHours()}
                 disabled={savingHours}
-                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-3.5 font-semibold text-white disabled:opacity-60 sm:w-auto"
+                className="mt-3 ms-btn ms-btn-primary ms-btn-lg ms-btn-block sm:w-auto"
               >
                 {savingHours ? (
                   <LoaderCircle className="h-5 w-5 animate-spin" />
@@ -365,7 +359,7 @@ export default function SchedulePage() {
                       ? ROUTES.LESSON(nextLesson.id)
                       : `/dashboard/messages?conversation=${nextLesson.conversationId}`
                   }
-                  className="rounded-2xl bg-white px-5 py-3 text-center font-semibold text-violet-700"
+                  className="ms-btn ms-btn-white"
                 >
                   {nextLesson.format === 'online'
                     ? 'Войти в занятие'
@@ -380,22 +374,16 @@ export default function SchedulePage() {
               <button
                 type="button"
                 onClick={() => setFilter('upcoming')}
-                className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold ${
-                  filter === 'upcoming'
-                    ? 'bg-violet-600 text-white'
-                    : 'bg-white text-slate-600'
-                }`}
+                aria-pressed={filter === 'upcoming'}
+                className="ms-choice ms-choice-pill shrink-0"
               >
                 {role === 'tutor' ? 'Подтверждённые' : 'Текущие'}
               </button>
               <button
                 type="button"
                 onClick={() => setFilter('history')}
-                className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold ${
-                  filter === 'history'
-                    ? 'bg-violet-600 text-white'
-                    : 'bg-white text-slate-600'
-                }`}
+                aria-pressed={filter === 'history'}
+                className="ms-choice ms-choice-pill shrink-0"
               >
                 История
               </button>

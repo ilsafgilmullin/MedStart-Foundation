@@ -29,7 +29,7 @@ export default function RegisterTutorPage() {
           <Link href={ROUTES.LOGIN} className="font-semibold text-teal-700 hover:text-teal-900">
             Уже есть аккаунт
           </Link>
-          <Link href={ROUTES.REGISTER.STUDENT} className="font-semibold text-violet-700 hover:text-violet-900">
+          <Link href={ROUTES.REGISTER.STUDENT} className="font-semibold text-teal-700 hover:text-teal-900">
             Зарегистрироваться как студент
           </Link>
         </div>
@@ -182,11 +182,7 @@ export default function RegisterTutorPage() {
                 disabled={disabled}
                 onClick={() => form.setOnline(!form.online)}
                 aria-pressed={form.online}
-                className={`rounded-2xl border px-4 py-3 text-left font-semibold transition disabled:opacity-50 ${
-                  form.online
-                    ? 'border-teal-500 bg-teal-50 text-teal-800 ring-4 ring-teal-100'
-                    : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                }`}
+                className="ms-choice ms-choice-block justify-start text-left"
               >
                 Онлайн
               </button>
@@ -195,11 +191,7 @@ export default function RegisterTutorPage() {
                 disabled={disabled}
                 onClick={() => form.setInPerson(!form.inPerson)}
                 aria-pressed={form.inPerson}
-                className={`rounded-2xl border px-4 py-3 text-left font-semibold transition disabled:opacity-50 ${
-                  form.inPerson
-                    ? 'border-violet-500 bg-violet-50 text-violet-800 ring-4 ring-violet-100'
-                    : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                }`}
+                className="ms-choice ms-choice-block justify-start text-left"
               >
                 Очно
               </button>

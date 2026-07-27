@@ -178,14 +178,11 @@ export default function SettingsPage() {
                     [item.key]: !current[item.key],
                   }))
                 }
-                className={`relative h-7 w-12 shrink-0 rounded-full transition ${
-                  preferences[item.key] ? 'bg-violet-600' : 'bg-slate-200'
-                }`}
+                data-active={preferences[item.key]}
+                className="ms-switch"
               >
                 <span
-                  className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition ${
-                    preferences[item.key] ? 'left-6' : 'left-1'
-                  }`}
+                  className="ms-switch-thumb"
                 />
               </button>
             </div>
@@ -196,7 +193,7 @@ export default function SettingsPage() {
           type="button"
           onClick={() => void save()}
           disabled={saving}
-          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-3 font-semibold text-white disabled:opacity-60 sm:w-auto"
+          className="mt-6 ms-btn ms-btn-primary ms-btn-block sm:w-auto"
         >
           {saving ? (
             <LoaderCircle className="h-5 w-5 animate-spin" />
@@ -238,7 +235,7 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => void verifyEmail()}
                 disabled={Boolean(busyAction)}
-                className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-violet-700 disabled:opacity-60"
+                className="mt-4 ms-link-action text-sm disabled:opacity-60"
               >
                 {busyAction === 'verify' && (
                   <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -260,7 +257,7 @@ export default function SettingsPage() {
               type="button"
               onClick={() => void requestPasswordReset()}
               disabled={Boolean(busyAction)}
-              className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-violet-700 disabled:opacity-60"
+              className="mt-4 ms-link-action text-sm disabled:opacity-60"
             >
               {busyAction === 'password' && (
                 <LoaderCircle className="h-4 w-4 animate-spin" />

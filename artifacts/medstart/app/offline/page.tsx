@@ -15,7 +15,7 @@ export default function OfflinePage() {
         </p>
         <Link
           href="/dashboard"
-          className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-3.5 font-semibold text-white"
+          className="mt-7 ms-btn ms-btn-primary ms-btn-lg ms-btn-block"
         >
           <RefreshCw className="h-5 w-5" />
           Попробовать снова

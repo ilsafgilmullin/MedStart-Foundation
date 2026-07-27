@@ -49,7 +49,7 @@ export default function Sidebar() {
               key={item.href}
               href={item.href}
               prefetch={false}
-              className={`flex items-center gap-3 rounded-2xl px-4 py-3 font-medium transition ${active ? 'bg-violet-600 text-white' : 'text-slate-700 hover:bg-violet-50 hover:text-violet-700'}`}
+              className={`flex items-center gap-3 rounded-2xl px-4 py-3 font-medium transition ${active ? 'bg-teal-700 text-white shadow-sm' : 'text-slate-700 hover:bg-teal-50 hover:text-teal-800'}`}
             >
               <Icon className="h-5 w-5" />
               {item.name}
@@ -71,7 +71,7 @@ export default function Sidebar() {
         </div>
         <button
           onClick={exit}
-          className="flex w-full items-center justify-center gap-3 rounded-2xl border border-red-100 py-3 font-medium text-red-600 hover:bg-red-50"
+          className="ms-btn ms-btn-danger-outline ms-btn-block"
         >
           <LogOut className="h-5 w-5" />
           Выйти

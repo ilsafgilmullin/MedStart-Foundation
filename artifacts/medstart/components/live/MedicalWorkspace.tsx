@@ -275,7 +275,7 @@ function Field({
         maxLength={6000}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full resize-y rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-base leading-6 text-white outline-none placeholder:text-slate-600 focus:border-violet-400 sm:text-sm"
+        className="w-full resize-y rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-base leading-6 text-white outline-none placeholder:text-slate-600 focus:border-teal-400 sm:text-sm"
       />
     </label>
   )
@@ -512,11 +512,7 @@ export default function MedicalWorkspace({
                 type="button"
                 onClick={() => setActiveModule(item.id)}
                 aria-pressed={activeModule === item.id}
-                className={`flex snap-start shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold transition sm:px-4 ${
-                  activeModule === item.id
-                    ? 'bg-violet-600 text-white'
-                    : 'bg-white/5 text-slate-300 hover:bg-white/10'
-                }`}
+                className="ms-choice ms-choice-dark snap-start shrink-0 text-xs sm:px-4"
               >
                 <Icon className="h-4 w-4" />
                 <span className="sm:hidden">{item.shortLabel}</span>
@@ -559,6 +555,7 @@ export default function MedicalWorkspace({
                 setError('')
                 setNotice('')
               }}
+              className="ms-icon-btn ms-icon-btn-on-dark ms-icon-btn-sm"
             >
               <X className="h-4 w-4" />
             </button>
@@ -624,7 +621,7 @@ export default function MedicalWorkspace({
                         key={asset.id}
                         className={`w-full rounded-2xl border p-3 ${
                           selectedAssetId === asset.id
-                            ? 'border-violet-400 bg-violet-500/15'
+                            ? 'border-teal-400 bg-teal-500/15'
                             : 'border-white/10 bg-white/5'
                         }`}
                       >
@@ -632,7 +629,7 @@ export default function MedicalWorkspace({
                           <button
                             type="button"
                             onClick={() => setSelectedAssetId(asset.id)}
-                            className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                            className="ms-row-action min-w-0 flex-1 items-start gap-3 rounded-xl p-1 text-left text-white"
                           >
                             <ImageIcon className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" />
                             <div className="min-w-0 flex-1">
@@ -650,7 +647,7 @@ export default function MedicalWorkspace({
                             <button
                               type="button"
                               onClick={() => void removeAsset(asset)}
-                              className="rounded-lg p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-300"
+                              className="ms-icon-btn ms-icon-btn-danger ms-icon-btn-sm"
                               aria-label={`Удалить файл ${asset.fileName}`}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -674,7 +671,7 @@ export default function MedicalWorkspace({
                       <button
                         type="button"
                         onClick={() => setZoom((value) => Math.max(50, value - 10))}
-                        className="rounded-lg bg-white/10 p-2"
+                        className="ms-icon-btn ms-icon-btn-on-dark ms-icon-btn-sm"
                         title="Уменьшить"
                       >
                         <ZoomOut className="h-4 w-4" />
@@ -682,7 +679,7 @@ export default function MedicalWorkspace({
                       <button
                         type="button"
                         onClick={() => setZoom((value) => Math.min(250, value + 10))}
-                        className="rounded-lg bg-white/10 p-2"
+                        className="ms-icon-btn ms-icon-btn-on-dark ms-icon-btn-sm"
                         title="Увеличить"
                       >
                         <ZoomIn className="h-4 w-4" />
@@ -690,7 +687,7 @@ export default function MedicalWorkspace({
                       <button
                         type="button"
                         onClick={() => setRotation((value) => (value + 90) % 360)}
-                        className="rounded-lg bg-white/10 p-2"
+                        className="ms-icon-btn ms-icon-btn-on-dark ms-icon-btn-sm"
                         title="Повернуть"
                       >
                         <RotateCw className="h-4 w-4" />
@@ -698,7 +695,8 @@ export default function MedicalWorkspace({
                       <button
                         type="button"
                         onClick={() => setInvert((value) => !value)}
-                        className={`rounded-lg p-2 ${invert ? 'bg-violet-600' : 'bg-white/10'}`}
+                        aria-pressed={invert}
+                        className="ms-icon-btn ms-icon-btn-on-dark ms-icon-btn-sm"
                         title="Инверсия"
                       >
                         <Contrast className="h-4 w-4" />
@@ -706,7 +704,8 @@ export default function MedicalWorkspace({
                       <button
                         type="button"
                         onClick={() => setGrayscale((value) => !value)}
-                        className={`rounded-lg p-2 ${grayscale ? 'bg-violet-600' : 'bg-white/10'}`}
+                        aria-pressed={grayscale}
+                        className="ms-icon-btn ms-icon-btn-on-dark ms-icon-btn-sm"
                         title="Оттенки серого"
                       >
                         <SlidersHorizontal className="h-4 w-4" />
@@ -721,7 +720,7 @@ export default function MedicalWorkspace({
                           setInvert(false)
                           setGrayscale(false)
                         }}
-                        className="rounded-lg bg-white/10 p-2"
+                        className="ms-icon-btn ms-icon-btn-on-dark ms-icon-btn-sm"
                         title="Сбросить отображение"
                       >
                         <RotateCcw className="h-4 w-4" />
@@ -744,7 +743,7 @@ export default function MedicalWorkspace({
                                 'Снимок наложен на совместную доску.',
                               )
                             }
-                            className="rounded-xl bg-violet-600 px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                            className="ms-btn ms-btn-primary ms-btn-sm"
                           >
                             Наложить на доску
                           </button>
@@ -760,7 +759,7 @@ export default function MedicalWorkspace({
                           max="180"
                           value={brightness}
                           onChange={(event) => setBrightness(Number(event.target.value))}
-                          className="mt-1 block w-full accent-violet-500"
+                          className="mt-1 block w-full accent-teal-500"
                         />
                       </label>
                       <label className="text-xs text-slate-400">
@@ -771,7 +770,7 @@ export default function MedicalWorkspace({
                           max="220"
                           value={contrast}
                           onChange={(event) => setContrast(Number(event.target.value))}
-                          className="mt-1 block w-full accent-violet-500"
+                          className="mt-1 block w-full accent-teal-500"
                         />
                       </label>
                     </div>
@@ -829,11 +828,8 @@ export default function MedicalWorkspace({
                         key={item.id}
                         type="button"
                         onClick={() => setAnatomyLayer(item.id)}
-                        className={`rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${
-                          anatomyLayer === item.id
-                            ? 'bg-violet-600'
-                            : 'bg-white/5 text-slate-300'
-                        }`}
+                        aria-pressed={anatomyLayer === item.id}
+                        className="ms-choice ms-choice-dark ms-choice-block justify-start text-left text-sm"
                       >
                         {item.label}
                       </button>
@@ -850,11 +846,8 @@ export default function MedicalWorkspace({
                         key={item.id}
                         type="button"
                         onClick={() => setAnatomyView(item.id)}
-                        className={`rounded-xl px-3 py-2 text-xs font-semibold ${
-                          anatomyView === item.id
-                            ? 'bg-violet-600'
-                            : 'bg-white/5 text-slate-300'
-                        }`}
+                        aria-pressed={anatomyView === item.id}
+                        className="ms-choice ms-choice-dark ms-choice-block text-xs"
                       >
                         {item.label}
                       </button>
@@ -871,11 +864,8 @@ export default function MedicalWorkspace({
                         key={item.id}
                         type="button"
                         onClick={() => setAnatomyRegion(item.id)}
-                        className={`rounded-full px-3 py-2 text-xs font-semibold ${
-                          anatomyRegion === item.id
-                            ? 'bg-violet-600'
-                            : 'bg-white/5 text-slate-300'
-                        }`}
+                        aria-pressed={anatomyRegion === item.id}
+                        className="ms-choice ms-choice-dark ms-choice-pill text-xs"
                       >
                         {item.label}
                       </button>
@@ -899,7 +889,7 @@ export default function MedicalWorkspace({
                       'Анатомическая модель наложена на доску.',
                     )
                   }
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 py-3 font-semibold"
+                  className="ms-btn ms-btn-primary ms-btn-block"
                 >
                   <LayoutDashboard className="h-4 w-4" />
                   Наложить на доску
@@ -916,7 +906,7 @@ export default function MedicalWorkspace({
                     )
                     setActiveModule('case')
                   }}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold"
+                  className="ms-btn ms-btn-on-dark ms-btn-block text-sm"
                 >
                   <ClipboardList className="h-4 w-4" />
                   Добавить ориентир в кейс
@@ -958,7 +948,7 @@ export default function MedicalWorkspace({
                       clinicalCase: { ...current.clinicalCase, ...preset.data },
                     }))
                   }
-                  className="shrink-0 rounded-full border border-violet-400/20 bg-violet-500/10 px-4 py-2 text-xs font-semibold text-violet-200"
+                  className="ms-choice ms-choice-dark ms-choice-pill shrink-0 text-xs"
                 >
                   Шаблон: {preset.name}
                 </button>
@@ -1019,7 +1009,7 @@ export default function MedicalWorkspace({
                   'Клинический кейс сохранён для обоих участников.',
                 )
               }
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-3.5 font-semibold sm:w-auto"
+              className="mt-5 ms-btn ms-btn-primary ms-btn-lg ms-btn-block sm:w-auto"
             >
               <Save className="h-4 w-4" />
               Сохранить клинический кейс
@@ -1075,7 +1065,7 @@ export default function MedicalWorkspace({
                             onChange={(event) =>
                               updateLab(row.id, field, event.target.value)
                             }
-                            className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2.5 text-sm outline-none focus:border-violet-400"
+                            className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2.5 text-sm outline-none focus:border-teal-400"
                           />
                         </label>
                       ))}
@@ -1087,7 +1077,7 @@ export default function MedicalWorkspace({
                           updateLab(row.id, 'note', event.target.value)
                         }
                         placeholder="Комментарий к показателю"
-                        className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-900 px-3 py-2.5 text-sm outline-none focus:border-violet-400"
+                        className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-900 px-3 py-2.5 text-sm outline-none focus:border-teal-400"
                       />
                       <span
                         className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
@@ -1108,7 +1098,7 @@ export default function MedicalWorkspace({
                             labs: current.labs.filter((item) => item.id !== row.id),
                           }))
                         }
-                        className="rounded-xl bg-red-500/10 p-2.5 text-red-300"
+                        className="ms-icon-btn ms-icon-btn-danger ms-icon-btn-sm"
                         aria-label="Удалить показатель"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -1132,7 +1122,7 @@ export default function MedicalWorkspace({
                     labs: [...current.labs, newLabRow()].slice(0, 100),
                   }))
                 }
-                className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-semibold"
+                className="ms-btn ms-btn-on-dark"
               >
                 <Plus className="h-4 w-4" />
                 Добавить показатель
@@ -1145,7 +1135,7 @@ export default function MedicalWorkspace({
                     'Лабораторные данные сохранены.',
                   )
                 }
-                className="flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-3 font-semibold"
+                className="ms-btn ms-btn-primary"
               >
                 <Save className="h-4 w-4" />
                 Сохранить таблицу
@@ -1203,7 +1193,7 @@ export default function MedicalWorkspace({
                   <input
                     value={workspace.ecg[field]}
                     onChange={(event) => updateEcg(field, event.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm outline-none focus:border-violet-400"
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm outline-none focus:border-teal-400"
                   />
                 </label>
               ))}
@@ -1231,7 +1221,7 @@ export default function MedicalWorkspace({
                       ecg: { ...current.ecg, rhythm, heartRate: rate },
                     }))
                   }
-                  className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300"
+                  className="ms-choice ms-choice-dark ms-choice-pill text-xs"
                 >
                   {rhythm}
                 </button>
@@ -1242,7 +1232,7 @@ export default function MedicalWorkspace({
               onClick={() =>
                 void commitPatch({ ecg: workspace.ecg }, 'Разбор ЭКГ сохранён.')
               }
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-3.5 font-semibold sm:w-auto"
+              className="mt-5 ms-btn ms-btn-primary ms-btn-lg ms-btn-block sm:w-auto"
             >
               <Save className="h-4 w-4" />
               Сохранить разбор ЭКГ
@@ -1293,7 +1283,7 @@ export default function MedicalWorkspace({
                     maxLength={80}
                     onChange={(event) => updatePrivacy('patientLabel', event.target.value)}
                     placeholder="Например: Учебный пациент A-01"
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-3 text-sm outline-none focus:border-violet-400"
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-3 text-sm outline-none focus:border-teal-400"
                   />
                 </label>
                 <button
@@ -1304,7 +1294,7 @@ export default function MedicalWorkspace({
                       'Проверка обезличивания сохранена.',
                     )
                   }
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-3.5 font-semibold sm:w-auto"
+                  className="ms-btn ms-btn-primary ms-btn-lg ms-btn-block sm:w-auto"
                 >
                   <ShieldCheck className="h-4 w-4" />
                   Подтвердить безопасность
@@ -1375,7 +1365,7 @@ export default function MedicalWorkspace({
                           'Найденные идентификаторы заменены. Проверьте текст вручную.',
                         )
                       }}
-                      className="mt-2 w-full rounded-xl border border-amber-300/20 bg-amber-500/10 px-3 py-2.5 text-xs font-semibold text-amber-100"
+                      className="mt-2 ms-btn ms-btn-on-dark ms-btn-sm ms-btn-block text-xs"
                     >
                       Обезличить найденные фрагменты
                     </button>

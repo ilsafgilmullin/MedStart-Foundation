@@ -43,7 +43,7 @@ export function PasswordField({
           disabled={disabled}
           aria-label={visible ? 'Скрыть пароль' : 'Показать пароль'}
           aria-pressed={visible}
-          className="absolute inset-y-1 right-1 grid w-12 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
+          className="absolute right-2 top-1/2 -translate-y-1/2 ms-icon-btn ms-icon-btn-neutral ms-icon-btn-sm"
         >
           {visible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
         </button>

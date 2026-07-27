@@ -68,7 +68,7 @@ type CatalogItem = OfficialKnowledgeResource | KnowledgeSubmission
 type PageTab = 'catalog' | 'favorites' | 'my' | 'moderation'
 
 const inputClass =
-  'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-800 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100'
+  'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-800 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100'
 
 const statusLabels: Record<KnowledgeSubmissionStatus, string> = {
   pending: 'На проверке',
@@ -210,11 +210,8 @@ function ResourceCard({
         <button
           type="button"
           onClick={() => onFavorite(item)}
-          className={`rounded-xl border p-2.5 transition ${
-            favorite
-              ? 'border-rose-200 bg-rose-50 text-rose-600'
-              : 'border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600'
-          }`}
+          aria-pressed={favorite}
+          className={`ms-icon-btn ${favorite ? 'ms-icon-btn-danger' : 'ms-icon-btn-neutral'}`}
           aria-label={
             favorite ? 'Убрать из избранного' : 'Добавить в избранное'
           }
@@ -278,7 +275,7 @@ function ResourceCard({
           type="button"
           onClick={() => onDownload(item)}
           disabled={downloading}
-          className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 py-3 font-semibold text-white transition hover:bg-violet-700 disabled:opacity-60"
+          className="mt-5 ms-btn ms-btn-primary ms-btn-block disabled:opacity-60"
         >
           {downloading ? (
             <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -292,7 +289,7 @@ function ResourceCard({
           href={item.sourceUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 py-3 font-semibold text-white transition hover:bg-violet-700"
+          className="mt-5 ms-btn ms-btn-primary ms-btn-block"
         >
           <ExternalLink className="h-4 w-4" />
           Открыть источник
@@ -408,7 +405,7 @@ function SubmissionForm({ onClose, onCreated }: SubmissionFormProps) {
         <button
           type="button"
           onClick={onClose}
-          className="rounded-xl p-2 text-slate-500 hover:bg-slate-100"
+          className="ms-icon-btn ms-icon-btn-neutral"
           aria-label="Закрыть форму"
         >
           <X className="h-5 w-5" />
@@ -538,11 +535,8 @@ function SubmissionForm({ onClose, onCreated }: SubmissionFormProps) {
             <button
               type="button"
               onClick={() => setSourceMode('file')}
-              className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
-                sourceMode === 'file'
-                  ? 'bg-white text-violet-700 shadow-sm'
-                  : 'text-slate-500'
-              }`}
+              aria-pressed={sourceMode === 'file'}
+              className="ms-choice ms-choice-block"
             >
               <Upload className="h-4 w-4" />
               PDF-файл
@@ -550,11 +544,8 @@ function SubmissionForm({ onClose, onCreated }: SubmissionFormProps) {
             <button
               type="button"
               onClick={() => setSourceMode('link')}
-              className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
-                sourceMode === 'link'
-                  ? 'bg-white text-violet-700 shadow-sm'
-                  : 'text-slate-500'
-              }`}
+              aria-pressed={sourceMode === 'link'}
+              className="ms-choice ms-choice-block"
             >
               <Link2 className="h-4 w-4" />
               Ссылка
@@ -582,7 +573,7 @@ function SubmissionForm({ onClose, onCreated }: SubmissionFormProps) {
               type="file"
               accept="application/pdf,.pdf"
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-              className="mt-4 block w-full text-sm text-slate-600 file:mr-4 file:rounded-xl file:border-0 file:bg-violet-600 file:px-4 file:py-2.5 file:font-semibold file:text-white"
+              className="mt-4 block w-full text-sm text-slate-600 file:mr-4 file:rounded-xl file:border-0 file:bg-teal-700 file:px-4 file:py-2.5 file:font-semibold file:text-white hover:file:bg-teal-800"
               required
             />
           </label>
@@ -629,13 +620,13 @@ function SubmissionForm({ onClose, onCreated }: SubmissionFormProps) {
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="rounded-2xl border border-slate-200 px-5 py-3 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            className="ms-btn ms-btn-secondary"
           >
             Отмена
           </button>
           <button
             disabled={saving}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-3 font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
+            className="ms-btn ms-btn-primary disabled:opacity-60"
           >
             {saving ? (
               <LoaderCircle className="h-5 w-5 animate-spin" />
@@ -665,7 +656,7 @@ function Confirmation({
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="mt-1 h-4 w-4 rounded border-amber-300 text-violet-600 focus:ring-violet-500"
+        className="mt-1 h-4 w-4 rounded border-amber-300 text-teal-700 focus:ring-teal-500"
         required
       />
       <span>{children}</span>
@@ -707,7 +698,7 @@ function OwnSubmissionCard({
             type="button"
             onClick={() => onDelete(item)}
             disabled={busy}
-            className="rounded-xl border border-red-100 p-2.5 text-red-500 hover:bg-red-50 disabled:opacity-50"
+            className="ms-icon-btn ms-icon-btn-danger ms-icon-btn-sm"
             aria-label="Удалить материал"
           >
             <Trash2 className="h-4 w-4" />
@@ -740,7 +731,7 @@ function OwnSubmissionCard({
         type="button"
         onClick={() => onOpen(item)}
         disabled={busy}
-        className="mt-5 inline-flex items-center gap-2 font-semibold text-violet-700 disabled:opacity-50"
+        className="mt-5 ms-link-action disabled:opacity-50"
       >
         {item.sourceMode === 'file' ? (
           <Download className="h-4 w-4" />
@@ -796,7 +787,7 @@ function ModerationCard({
           type="button"
           onClick={() => onOpen(item)}
           disabled={busy}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          className="ms-btn ms-btn-secondary ms-btn-sm"
         >
           {item.sourceMode === 'file' ? (
             <Download className="h-4 w-4" />
@@ -878,7 +869,7 @@ function ModerationCard({
               type="button"
               onClick={() => onDecision(item, 'reject')}
               disabled={busy}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 font-semibold text-white disabled:opacity-50"
+              className="ms-btn ms-btn-danger ms-btn-sm flex-1"
             >
               {busy ? (
                 <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -891,7 +882,7 @@ function ModerationCard({
               type="button"
               onClick={onCancelReject}
               disabled={busy}
-              className="rounded-xl border border-red-200 bg-white px-4 py-2.5 font-semibold text-red-700 disabled:opacity-50"
+              className="ms-btn ms-btn-danger-outline ms-btn-sm"
             >
               Отмена
             </button>
@@ -903,7 +894,7 @@ function ModerationCard({
             type="button"
             onClick={() => onDecision(item, 'approve')}
             disabled={busy}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+            className="ms-btn ms-btn-primary"
           >
             {busy ? (
               <LoaderCircle className="h-5 w-5 animate-spin" />
@@ -916,7 +907,7 @@ function ModerationCard({
             type="button"
             onClick={onStartReject}
             disabled={busy}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 px-5 py-3 font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+            className="ms-btn ms-btn-danger-outline"
           >
             <XCircle className="h-5 w-5" />
             Отклонить
@@ -1194,7 +1185,7 @@ export default function KnowledgePage() {
                 setFormOpen(true)
                 setMessage('')
               }}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 font-bold text-violet-700 shadow-lg transition hover:bg-violet-50"
+              className="ms-btn ms-btn-white"
             >
               <Plus className="h-5 w-5" />
               Предложить материал
@@ -1266,11 +1257,8 @@ export default function KnowledgePage() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`inline-flex shrink-0 items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold transition ${
-                activeTab === tab.id
-                  ? 'bg-violet-600 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-violet-50 hover:text-violet-700'
-              }`}
+              aria-pressed={activeTab === tab.id}
+              className="ms-choice ms-choice-pill shrink-0"
             >
               {tab.id === 'favorites' && <BookMarked className="h-4 w-4" />}
               {tab.id === 'moderation' && <ShieldCheck className="h-4 w-4" />}
@@ -1295,7 +1283,7 @@ export default function KnowledgePage() {
         <>
           <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
             <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_repeat(3,minmax(160px,220px))]">
-              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 focus-within:border-violet-500 focus-within:ring-4 focus-within:ring-violet-100">
+              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 focus-within:border-teal-500 focus-within:ring-4 focus-within:ring-teal-100">
                 <Search className="h-5 w-5 shrink-0 text-slate-400" />
                 <input
                   value={queryText}
@@ -1403,7 +1391,7 @@ export default function KnowledgePage() {
             <button
               type="button"
               onClick={() => setFormOpen(true)}
-              className="inline-flex items-center gap-2 rounded-2xl bg-violet-600 px-4 py-3 font-semibold text-white"
+              className="ms-btn ms-btn-primary"
             >
               <Plus className="h-4 w-4" />
               Добавить

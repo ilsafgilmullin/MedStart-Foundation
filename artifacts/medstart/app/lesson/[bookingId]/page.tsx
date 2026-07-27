@@ -193,7 +193,7 @@ export default function LessonPage() {
             <button
               type="button"
               onClick={() => setError('')}
-              className="text-xs font-semibold text-amber-200"
+              className="ms-btn ms-btn-on-dark ms-btn-sm"
             >
               Закрыть
             </button>
@@ -225,7 +225,7 @@ export default function LessonPage() {
           </p>
           <Link
             href={ROUTES.SCHEDULE}
-            className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-3.5 font-semibold"
+            className="mt-7 ms-btn ms-btn-primary ms-btn-lg ms-btn-block"
           >
             <ArrowLeft className="h-5 w-5" />
             Вернуться в расписание
@@ -326,7 +326,7 @@ export default function LessonPage() {
                 type="button"
                 onClick={() => void join('audio')}
                 disabled={joining !== null}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-4 font-semibold text-white transition hover:bg-violet-500 disabled:opacity-60"
+                className="ms-btn ms-btn-primary ms-btn-lg ms-btn-block"
               >
                 {joining !== null ? (
                   <LoaderCircle className="h-5 w-5 animate-spin" />
@@ -338,7 +338,7 @@ export default function LessonPage() {
               <button
                 type="button"
                 disabled
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 font-semibold text-slate-500"
+                className="ms-btn ms-btn-on-dark ms-btn-lg ms-btn-block"
               >
                 <Video className="h-5 w-5" />
                 Видео будет подключено позже
