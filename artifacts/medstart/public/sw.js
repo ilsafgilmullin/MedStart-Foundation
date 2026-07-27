@@ -1,4 +1,4 @@
-const CACHE_NAME = 'medstart-shell-v4'
+const CACHE_NAME = 'medstart-shell-v5'
 const PUBLIC_SHELL = ['/', '/login', '/register/student', '/register/tutor']
 const PRECACHE = ['/offline', '/medstart-mark.svg']
 
@@ -24,6 +24,21 @@ self.addEventListener('activate', (event) => {
   self.clients.claim()
 })
 
+async function networkFirst(request) {
+  try {
+    const response = await fetch(request)
+    if (response.ok) {
+      const copy = response.clone()
+      void caches.open(CACHE_NAME).then((cache) => cache.put(request, copy))
+    }
+    return response
+  } catch {
+    const cached = await caches.match(request)
+    if (cached) return cached
+    throw new Error('NETWORK_AND_CACHE_UNAVAILABLE')
+  }
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event
   if (request.method !== 'GET') return
@@ -37,21 +52,7 @@ self.addEventListener('fetch', (event) => {
     url.pathname.startsWith('/_next/static/') ||
     url.pathname === '/medstart-mark.svg'
   ) {
-    event.respondWith(
-      caches.match(request).then(
-        (cached) =>
-          cached ||
-          fetch(request).then((response) => {
-            if (response.ok) {
-              const copy = response.clone()
-              void caches
-                .open(CACHE_NAME)
-                .then((cache) => cache.put(request, copy))
-            }
-            return response
-          }),
-      ),
-    )
+    event.respondWith(networkFirst(request))
     return
   }
 
