@@ -17,7 +17,8 @@ export default function LoginPage() {
         <div className="mt-8 rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
           <h1 className="text-3xl font-bold text-slate-900">Вход</h1>
           <p className="mt-2 text-slate-500">
-            Войдите в свой аккаунт MedStart.
+            Войдите в свой аккаунт MedStart. Для нового аккаунта сначала
+            подтвердите почту по ссылке из письма.
           </p>
           <form onSubmit={form.handleSubmit} className="mt-8 space-y-5">
             <label className="block space-y-2 text-sm font-medium">
