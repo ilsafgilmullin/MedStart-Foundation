@@ -1,0 +1,342 @@
+from pathlib import Path
+
+def replace_section(text: str, start: str, end: str, replacement: str, label: str) -> str:
+    start_index = text.find(start)
+    if start_index < 0:
+        raise SystemExit(f'{label}: start marker missing')
+    end_index = text.find(end, start_index + len(start))
+    if end_index < 0:
+        raise SystemExit(f'{label}: end marker missing')
+    return text[:start_index] + replacement.rstrip() + '\n\n' + text[end_index:]
+
+rules_path = Path('firestore.secure.rules')
+rules = rules_path.read_text()
+
+rules = replace_section(
+    rules,
+    '    function validNewProfile(userId) {',
+    '    function validTutorResubmission() {',
+    '''    function validNotificationPreferences(data) {
+      return data is map
+        && data.keys().hasOnly([
+          'bookingUpdates', 'newMessages', 'lessonReminders', 'productNews'
+        ])
+        && data.keys().hasAll([
+          'bookingUpdates', 'newMessages', 'lessonReminders', 'productNews'
+        ])
+        && data.bookingUpdates is bool
+        && data.newMessages is bool
+        && data.lessonReminders is bool
+        && data.productNews is bool;
+    }
+
+    function validEditableProfile(data) {
+      return data.firstName is string
+        && data.firstName.size() > 0
+        && data.firstName.size() <= 80
+        && data.lastName is string
+        && data.lastName.size() > 0
+        && data.lastName.size() <= 80
+        && data.displayName is string
+        && data.displayName.size() > 0
+        && data.displayName.size() <= 160
+        && data.avatar is string
+        && data.avatar.size() <= 2000
+        && (!(data.keys().hasAny(['fieldOfStudy']))
+          || (data.fieldOfStudy is string && data.fieldOfStudy.size() <= 120))
+        && (!(data.keys().hasAny(['studyYear']))
+          || (data.studyYear is string && data.studyYear.size() <= 20))
+        && (!(data.keys().hasAny(['title']))
+          || (data.title is string && data.title.size() <= 160))
+        && (!(data.keys().hasAny(['specialization']))
+          || (data.specialization is string && data.specialization.size() <= 180))
+        && (!(data.keys().hasAny(['subjects']))
+          || (data.subjects is list && data.subjects.size() <= 30))
+        && (!(data.keys().hasAny(['institution']))
+          || (data.institution is string && data.institution.size() <= 240))
+        && (!(data.keys().hasAny(['experience']))
+          || (data.experience is string && data.experience.size() <= 120))
+        && (!(data.keys().hasAny(['bio']))
+          || (data.bio is string && data.bio.size() <= 4000))
+        && (!(data.keys().hasAny(['city']))
+          || (data.city is string && data.city.size() <= 160))
+        && (!(data.keys().hasAny(['lessonPrice']))
+          || (data.lessonPrice is number
+            && data.lessonPrice >= 0
+            && data.lessonPrice <= 1000000))
+        && (!(data.keys().hasAny(['lessonDuration']))
+          || (data.lessonDuration is int
+            && data.lessonDuration >= 30
+            && data.lessonDuration <= 180))
+        && (!(data.keys().hasAny(['lessonFormats']))
+          || (data.lessonFormats is list
+            && data.lessonFormats.size() > 0
+            && data.lessonFormats.size() <= 2
+            && data.lessonFormats.hasOnly(['online', 'in_person'])))
+        && (!(data.keys().hasAny(['timezone']))
+          || (data.timezone is string
+            && data.timezone.size() > 0
+            && data.timezone.size() <= 80))
+        && (!(data.keys().hasAny(['notificationPreferences']))
+          || validNotificationPreferences(data.notificationPreferences))
+        && data.onboardingCompleted is bool
+        && data.updatedAt is timestamp;
+    }
+
+    function validNewProfile(userId) {
+      return request.resource.data.keys().hasOnly([
+          'uid', 'firstName', 'lastName', 'displayName', 'email', 'role',
+          'status', 'statusBeforeBlock', 'avatar', 'fieldOfStudy',
+          'studyYear', 'title', 'specialization', 'subjects',
+          'institution', 'experience', 'bio', 'city', 'lessonPrice',
+          'lessonDuration', 'lessonFormats', 'timezone', 'rating',
+          'reviewsCount', 'isPublic', 'notificationPreferences',
+          'moderationNote', 'moderatedBy', 'moderatedAt',
+          'onboardingCompleted', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'uid', 'firstName', 'lastName', 'displayName', 'email', 'role',
+          'status', 'avatar', 'rating', 'reviewsCount', 'isPublic',
+          'onboardingCompleted', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.uid == userId
+        && request.resource.data.email == request.auth.token.email
+        && validEditableProfile(request.resource.data)
+        && request.resource.data.rating == 0
+        && request.resource.data.reviewsCount == 0
+        && request.resource.data.isPublic == false
+        && request.resource.data.createdAt is timestamp
+        && (
+          (
+            request.resource.data.role == 'student'
+            && request.resource.data.status == 'active'
+          )
+          || (
+            request.resource.data.role == 'tutor'
+            && request.resource.data.status == 'pending'
+          )
+        );
+    }
+
+    function safeSelfUpdate() {
+      return request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.rating == resource.data.rating
+        && request.resource.data.reviewsCount == resource.data.reviewsCount
+        && request.resource.data.isPublic == resource.data.isPublic
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'firstName', 'lastName', 'displayName', 'avatar',
+          'fieldOfStudy', 'studyYear', 'title', 'specialization',
+          'subjects', 'institution', 'experience', 'bio', 'city',
+          'lessonPrice', 'lessonDuration', 'lessonFormats', 'timezone',
+          'notificationPreferences', 'onboardingCompleted', 'updatedAt'
+        ])
+        && validEditableProfile(request.resource.data);
+    }''',
+    'profile validation',
+)
+
+rules = replace_section(
+    rules,
+    '    function validAvailability(data, tutorId) {',
+    '    match /availability/{tutorId} {',
+    '''    function validAvailabilityDay(day) {
+      return day is map
+        && day.keys().hasOnly(['enabled', 'start', 'end'])
+        && day.keys().hasAll(['enabled', 'start', 'end'])
+        && day.enabled is bool
+        && day.start is string
+        && day.start.matches('([01][0-9]|2[0-3]):[0-5][0-9]')
+        && day.end is string
+        && day.end.matches('([01][0-9]|2[0-3]):[0-5][0-9]')
+        && (!day.enabled || day.start < day.end);
+    }
+
+    function validAvailability(data, tutorId) {
+      return data.keys().hasOnly(['tutorUid', 'timezone', 'days', 'updatedAt'])
+        && data.keys().hasAll(['tutorUid', 'timezone', 'days', 'updatedAt'])
+        && data.tutorUid == tutorId
+        && data.timezone is string
+        && data.timezone.size() > 0
+        && data.timezone.size() <= 80
+        && data.days is map
+        && data.days.keys().hasOnly([
+          'monday', 'tuesday', 'wednesday', 'thursday',
+          'friday', 'saturday', 'sunday'
+        ])
+        && data.days.keys().hasAll([
+          'monday', 'tuesday', 'wednesday', 'thursday',
+          'friday', 'saturday', 'sunday'
+        ])
+        && validAvailabilityDay(data.days.monday)
+        && validAvailabilityDay(data.days.tuesday)
+        && validAvailabilityDay(data.days.wednesday)
+        && validAvailabilityDay(data.days.thursday)
+        && validAvailabilityDay(data.days.friday)
+        && validAvailabilityDay(data.days.saturday)
+        && validAvailabilityDay(data.days.sunday)
+        && data.updatedAt is timestamp;
+    }''',
+    'availability validation',
+)
+
+rules = replace_section(
+    rules,
+    '    function validMedicalWorkspace(data, bookingId) {',
+    '    match /medicalWorkspaces/{bookingId} {',
+    '''    function validClinicalCase(data) {
+      return data is map
+        && data.keys().hasOnly([
+          'complaint', 'anamnesis', 'examination', 'diagnosis',
+          'differential', 'plan', 'teachingGoal'
+        ])
+        && data.keys().hasAll([
+          'complaint', 'anamnesis', 'examination', 'diagnosis',
+          'differential', 'plan', 'teachingGoal'
+        ])
+        && data.complaint is string && data.complaint.size() <= 4000
+        && data.anamnesis is string && data.anamnesis.size() <= 8000
+        && data.examination is string && data.examination.size() <= 8000
+        && data.diagnosis is string && data.diagnosis.size() <= 4000
+        && data.differential is string && data.differential.size() <= 8000
+        && data.plan is string && data.plan.size() <= 8000
+        && data.teachingGoal is string && data.teachingGoal.size() <= 4000;
+    }
+
+    function validEcg(data) {
+      return data is map
+        && data.keys().hasOnly([
+          'rhythm', 'heartRate', 'axis', 'prMs', 'qrsMs',
+          'qtMs', 'qtcMs', 'conclusion'
+        ])
+        && data.keys().hasAll([
+          'rhythm', 'heartRate', 'axis', 'prMs', 'qrsMs',
+          'qtMs', 'qtcMs', 'conclusion'
+        ])
+        && data.rhythm is string && data.rhythm.size() <= 160
+        && data.heartRate is string && data.heartRate.size() <= 20
+        && data.axis is string && data.axis.size() <= 160
+        && data.prMs is string && data.prMs.size() <= 20
+        && data.qrsMs is string && data.qrsMs.size() <= 20
+        && data.qtMs is string && data.qtMs.size() <= 20
+        && data.qtcMs is string && data.qtcMs.size() <= 20
+        && data.conclusion is string && data.conclusion.size() <= 8000;
+    }
+
+    function validPrivacy(data) {
+      return data is map
+        && data.keys().hasOnly([
+          'deidentified', 'identifiersRemoved', 'consentConfirmed',
+          'educationalUseOnly', 'patientLabel'
+        ])
+        && data.keys().hasAll([
+          'deidentified', 'identifiersRemoved', 'consentConfirmed',
+          'educationalUseOnly', 'patientLabel'
+        ])
+        && data.deidentified is bool
+        && data.identifiersRemoved is bool
+        && data.consentConfirmed is bool
+        && data.educationalUseOnly is bool
+        && data.patientLabel is string
+        && data.patientLabel.size() <= 160;
+    }
+
+    function validBoardBackground(data) {
+      return data is map
+        && data.keys().hasOnly([
+          'kind', 'assetId', 'label', 'anatomyLayer',
+          'anatomyView', 'anatomyRegion'
+        ])
+        && data.keys().hasAll([
+          'kind', 'assetId', 'label', 'anatomyLayer',
+          'anatomyView', 'anatomyRegion'
+        ])
+        && data.kind in ['none', 'image', 'anatomy']
+        && data.assetId is string && data.assetId.size() <= 220
+        && data.label is string && data.label.size() <= 240
+        && data.anatomyLayer in ['organs', 'skeleton', 'vessels']
+        && data.anatomyView in ['front', 'left', 'back', 'right']
+        && data.anatomyRegion is string
+        && data.anatomyRegion.size() <= 80;
+    }
+
+    function validMedicalWorkspace(data, bookingId) {
+      return data.keys().hasOnly([
+          'bookingId', 'clinicalCase', 'labs', 'ecg', 'privacy',
+          'boardBackground', 'updatedByUid', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasAll([
+          'bookingId', 'clinicalCase', 'labs', 'ecg', 'privacy',
+          'boardBackground', 'updatedByUid', 'createdAt', 'updatedAt'
+        ])
+        && data.bookingId == bookingId
+        && validClinicalCase(data.clinicalCase)
+        && data.labs is list
+        && data.labs.size() <= 100
+        && validEcg(data.ecg)
+        && validPrivacy(data.privacy)
+        && validBoardBackground(data.boardBackground)
+        && data.updatedByUid == request.auth.uid
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }''',
+    'medical workspace validation',
+)
+
+rules = replace_section(
+    rules,
+    '    match /medicalWorkspaces/{bookingId} {',
+    '      match /assets/{assetId} {',
+    '''    match /medicalWorkspaces/{bookingId} {
+      allow read: if canReadLessonData(bookingId);
+      allow create: if canWriteLessonData(bookingId)
+        && validMedicalWorkspace(request.resource.data, bookingId)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if canWriteLessonData(bookingId)
+        && validMedicalWorkspace(request.resource.data, bookingId)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isOwner();''',
+    'medical workspace write rules',
+)
+
+rules_path.write_text(rules)
+
+workspace_path = Path('artifacts/medstart/lib/medical-workspace.ts')
+workspace = workspace_path.read_text()
+workspace = workspace.replace(
+    "import { deleteObject, getBlob, ref } from 'firebase/storage'",
+    "import { deleteObject, getDownloadURL, ref } from 'firebase/storage'",
+    1,
+)
+
+transaction_start = workspace.index("    transaction.set(\n")
+transaction_end = workspace.index("\n    )", transaction_start) + len("\n    )")
+new_transaction = """    const normalizedCurrent = normalizeWorkspace(bookingId, current)
+
+    transaction.set(workspaceRef, {
+      ...normalizedCurrent,
+      ...patch,
+      bookingId,
+      updatedByUid: userUid,
+      createdAt: snapshot.exists()
+        ? current?.createdAt ?? serverTimestamp()
+        : serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })"""
+workspace = workspace[:transaction_start] + new_transaction + workspace[transaction_end:]
+
+loader_start = workspace.index(
+    "export async function loadMedicalAssetObjectUrl(asset: MedicalAsset) {"
+)
+loader_end_marker = "\n}\n\nexport async function deleteMedicalAsset"
+loader_end = workspace.index(loader_end_marker, loader_start) + 2
+new_loader = """export async function loadMedicalAssetObjectUrl(asset: MedicalAsset) {
+  if (asset.mimeType === 'application/dicom') return ''
+  return getDownloadURL(ref(storage, asset.storagePath))
+}"""
+workspace = workspace[:loader_start] + new_loader + workspace[loader_end:]
+workspace_path.write_text(workspace)
