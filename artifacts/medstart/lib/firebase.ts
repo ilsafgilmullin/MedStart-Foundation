@@ -1,6 +1,17 @@
 import { initializeApp, getApps, getApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
-import { getFirestore, initializeFirestore, memoryLocalCache } from 'firebase/firestore'
+import {
+  browserLocalPersistence,
+  browserSessionPersistence,
+  getAuth,
+  indexedDBLocalPersistence,
+  initializeAuth,
+  inMemoryPersistence,
+} from 'firebase/auth'
+import {
+  getFirestore,
+  initializeFirestore,
+  memoryLocalCache,
+} from 'firebase/firestore'
 
 /**
  * Firebase's web configuration is public client metadata. Keeping it here
@@ -27,7 +38,27 @@ const firebaseConfig = {
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
 
-export const auth = getAuth(app)
+function createAuth() {
+  try {
+    // Safari, private browsing and embedded Replit previews do not always offer
+    // the same storage backend. Firebase tries these in order and falls back to
+    // an in-memory session instead of failing the whole sign-in operation.
+    return initializeAuth(app, {
+      persistence: [
+        indexedDBLocalPersistence,
+        browserLocalPersistence,
+        browserSessionPersistence,
+        inMemoryPersistence,
+      ],
+    })
+  } catch {
+    // Hot reload can initialize Auth for the same app more than once.
+    return getAuth(app)
+  }
+}
+
+export const auth = createAuth()
+auth.useDeviceLanguage()
 
 function createFirestore() {
   try {
