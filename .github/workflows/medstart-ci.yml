@@ -51,15 +51,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: fix/medium-audit-v1
           fetch-depth: 0
 
       - name: Apply final medium migration
-        if: github.event_name == 'push' && github.ref == 'refs/heads/fix/medium-audit-v1'
-        shell: bash
-        run: |
-          if [ -f scripts/apply-medium-stage2-final.py ]; then
-            python scripts/apply-medium-stage2-final.py
-          fi
+        if: github.event_name == 'pull_request'
+        run: python scripts/apply-medium-stage2-final.py
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -131,12 +128,9 @@ jobs:
         run: pnpm --filter @workspace/medstart build
 
       - name: Commit validated medium migration
-        if: github.event_name == 'push' && github.ref == 'refs/heads/fix/medium-audit-v1'
+        if: github.event_name == 'pull_request'
         shell: bash
         run: |
-          if [ ! -f scripts/apply-medium-stage2-final.py ]; then
-            exit 0
-          fi
           rm -f scripts/apply-medium-stage2-final.py
           rm -f .github/workflows/apply-medium-stage2-once.yml
           rm -f .github/workflows/apply-medium-stage2-runner.yml
