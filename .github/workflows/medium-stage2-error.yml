@@ -78,6 +78,9 @@ jobs:
           Path('/tmp/apply-medium-stage2.py').write_text(script)
           EXTRACT
           python /tmp/apply-medium-stage2.py
+          cp firestore.secure.rules generated-firestore.secure.rules
+          cp artifacts/medstart/lib/medical-workspace.ts generated-medical-workspace.ts
+          cp /tmp/apply-medium-stage2.py generated-stage2.py
       - uses: pnpm/action-setup@v4
         with:
           version: 10.26.1
@@ -105,6 +108,10 @@ jobs:
           exit 0
       - uses: actions/upload-artifact@v4
         with:
-          name: medium-stage2-rules-error
-          path: medium-stage2-rules-error.txt
+          name: medium-stage2-rules-diagnostics
+          path: |
+            medium-stage2-rules-error.txt
+            generated-firestore.secure.rules
+            generated-medical-workspace.ts
+            generated-stage2.py
           retention-days: 3
