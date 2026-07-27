@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
+import { setTimeout as delay } from 'node:timers/promises'
 import {
   applicationDefault,
   getApps,
@@ -13,6 +14,7 @@ const API_KEY = 'AIzaSyAt4F5JQAdQPw8kmY-0dorxcaT_JX2d3v0'
 const OWNER_UID = 'm8JbbeeXMmZzywUwHboOyMm9MnG2'
 const OWNER_EMAIL = 'ilsafgilmullin@yandex.ru'
 const REPORT_PATH = 'auth-live-audit-report.json'
+const RULES_RELEASE = `projects/${PROJECT_ID}/releases/cloud.firestore`
 
 const report = {
   generatedAt: new Date().toISOString(),
@@ -66,6 +68,86 @@ async function identityRequest(operation, body, options = {}) {
     )
   }
   return payload
+}
+
+async function rulesRequest(path, accessToken, method = 'GET', body) {
+  const response = await fetch(`https://firebaserules.googleapis.com/v1/${path}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      ...(body ? { 'content-type': 'application/json' } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  })
+  const payload = await response.json().catch(() => ({}))
+  return { response, payload }
+}
+
+async function deployFirestoreRules(credential) {
+  const source = await readFile('../../firestore.secure.rules', 'utf8')
+  const token = await credential.getAccessToken()
+  const accessToken = token.access_token
+  if (!accessToken) throw new Error('Firebase credential did not provide an access token')
+
+  const created = await rulesRequest(
+    `projects/${PROJECT_ID}/rulesets`,
+    accessToken,
+    'POST',
+    {
+      source: {
+        files: [{ name: 'firestore.secure.rules', content: source }],
+      },
+    },
+  )
+  if (!created.response.ok || !created.payload?.name) {
+    throw new Error(
+      `Rules API could not create ruleset: ${String(created.payload?.error?.message || created.response.status)}`,
+    )
+  }
+
+  const currentRelease = await rulesRequest(RULES_RELEASE, accessToken)
+  if (currentRelease.response.status === 404) {
+    const release = await rulesRequest(
+      `projects/${PROJECT_ID}/releases`,
+      accessToken,
+      'POST',
+      {
+        name: RULES_RELEASE,
+        rulesetName: created.payload.name,
+      },
+    )
+    if (!release.response.ok) {
+      throw new Error(
+        `Rules API could not create Firestore release: ${String(release.payload?.error?.message || release.response.status)}`,
+      )
+    }
+  } else {
+    if (!currentRelease.response.ok) {
+      throw new Error(
+        `Rules API could not read Firestore release: ${String(currentRelease.payload?.error?.message || currentRelease.response.status)}`,
+      )
+    }
+    const release = await rulesRequest(
+      RULES_RELEASE,
+      accessToken,
+      'PATCH',
+      {
+        release: {
+          name: RULES_RELEASE,
+          rulesetName: created.payload.name,
+        },
+        updateMask: 'rulesetName',
+      },
+    )
+    if (!release.response.ok) {
+      throw new Error(
+        `Rules API could not update Firestore release: ${String(release.payload?.error?.message || release.response.status)}`,
+      )
+    }
+  }
+
+  await delay(2_000)
+  return created.payload.name
 }
 
 function firestoreValue(value) {
@@ -176,11 +258,12 @@ let auditUid = ''
 let failure
 
 try {
+  const credential = applicationDefault()
   const adminApp =
     getApps().find((app) => app.name === 'medstart-live-auth-audit') ||
     initializeApp(
       {
-        credential: applicationDefault(),
+        credential,
         projectId: PROJECT_ID,
       },
       'medstart-live-auth-audit',
@@ -209,6 +292,9 @@ try {
     status: ownerProfile.data()?.status || null,
   }
   check('owner-account-consistency')
+
+  const rulesetName = await deployFirestoreRules(credential)
+  check('firestore-rules-api-deployed', { rulesetName })
 
   const auditId = randomUUID().replaceAll('-', '').slice(0, 20)
   const auditEmail = `medstart-auth-audit-${auditId}@example.com`
