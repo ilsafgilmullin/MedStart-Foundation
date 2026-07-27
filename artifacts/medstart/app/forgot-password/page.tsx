@@ -113,7 +113,7 @@ export default function ForgotPasswordPage() {
             type="button"
             disabled={disabled}
             onClick={() => void requestReset()}
-            className="mt-5 inline-flex w-full items-center justify-center rounded-2xl border border-teal-200 bg-white px-5 py-3.5 font-semibold text-teal-800 transition hover:bg-teal-50 disabled:cursor-wait disabled:opacity-60"
+            className="mt-5 ms-btn ms-btn-secondary ms-btn-lg ms-btn-block disabled:cursor-wait"
           >
             {loading ? (
               <>

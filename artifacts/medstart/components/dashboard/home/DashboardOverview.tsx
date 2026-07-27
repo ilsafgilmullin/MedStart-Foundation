@@ -146,7 +146,7 @@ export default function DashboardOverview() {
             </div>
             <Link
               href="/dashboard/admin"
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-3 font-semibold text-white"
+              className="ms-btn ms-btn-primary shrink-0"
             >
               Открыть панель
               <ArrowRight className="h-4 w-4" />
@@ -195,7 +195,7 @@ export default function DashboardOverview() {
               </div>
               <Link
                 href="/dashboard/requests"
-                className="hidden items-center gap-2 font-semibold text-violet-700 sm:flex"
+                className="hidden ms-link-action sm:flex"
               >
                 Все заявки
                 <ArrowRight className="h-4 w-4" />
@@ -319,7 +319,7 @@ export default function DashboardOverview() {
           </div>
           <Link
             href="/dashboard/tutors"
-            className="hidden items-center gap-2 font-semibold text-violet-700 sm:flex"
+            className="hidden ms-link-action sm:flex"
           >
             Весь каталог
             <ArrowRight className="h-4 w-4" />

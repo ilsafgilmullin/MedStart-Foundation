@@ -89,7 +89,7 @@ export default function TutorsPage() {
         <select
           value={specialization}
           onChange={(event) => setSpecialization(event.target.value)}
-          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-violet-500"
+          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-teal-500"
         >
           <option value="all">Все специализации</option>
           {specializations.map((item) => (
@@ -189,7 +189,7 @@ export default function TutorsPage() {
               </div>
               <Link
                 href={`/dashboard/tutors/${tutor.uid}`}
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 py-3 font-semibold text-white"
+                className="mt-5 ms-btn ms-btn-primary ms-btn-block"
               >
                 Открыть профиль
                 <ArrowRight className="h-4 w-4" />

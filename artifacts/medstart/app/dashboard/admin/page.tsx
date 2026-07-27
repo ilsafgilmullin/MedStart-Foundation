@@ -256,7 +256,7 @@ export default function AdminPage() {
           type="button"
           onClick={() => void loadOverview()}
           disabled={loading || Boolean(busyUid)}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="ms-btn ms-btn-secondary"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           Обновить
@@ -418,7 +418,7 @@ export default function AdminPage() {
                           type="button"
                           onClick={() => void applyDecision(tutor, 'reject')}
                           disabled={isBusy}
-                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+                          className="ms-btn ms-btn-danger ms-btn-sm flex-1"
                         >
                           {isBusy ? (
                             <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -434,7 +434,7 @@ export default function AdminPage() {
                             setRejectionReason('')
                           }}
                           disabled={isBusy}
-                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 font-semibold text-red-700"
+                          className="ms-btn ms-btn-danger-outline ms-btn-sm"
                         >
                           <X className="h-4 w-4" />
                           Отмена
@@ -447,7 +447,7 @@ export default function AdminPage() {
                         type="button"
                         onClick={() => void applyDecision(tutor, 'approve')}
                         disabled={Boolean(busyUid)}
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="ms-btn ms-btn-primary"
                       >
                         {isBusy ? (
                           <LoaderCircle className="h-5 w-5 animate-spin" />
@@ -465,7 +465,7 @@ export default function AdminPage() {
                           setMessage('')
                         }}
                         disabled={Boolean(busyUid)}
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-5 py-3 font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="ms-btn ms-btn-danger-outline"
                       >
                         <XCircle className="h-5 w-5" />
                         Отклонить
@@ -612,7 +612,7 @@ export default function AdminPage() {
                                 type="button"
                                 onClick={() => void toggleAdmin(profile)}
                                 disabled={Boolean(busyUid)}
-                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-violet-200 px-3 py-2 text-sm font-semibold text-violet-700 disabled:opacity-50"
+                                className="ms-btn ms-btn-secondary ms-btn-sm"
                               >
                                 {busy ? (
                                   <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -629,10 +629,10 @@ export default function AdminPage() {
                               type="button"
                               onClick={() => void toggleBlocked(profile)}
                               disabled={Boolean(busyUid)}
-                              className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50 ${
+                              className={`ms-btn ms-btn-sm ${
                                 profile.status === 'blocked'
-                                  ? 'bg-emerald-50 text-emerald-700'
-                                  : 'bg-red-50 text-red-600'
+                                  ? 'ms-btn-soft'
+                                  : 'ms-btn-danger-outline'
                               }`}
                             >
                               {busy ? (

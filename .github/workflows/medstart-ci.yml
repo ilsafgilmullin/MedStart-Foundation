@@ -86,6 +86,7 @@ jobs:
           test -f scripts/test-auth-rules.mjs
           test -f scripts/final-audit-invariants.mjs
           test -f scripts/full-repository-audit.mjs
+          test -f scripts/button-system-audit.mjs
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -95,6 +96,9 @@ jobs:
 
       - name: Run full repository audit
         run: node scripts/full-repository-audit.mjs
+
+      - name: Audit unified button system
+        run: node scripts/button-system-audit.mjs
 
       - name: Run final static audit invariants
         run: node scripts/final-audit-invariants.mjs

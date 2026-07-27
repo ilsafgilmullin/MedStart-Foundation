@@ -171,14 +171,14 @@ export default function TutorStudentsPage() {
                 <div className="mt-5 grid grid-cols-2 gap-2">
                   <Link
                     href={`/dashboard/messages?conversation=${student.conversationId}`}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-3 py-2.5 text-sm font-semibold text-white"
+                    className="ms-btn ms-btn-primary ms-btn-sm"
                   >
                     <MessageCircle className="h-4 w-4" />
                     Написать
                   </Link>
                   <Link
                     href={`/dashboard/materials?student=${student.uid}`}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700"
+                    className="ms-btn ms-btn-secondary ms-btn-sm"
                   >
                     <FolderOpen className="h-4 w-4" />
                     Материал
@@ -199,7 +199,7 @@ export default function TutorStudentsPage() {
           </p>
           <Link
             href="/dashboard/requests"
-            className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-violet-600 px-5 py-3 font-semibold text-white"
+            className="mt-6 ms-btn ms-btn-primary"
           >
             <CalendarDays className="h-5 w-5" />
             Проверить заявки

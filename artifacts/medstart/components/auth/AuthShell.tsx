@@ -104,4 +104,4 @@ export const authInputClass =
   'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-base text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 sm:text-sm'
 
 export const authPrimaryButtonClass =
-  'inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-teal-600 to-cyan-600 px-5 py-3.5 font-semibold text-white shadow-lg shadow-teal-600/20 transition hover:from-teal-700 hover:to-cyan-700 disabled:cursor-wait disabled:opacity-60'
+  'ms-btn ms-btn-primary ms-btn-lg ms-btn-block disabled:cursor-wait'

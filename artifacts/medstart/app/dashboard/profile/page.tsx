@@ -21,7 +21,7 @@ import { uploadAvatar } from '@/lib/storage'
 import type { LessonFormat, UserProfile } from '@/lib/user-profile'
 
 const inputClass =
-  'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100'
+  'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100'
 
 const roleNames = {
   student: 'Студент',
@@ -330,7 +330,7 @@ export default function ProfilePage() {
               type="button"
               onClick={() => fileInput.current?.click()}
               disabled={uploading}
-              className="absolute -bottom-2 -right-2 flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-600 text-white shadow-lg disabled:opacity-60"
+              className="absolute -bottom-2 -right-2 ms-icon-btn ms-icon-btn-primary ms-icon-btn-sm rounded-full shadow-lg"
               aria-label="Изменить фотографию"
             >
               {uploading ? (
@@ -560,11 +560,8 @@ export default function ProfilePage() {
                   key={item.value}
                   type="button"
                   onClick={() => toggleFormat(item.value)}
-                  className={`rounded-2xl border px-4 py-3 text-left font-semibold transition ${
-                    form.lessonFormats.includes(item.value)
-                      ? 'border-violet-500 bg-violet-50 text-violet-700'
-                      : 'border-slate-200 text-slate-600'
-                  }`}
+                  aria-pressed={form.lessonFormats.includes(item.value)}
+                  className="ms-choice ms-choice-block justify-start text-left"
                 >
                   {item.label}
                 </button>
@@ -589,7 +586,7 @@ export default function ProfilePage() {
             type="button"
             onClick={() => void resubmit()}
             disabled={saving}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-6 py-3.5 font-semibold text-white disabled:opacity-60"
+            className="ms-btn ms-btn-primary ms-btn-lg disabled:opacity-60"
           >
             {saving ? (
               <LoaderCircle className="h-5 w-5 animate-spin" />
@@ -603,7 +600,7 @@ export default function ProfilePage() {
             type="button"
             onClick={() => void saveProfile()}
             disabled={saving}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-6 py-3.5 font-semibold text-white disabled:opacity-60"
+            className="ms-btn ms-btn-primary ms-btn-lg"
           >
             {saving ? (
               <LoaderCircle className="h-5 w-5 animate-spin" />

@@ -7,7 +7,7 @@ export default function Header({ onMenuClick }: { onMenuClick: () => void }) {
       <div className="flex h-16 items-center justify-between px-5 lg:px-8">
         <button
           onClick={onMenuClick}
-          className="rounded-xl p-2 hover:bg-slate-100 lg:hidden"
+          className="ms-icon-btn ms-icon-btn-neutral lg:hidden"
         >
           <Menu className="h-6 w-6" />
         </button>

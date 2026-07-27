@@ -31,7 +31,7 @@ export default function LoginPage() {
             <Link href="/register/student" className="text-teal-700 hover:text-teal-900">
               Я студент
             </Link>
-            <Link href="/register/tutor" className="text-violet-700 hover:text-violet-900">
+            <Link href="/register/tutor" className="text-teal-700 hover:text-teal-900">
               Я репетитор
             </Link>
           </div>

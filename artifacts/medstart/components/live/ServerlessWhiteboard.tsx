@@ -571,7 +571,7 @@ export default function ServerlessWhiteboard({
         </div>
 
         {backgroundImageUrl && (
-          <div className="mt-3 flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-800">
+          <div className="mt-3 flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-violet-800">
             <ImageIcon className="h-4 w-4 shrink-0" />
             <span className="min-w-0 flex-1 truncate">
               Фон: {backgroundLabel || 'медицинский материал'}
@@ -580,7 +580,7 @@ export default function ServerlessWhiteboard({
               <button
                 type="button"
                 onClick={onClearBackground}
-                className="rounded-lg p-1 hover:bg-violet-100"
+                className="ms-icon-btn ms-icon-btn-neutral ms-icon-btn-sm"
                 aria-label="Снять медицинский фон"
               >
                 <X className="h-4 w-4" />
@@ -600,11 +600,7 @@ export default function ServerlessWhiteboard({
                 aria-label={item.label}
                 aria-pressed={tool === item.kind}
                 onClick={() => setTool(item.kind)}
-                className={`flex h-10 w-10 snap-start shrink-0 items-center justify-center rounded-xl transition ${
-                  tool === item.kind
-                    ? 'bg-violet-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
+                className="ms-icon-btn ms-icon-btn-neutral snap-start"
               >
                 <Icon className="h-4 w-4" />
               </button>
@@ -619,9 +615,9 @@ export default function ServerlessWhiteboard({
               aria-label={`Цвет ${item}`}
               aria-pressed={color === item}
               onClick={() => setColor(item)}
-              className={`h-8 w-8 snap-start shrink-0 rounded-full border-2 ${
+              className={`ms-color-swatch snap-start ${
                 color === item
-                  ? 'border-violet-600 ring-2 ring-violet-200'
+                  ? 'border-teal-600 ring-2 ring-teal-200'
                   : 'border-white'
               }`}
               style={{ backgroundColor: item }}
@@ -634,7 +630,7 @@ export default function ServerlessWhiteboard({
             max="10"
             value={size}
             onChange={(event) => setSize(Number(event.target.value))}
-            className="ml-1 w-20 shrink-0 accent-violet-600"
+            className="ml-1 w-20 shrink-0 accent-teal-700"
           />
 
           <div className="mx-1 h-7 w-px shrink-0 bg-slate-200" />
@@ -643,7 +639,7 @@ export default function ServerlessWhiteboard({
             title="Отменить"
             aria-label="Отменить"
             onClick={undo}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200"
+            className="ms-icon-btn ms-icon-btn-neutral ms-icon-btn-sm"
           >
             <RotateCcw className="h-4 w-4" />
           </button>
@@ -652,7 +648,7 @@ export default function ServerlessWhiteboard({
             title="Повторить"
             aria-label="Повторить"
             onClick={redo}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200"
+            className="ms-icon-btn ms-icon-btn-neutral ms-icon-btn-sm"
           >
             <Redo2 className="h-4 w-4" />
           </button>
@@ -661,7 +657,7 @@ export default function ServerlessWhiteboard({
             title="Скачать PNG"
             aria-label="Скачать доску"
             onClick={() => void exportBoard()}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200"
+            className="ms-icon-btn ms-icon-btn-neutral ms-icon-btn-sm"
           >
             <Download className="h-4 w-4" />
           </button>
@@ -671,7 +667,7 @@ export default function ServerlessWhiteboard({
               title="Очистить аннотации"
               aria-label="Очистить аннотации"
               onClick={() => void clearAll()}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600 hover:bg-red-100"
+              className="ms-icon-btn ms-icon-btn-danger ms-icon-btn-sm"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -686,7 +682,7 @@ export default function ServerlessWhiteboard({
               maxLength={500}
               onChange={(event) => setText(event.target.value)}
               placeholder="Введите текст, затем коснитесь доски"
-              className="min-w-0 flex-1 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-base text-slate-900 outline-none focus:border-violet-500 sm:text-sm"
+              className="min-w-0 flex-1 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-base text-slate-900 outline-none focus:border-teal-500 sm:text-sm"
             />
           </div>
         )}

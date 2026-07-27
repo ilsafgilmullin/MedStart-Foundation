@@ -80,7 +80,7 @@ export default function DemoLessonRoom({
             type="button"
             onClick={onLeave}
             aria-label="Вернуться в расписание"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/15"
+            className="ms-icon-btn ms-icon-btn-on-dark"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -124,11 +124,7 @@ export default function DemoLessonRoom({
               type="button"
               onClick={() => setMobileView(view)}
               aria-pressed={mobileView === view}
-              className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-semibold ${
-                mobileView === view
-                  ? 'bg-violet-600 text-white'
-                  : 'text-slate-400'
-              }`}
+              className="ms-choice ms-choice-dark w-full gap-1.5 px-2 py-2 text-[11px]"
             >
               <Icon className="h-3.5 w-3.5" />
               {label}

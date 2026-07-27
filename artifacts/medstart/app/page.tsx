@@ -187,13 +187,13 @@ export default function HomePage() {
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
             <Link
               href="/login"
-              className="whitespace-nowrap rounded-xl px-2.5 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-100 sm:px-4 sm:text-sm"
+              className="ms-btn ms-btn-ghost ms-btn-sm whitespace-nowrap px-2.5 text-xs sm:px-4 sm:text-sm"
             >
               Войти
             </Link>
             <Link
               href="/register/student"
-              className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-xl bg-teal-700 px-3 text-xs font-black text-white shadow-sm transition hover:bg-teal-800 sm:px-5 sm:text-sm"
+              className="ms-btn ms-btn-primary ms-btn-sm whitespace-nowrap px-3 text-xs sm:px-5 sm:text-sm"
             >
               <span className="sm:hidden">Начать</span>
               <span className="hidden sm:inline">Начать обучение</span>
@@ -229,14 +229,14 @@ export default function HomePage() {
             <div className="mt-7 flex flex-col gap-3 sm:mt-9 sm:flex-row">
               <Link
                 href="/register/student"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-3.5 font-black text-slate-950 shadow-xl transition hover:bg-cyan-50 sm:py-4"
+                className="ms-btn ms-btn-primary ms-btn-lg"
               >
                 Начать обучение
                 <ArrowRight className="h-5 w-5" />
               </Link>
               <Link
                 href="/register/tutor"
-                className="inline-flex items-center justify-center rounded-2xl border border-white/30 bg-transparent px-6 py-3.5 font-black text-white transition hover:bg-white/10 sm:py-4"
+                className="ms-btn ms-btn-on-dark ms-btn-lg"
               >
                 Стать преподавателем
               </Link>
@@ -413,7 +413,7 @@ export default function HomePage() {
                 </div>
               ))}
             </div>
-            <Link href="/register/student" className="mt-8 inline-flex items-center gap-2 font-black text-teal-700 transition hover:text-teal-900">
+            <Link href="/register/student" className="mt-8 ms-link-action">
               Найти преподавателя
               <ChevronRight className="h-5 w-5" />
             </Link>
@@ -528,7 +528,7 @@ export default function HomePage() {
                   <div key={item} className="flex items-start gap-3"><Check className="mt-0.5 h-5 w-5 shrink-0 text-cyan-700" /><span className="text-sm font-semibold text-slate-700">{item}</span></div>
                 ))}
               </div>
-              <Link href="/register/student" className="mt-7 inline-flex items-center gap-2 rounded-2xl bg-cyan-700 px-5 py-3.5 font-black text-white transition hover:bg-cyan-800">
+              <Link href="/register/student" className="mt-7 ms-btn ms-btn-primary">
                 Создать профиль студента
                 <ArrowRight className="h-4 w-4" />
               </Link>
@@ -544,7 +544,7 @@ export default function HomePage() {
                   <div key={item} className="flex items-start gap-3"><Check className="mt-0.5 h-5 w-5 shrink-0 text-violet-700" /><span className="text-sm font-semibold text-slate-700">{item}</span></div>
                 ))}
               </div>
-              <Link href="/register/tutor" className="mt-7 inline-flex items-center gap-2 rounded-2xl bg-violet-700 px-5 py-3.5 font-black text-white transition hover:bg-violet-800">
+              <Link href="/register/tutor" className="mt-7 ms-btn ms-btn-secondary">
                 Подать анкету преподавателя
                 <ArrowRight className="h-4 w-4" />
               </Link>
@@ -580,11 +580,11 @@ export default function HomePage() {
               <p className="mt-4 text-base leading-8 text-cyan-50/80 sm:text-lg">Преподаватель, занятие, материалы, учебная база и будущие видеокурсы — в одном аккаунте MedStart.</p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
-              <Link href="/register/student" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 font-black text-slate-950 transition hover:bg-cyan-50">
+              <Link href="/register/student" className="ms-btn ms-btn-primary ms-btn-lg">
                 Начать обучение
                 <ArrowRight className="h-5 w-5" />
               </Link>
-              <Link href="/register/tutor" className="inline-flex items-center justify-center rounded-2xl border border-white/30 bg-transparent px-6 py-4 font-black text-white transition hover:bg-white/10">Стать преподавателем</Link>
+              <Link href="/register/tutor" className="ms-btn ms-btn-on-dark ms-btn-lg">Стать преподавателем</Link>
             </div>
           </div>
         </div>

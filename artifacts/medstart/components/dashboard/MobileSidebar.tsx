@@ -34,7 +34,7 @@ export default function MobileSidebar({
         <button
           aria-label="Закрыть меню"
           onClick={onClose}
-          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          className="ms-overlay-close fixed inset-0 z-40 lg:hidden"
         />
       )}
       <aside
@@ -50,7 +50,7 @@ export default function MobileSidebar({
           </Link>
           <button
             onClick={onClose}
-            className="rounded-xl p-2 hover:bg-slate-100"
+            className="ms-icon-btn ms-icon-btn-neutral"
           >
             <X className="h-5 w-5" />
           </button>
@@ -67,7 +67,7 @@ export default function MobileSidebar({
                 href={item.href}
                 prefetch={false}
                 onClick={onClose}
-                className={`flex items-center gap-3 rounded-2xl px-4 py-3 font-medium ${active ? 'bg-violet-600 text-white' : 'text-slate-700 hover:bg-violet-50'}`}
+                className={`flex items-center gap-3 rounded-2xl px-4 py-3 font-medium ${active ? 'bg-teal-700 text-white shadow-sm' : 'text-slate-700 hover:bg-teal-50 hover:text-teal-800'}`}
               >
                 <Icon className="h-5 w-5" />
                 {item.name}
@@ -84,7 +84,7 @@ export default function MobileSidebar({
           </div>
           <button
             onClick={exit}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-100 py-3 text-red-600"
+            className="ms-btn ms-btn-danger-outline ms-btn-block"
           >
             <LogOut className="h-5 w-5" />
             Выйти

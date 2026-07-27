@@ -178,9 +178,8 @@ export default function MessagesPage() {
                     key={conversation.id}
                     type="button"
                     onClick={() => setSelectedId(conversation.id)}
-                    className={`flex w-full items-start gap-3 border-b border-slate-100 p-4 text-left transition ${
-                      active ? 'bg-violet-50' : 'hover:bg-slate-50'
-                    }`}
+                    data-active={active}
+                    className="ms-row-action w-full gap-3 border-b border-slate-100 p-4 text-left"
                   >
                     {other.avatar ? (
                       <ProfilePhoto
@@ -242,7 +241,7 @@ export default function MessagesPage() {
                     <button
                       type="button"
                       onClick={() => setSelectedId('')}
-                      className="rounded-xl p-2 text-slate-500 hover:bg-slate-100 lg:hidden"
+                      className="ms-icon-btn ms-icon-btn-neutral lg:hidden"
                       aria-label="Назад к диалогам"
                     >
                       <ArrowLeft className="h-5 w-5" />
@@ -339,11 +338,11 @@ export default function MessagesPage() {
                   rows={1}
                   maxLength={2_000}
                   placeholder="Напишите сообщение…"
-                  className="max-h-32 min-h-12 flex-1 resize-none rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+                  className="max-h-32 min-h-12 flex-1 resize-none rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
                 />
                 <button
                   disabled={sending || !draft.trim()}
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-600 text-white disabled:opacity-50"
+                  className="ms-icon-btn ms-icon-btn-primary"
                   aria-label="Отправить"
                 >
                   {sending ? (

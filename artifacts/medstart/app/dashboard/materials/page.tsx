@@ -24,7 +24,7 @@ import {
 import type { Booking, LearningMaterial, MaterialKind } from '@/lib/domain'
 
 const inputClass =
-  'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100'
+  'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100'
 
 const kindLabels: Record<MaterialKind, string> = {
   link: 'Ссылка',
@@ -190,7 +190,7 @@ export default function MaterialsPage() {
             type="button"
             onClick={() => setOpen(true)}
             disabled={!bookingOptions.length}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="ms-btn ms-btn-primary disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus className="h-5 w-5" />
             Добавить материал
@@ -225,7 +225,7 @@ export default function MaterialsPage() {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="rounded-xl p-2 text-slate-500 hover:bg-slate-100"
+              className="ms-icon-btn ms-icon-btn-neutral"
               aria-label="Закрыть"
             >
               <X className="h-5 w-5" />
@@ -298,7 +298,7 @@ export default function MaterialsPage() {
             </label>
             <button
               disabled={saving}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-3 font-semibold text-white disabled:opacity-60 lg:col-span-2 lg:justify-self-end"
+              className="ms-btn ms-btn-primary disabled:opacity-60 lg:col-span-2 lg:justify-self-end"
             >
               {saving ? (
                 <LoaderCircle className="h-5 w-5 animate-spin" />
@@ -345,7 +345,7 @@ export default function MaterialsPage() {
                     href={material.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white"
+                    className="ms-btn ms-btn-primary ms-btn-sm flex-1"
                   >
                     Открыть
                     <ExternalLink className="h-4 w-4" />
@@ -356,7 +356,7 @@ export default function MaterialsPage() {
                     type="button"
                     onClick={() => void remove(material)}
                     disabled={deletingId === material.id}
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-red-200 text-red-600 disabled:opacity-60"
+                    className="ms-icon-btn ms-icon-btn-danger"
                     aria-label="Удалить материал"
                   >
                     {deletingId === material.id ? (
