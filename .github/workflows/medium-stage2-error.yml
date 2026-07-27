@@ -1,0 +1,43 @@
+name: Medium stage two error diagnostics
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/medium-stage2-error.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/medium-audit-v1
+      - name: Extract and execute migration with diagnostics
+        shell: bash
+        run: |
+          python <<'EXTRACT'
+          from pathlib import Path
+          source = Path('.github/workflows/apply-medium-stage2-once.yml').read_text()
+          start_marker = "          python <<'PY'\n"
+          end_marker = "\n          PY"
+          start = source.index(start_marker) + len(start_marker)
+          end = source.index(end_marker, start)
+          embedded = source[start:end]
+          lines = [line[10:] if line.startswith('          ') else line for line in embedded.splitlines()]
+          Path('/tmp/apply-medium-stage2.py').write_text('\n'.join(lines) + '\n')
+          EXTRACT
+          set +e
+          python /tmp/apply-medium-stage2.py > medium-stage2-error.txt 2>&1
+          status=$?
+          echo "exit_status=$status" >> medium-stage2-error.txt
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: medium-stage2-error
+          path: medium-stage2-error.txt
+          retention-days: 3
