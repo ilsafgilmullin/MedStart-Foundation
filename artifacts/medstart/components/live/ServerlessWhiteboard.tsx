@@ -48,7 +48,6 @@ interface ServerlessWhiteboardProps {
   onClearBackground?: () => void
 }
 
-const CACHE_LIMIT = 400
 const MAX_POINTS = 1_200
 
 const toolItems: Array<{
@@ -302,38 +301,18 @@ export default function ServerlessWhiteboard({
     elementsRef.current = elements
   }, [elements])
 
-  useEffect(() => {
-    const cacheKey = `medstart-board-${bookingId}`
-    try {
-      const cached = localStorage.getItem(cacheKey)
-      if (cached) {
-        const parsed = JSON.parse(cached) as unknown
-        if (Array.isArray(parsed)) setElements(parsed.filter(isBoardElement))
-      }
-    } catch {
-      // Private mode can disable local storage.
-    }
-
-    return subscribeToWhiteboard(
-      bookingId,
-      (next) => {
-        setElements(next.filter(isBoardElement))
-        setSyncState(navigator.onLine ? 'saved' : 'offline')
-      },
-      () => setSyncState(navigator.onLine ? 'error' : 'offline'),
-    )
-  }, [bookingId])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        `medstart-board-${bookingId}`,
-        JSON.stringify(elements.slice(-CACHE_LIMIT)),
-      )
-    } catch {
-      // Private mode can disable local storage.
-    }
-  }, [bookingId, elements])
+  useEffect(
+    () =>
+      subscribeToWhiteboard(
+        bookingId,
+        (next) => {
+          setElements(next.filter(isBoardElement))
+          setSyncState(navigator.onLine ? 'saved' : 'offline')
+        },
+        () => setSyncState(navigator.onLine ? 'error' : 'offline'),
+      ),
+    [bookingId],
+  )
 
   useEffect(() => {
     const update = () => {
@@ -374,14 +353,9 @@ export default function ServerlessWhiteboard({
 
     render()
 
-    if ('ResizeObserver' in window) {
-      const observer = new ResizeObserver(render)
-      observer.observe(container)
-      return () => observer.disconnect()
-    }
-
-    window.addEventListener('resize', render)
-    return () => window.removeEventListener('resize', render)
+    const observer = new ResizeObserver(render)
+    observer.observe(container)
+    return () => observer.disconnect()
   }, [draft, elements])
 
   const status = useMemo(() => {

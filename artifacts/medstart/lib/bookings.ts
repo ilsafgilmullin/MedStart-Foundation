@@ -7,17 +7,13 @@ import {
   runTransaction,
   serverTimestamp,
   where,
-  writeBatch,
   type Unsubscribe,
 } from 'firebase/firestore'
-import { db } from './firebase'
+import { auth, db } from './firebase'
 import {
-  conversationIdFor,
   sortBookings,
   type Booking,
   type BookingStatus,
-  type ChatMessage,
-  type Conversation,
 } from './domain'
 import type {
   EffectiveUserRole,
@@ -44,6 +40,12 @@ export interface BookingActionInput {
     'accepted' | 'declined' | 'cancelled' | 'completed'
   >
   response?: string
+}
+
+interface CreateBookingResponse {
+  bookingId?: string
+  conversationId?: string
+  error?: string
 }
 
 function clean(value: string) {
@@ -75,77 +77,42 @@ export async function createBooking(
     throw new Error('Укажите предмет, дату и время занятия.')
   }
 
-  const bookingRef = doc(collection(db, 'bookings'))
-  const conversationId = conversationIdFor(input.student.uid, input.tutor.uid)
-  const conversationRef = doc(db, 'conversations', conversationId)
-  const conversationSnapshot = await getDoc(conversationRef)
-  const messageText =
-    clean(input.message) ||
-    `Здравствуйте! Хочу записаться на занятие по теме «${subject}».`
-  const messageRef = doc(collection(conversationRef, 'messages'))
-  const batch = writeBatch(db)
-
-  const booking: Omit<Booking, 'id'> = {
-    studentUid: input.student.uid,
-    studentName: input.student.displayName,
-    studentAvatar: input.student.avatar || '',
-    tutorUid: input.tutor.uid,
-    tutorName: input.tutor.displayName,
-    tutorAvatar: input.tutor.avatar || '',
-    subject,
-    goal: clean(input.goal),
-    requestedDate,
-    requestedTime,
-    timezone: defaultTimezone(input.student),
-    durationMinutes: Math.max(30, input.tutor.lessonDuration ?? 60),
-    format: input.format,
-    price: Math.max(0, input.tutor.lessonPrice ?? 0),
-    status: 'pending',
-    studentMessage: messageText,
-    tutorResponse: '',
-    conversationId,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+  const currentUser = auth.currentUser
+  if (!currentUser || currentUser.uid !== input.student.uid) {
+    throw new Error('Сессия авторизации устарела. Войдите в аккаунт повторно.')
   }
 
-  batch.set(bookingRef, booking)
+  const token = await currentUser.getIdToken()
+  const response = await fetch('/api/bookings', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      tutorUid: input.tutor.uid,
+      subject,
+      goal: clean(input.goal),
+      requestedDate,
+      requestedTime,
+      timezone: defaultTimezone(input.student),
+      format: input.format,
+      message: clean(input.message),
+    }),
+  })
 
-  const conversationUpdate = {
-    latestBookingId: bookingRef.id,
-    lastMessage: messageText,
-    lastSenderUid: input.student.uid,
-    lastMessageAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+  const payload = (await response.json().catch(() => ({}))) as CreateBookingResponse
+  if (!response.ok) {
+    throw new Error(payload.error || 'Не удалось отправить заявку.')
+  }
+  if (!payload.bookingId || !payload.conversationId) {
+    throw new Error('Сервер вернул неполный ответ при создании заявки.')
   }
 
-  if (conversationSnapshot.exists()) {
-    batch.update(conversationRef, conversationUpdate)
-  } else {
-    const conversation: Omit<Conversation, 'id'> = {
-      participantUids: [input.student.uid, input.tutor.uid],
-      participantNames: {
-        [input.student.uid]: input.student.displayName,
-        [input.tutor.uid]: input.tutor.displayName,
-      },
-      participantAvatars: {
-        [input.student.uid]: input.student.avatar || '',
-        [input.tutor.uid]: input.tutor.avatar || '',
-      },
-      ...conversationUpdate,
-      createdAt: serverTimestamp(),
-    }
-    batch.set(conversationRef, conversation)
+  return {
+    bookingId: payload.bookingId,
+    conversationId: payload.conversationId,
   }
-
-  const firstMessage: Omit<ChatMessage, 'id'> = {
-    senderUid: input.student.uid,
-    text: messageText,
-    createdAt: serverTimestamp(),
-  }
-  batch.set(messageRef, firstMessage)
-  await batch.commit()
-
-  return { bookingId: bookingRef.id, conversationId }
 }
 
 export function subscribeToBookingsForUser(

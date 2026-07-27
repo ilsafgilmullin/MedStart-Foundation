@@ -29,30 +29,45 @@ export interface CreateMaterialInput {
   kind: MaterialKind
 }
 
+const MATERIAL_KINDS = new Set<MaterialKind>([
+  'link',
+  'document',
+  'video',
+  'note',
+])
+
+function safeHttpsUrl(value: string) {
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'https:' && Boolean(parsed.hostname)
+  } catch {
+    return false
+  }
+}
+
 export async function createMaterial(
   input: CreateMaterialInput,
 ): Promise<string> {
-  const title = input.title.trim()
-  if (!title) throw new Error('Укажите название материала.')
-  if (input.kind !== 'note' && !input.url.trim()) {
-    throw new Error('Добавьте ссылку на материал.')
+  const title = input.title.trim().slice(0, 180)
+  const description = input.description.trim().slice(0, 4_000)
+  const url = input.url.trim().slice(0, 2_000)
+
+  if (!MATERIAL_KINDS.has(input.kind)) {
+    throw new Error('Выбран неподдерживаемый тип материала.')
   }
-  if (input.url.trim()) {
-    try {
-      const url = new URL(input.url.trim())
-      if (!['http:', 'https:'].includes(url.protocol)) throw new Error()
-    } catch {
-      throw new Error(
-        'Укажите корректную ссылку, начинающуюся с http:// или https://.',
-      )
-    }
+  if (!title) throw new Error('Укажите название материала.')
+  if (input.kind === 'note' && url) {
+    throw new Error('Для заметки ссылка не требуется.')
+  }
+  if (input.kind !== 'note' && !safeHttpsUrl(url)) {
+    throw new Error('Укажите безопасную ссылку, начинающуюся с https://.')
   }
 
   const materialRef = await addDoc(collection(db, 'materials'), {
     ...input,
     title,
-    description: input.description.trim(),
-    url: input.url.trim(),
+    description,
+    url: input.kind === 'note' ? '' : url,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })

@@ -3,73 +3,110 @@ name: MedStart CI
 on:
   push:
     branches:
-      - audit/medstart-v2-clean
-  pull_request:
+      - main
+      - 'fix/**'
     paths:
       - 'artifacts/medstart/**'
+      - 'scripts/**'
+      - 'firestore.rules'
+      - 'firestore.secure.rules'
+      - 'storage.rules'
+      - 'firebase.json'
+      - 'firestore.indexes.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - 'package.json'
       - 'tsconfig*.json'
-      - '.github/workflows/medstart-ci.yml'
+      - '.github/workflows/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'artifacts/medstart/**'
+      - 'scripts/**'
+      - 'firestore.rules'
+      - 'firestore.secure.rules'
+      - 'storage.rules'
+      - 'firebase.json'
+      - 'firestore.indexes.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'package.json'
+      - 'tsconfig*.json'
+      - '.github/workflows/**'
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: medstart-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: pnpm
 
-      - name: Enable pnpm
-        run: corepack enable
+      - name: Set up Java for Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
 
-      - name: Refresh lockfile on refactor branch
-        if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
-        run: pnpm install --lockfile-only --no-frozen-lockfile
-
-      - name: Commit lockfile changes
-        if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
+      - name: Verify hardened Firebase configuration
         run: |
-          if git diff --quiet -- pnpm-lock.yaml; then
-            echo "Lockfile is already current."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add pnpm-lock.yaml
-            git commit -m "chore: refresh pnpm lockfile"
-            git push
-          fi
+          test -f firestore.secure.rules
+          test -f storage.rules
+          grep -q '"rules": "firestore.secure.rules"' firebase.json
+          grep -q 'allow create, update: if false;' storage.rules
+          grep -A2 'match /bookings/{bookingId}' firestore.secure.rules | grep -q 'allow create: if false;'
+          grep -A2 'match /conversations/{conversationId}' firestore.secure.rules | grep -q 'allow create: if false;'
+          ! grep -q 'medstart-board-' artifacts/medstart/components/live/ServerlessWhiteboard.tsx
+          test -f artifacts/medstart/app/api/bookings/route.ts
+          grep -q "fetch('/api/bookings'" artifacts/medstart/lib/bookings.ts
+          test -f scripts/test-critical-rules.mjs
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Compile and test Firebase security rules
+        env:
+          CI: 'true'
+        run: >-
+          pnpm dlx firebase-tools@15.24.0 emulators:exec
+          --only firestore,storage
+          --project demo-medstart
+          "node scripts/test-critical-rules.mjs"
+
       - name: Typecheck MedStart
-        id: typecheck
-        continue-on-error: true
-        run: pnpm --filter @workspace/medstart typecheck > typecheck.log 2>&1
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm --filter @workspace/medstart typecheck 2>&1 | tee typecheck.log
 
       - name: Upload typecheck report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: medstart-typecheck-report
+          name: medstart-critical-typecheck
           path: typecheck.log
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 3
-
-      - name: Stop after typecheck errors
-        if: steps.typecheck.outcome == 'failure'
-        run: |
-          cat typecheck.log
-          exit 1
 
       - name: Build MedStart
         env:

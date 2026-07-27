@@ -6,10 +6,23 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function userExists(userId) {
+      return firestore.exists(
+        /databases/(default)/documents/users/$(userId)
+      );
+    }
+
     function userProfile(userId) {
       return firestore.get(
         /databases/(default)/documents/users/$(userId)
       ).data;
+    }
+
+    function isActiveUser(userId) {
+      return signedIn()
+        && request.auth.uid == userId
+        && userExists(userId)
+        && userProfile(userId).status == 'active';
     }
 
     function isOwner() {
@@ -19,6 +32,7 @@ service firebase.storage {
 
     function isActiveAdmin() {
       return signedIn()
+        && userExists(request.auth.uid)
         && userProfile(request.auth.uid).role == 'admin'
         && userProfile(request.auth.uid).status == 'active';
     }
@@ -28,28 +42,32 @@ service firebase.storage {
     }
 
     function isActiveTutor(userId) {
-      return signedIn()
-        && request.auth.uid == userId
-        && userProfile(userId).role == 'tutor'
-        && userProfile(userId).status == 'active';
+      return isActiveUser(userId)
+        && userProfile(userId).role == 'tutor';
     }
 
     function isPublishedSubmission(submissionId) {
-      return firestore.get(
-        /databases/(default)/documents/knowledgeSubmissions/$(submissionId)
-      ).data.status == 'published';
+      return firestore.exists(
+          /databases/(default)/documents/knowledgeSubmissions/$(submissionId)
+        )
+        && firestore.get(
+          /databases/(default)/documents/knowledgeSubmissions/$(submissionId)
+        ).data.status == 'published';
     }
 
     match /avatars/{userId}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null
-        && request.auth.uid == userId
+      allow create, update: if isActiveUser(userId)
+        && request.resource.size > 0
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow delete: if isActiveUser(userId) || isModerator();
     }
 
     match /knowledge-submissions/{userId}/{submissionId}/{fileName} {
       allow read: if signedIn()
+        && userExists(request.auth.uid)
+        && userProfile(request.auth.uid).status == 'active'
         && (
           request.auth.uid == userId
           || isModerator()
@@ -64,73 +82,58 @@ service firebase.storage {
 
       allow update: if false;
 
-      allow delete: if signedIn()
-        && (
-          request.auth.uid == userId
-          || isModerator()
-        );
+      allow delete: if isActiveTutor(userId) || isModerator();
     }
 
-    match /{allPaths=**} {
-      allow read, write: if false;
+    function bookingExists(bookingId) {
+      return firestore.exists(
+        /databases/(default)/documents/bookings/$(bookingId)
+      );
     }
 
-    // MEDSTART_V6_MEDICAL_STORAGE_RULES
     function medicalBooking(bookingId) {
       return firestore.get(
         /databases/(default)/documents/bookings/$(bookingId)
       ).data;
     }
 
-    function canReadMedicalAsset(bookingId) {
+    function isActiveMedicalParticipant(bookingId) {
       return signedIn()
-        && medicalBooking(bookingId).status in ['accepted', 'completed']
+        && userExists(request.auth.uid)
+        && userProfile(request.auth.uid).status == 'active'
+        && bookingExists(bookingId)
         && (
           medicalBooking(bookingId).studentUid == request.auth.uid
           || medicalBooking(bookingId).tutorUid == request.auth.uid
-          || isModerator()
         );
     }
 
-    function canWriteMedicalAsset(bookingId) {
-      return signedIn()
-        && medicalBooking(bookingId).status == 'accepted'
-        && (
-          medicalBooking(bookingId).studentUid == request.auth.uid
-          || medicalBooking(bookingId).tutorUid == request.auth.uid
-        );
+    function canReadMedicalAsset(bookingId) {
+      return bookingExists(bookingId)
+        && medicalBooking(bookingId).status in ['accepted', 'completed']
+        && (isActiveMedicalParticipant(bookingId) || isModerator());
     }
 
     match /medical-workspaces/{bookingId}/{userId}/{fileName} {
       allow read: if canReadMedicalAsset(bookingId);
 
-      allow create: if canWriteMedicalAsset(bookingId)
-        && request.auth.uid == userId
-        && request.resource.size > 0
-        && request.resource.size <= 20 * 1024 * 1024
-        && request.resource.metadata.bookingId == bookingId
-        && request.resource.metadata.uploaderUid == request.auth.uid
-        && request.resource.metadata.deidentified == 'true'
-        && request.resource.metadata.educationalUseOnly == 'true'
-        && (
-          request.resource.contentType.matches('image/(jpeg|png|webp)')
-          || (
-            fileName.matches('.+[.]dcm')
-            && request.resource.contentType in [
-              'application/dicom',
-              'application/octet-stream'
-            ]
+      // Critical safety gate: direct client uploads are disabled until MedStart
+      // has a trusted server-side pipeline for malware scanning, EXIF/DICOM tag
+      // removal and verification of burned-in patient identifiers.
+      allow create, update: if false;
+
+      allow delete: if isModerator()
+        || (
+          isActiveMedicalParticipant(bookingId)
+          && (
+            request.auth.uid == userId
+            || medicalBooking(bookingId).tutorUid == request.auth.uid
           )
         );
+    }
 
-      allow update: if false;
-
-      allow delete: if signedIn()
-        && (
-          request.auth.uid == userId
-          || medicalBooking(bookingId).tutorUid == request.auth.uid
-          || isModerator()
-        );
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

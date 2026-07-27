@@ -16,6 +16,8 @@ export interface Booking {
   requestedDate: string
   requestedTime: string
   timezone: string
+  requestedStartAt?: unknown
+  requestedEndAt?: unknown
   durationMinutes: number
   format: LessonFormat
   price: number
@@ -278,6 +280,8 @@ function zonedDateTimeToMillis(
 }
 
 export function bookingDateTime(booking: Booking): number {
+  const authoritative = timestampToMillis(booking.requestedStartAt)
+  if (authoritative) return authoritative
   return zonedDateTimeToMillis(
     booking.requestedDate,
     booking.requestedTime,
@@ -319,6 +323,17 @@ export function formatBookingDate(
   booking: Booking,
   options: Intl.DateTimeFormatOptions = {},
 ): string {
+  const authoritative = timestampToMillis(booking.requestedStartAt)
+  if (authoritative) {
+    return new Intl.DateTimeFormat('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: booking.timezone || 'Europe/Moscow',
+      ...options,
+    }).format(new Date(authoritative))
+  }
   return formatLessonDate(
     booking.requestedDate,
     booking.requestedTime,

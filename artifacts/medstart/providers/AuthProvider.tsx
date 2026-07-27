@@ -42,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let unsubscribeProfile: (() => void) | undefined
+    let revokingAccess = false
 
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       unsubscribeProfile?.()
@@ -58,6 +59,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       unsubscribeProfile = subscribeToUserProfile(
         currentUser.uid,
         (nextProfile) => {
+          if (
+            nextProfile?.status === 'blocked' ||
+            nextProfile?.status === 'deleted'
+          ) {
+            setProfile(null)
+            setUser(null)
+            setLoading(false)
+            unsubscribeProfile?.()
+            unsubscribeProfile = undefined
+            if (!revokingAccess) {
+              revokingAccess = true
+              void performLogout()
+            }
+            return
+          }
+
           setProfile(nextProfile)
           setLoading(false)
           if (
