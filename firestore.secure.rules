@@ -3,7 +3,8 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
-      return request.auth != null;
+      return request.auth != null
+        && request.auth.token.email_verified == true;
     }
 
     function userExists(userId) {
@@ -38,7 +39,7 @@ service cloud.firestore {
     }
 
     function isOwnProfile(userId) {
-      return signedIn() && request.auth.uid == userId;
+      return request.auth != null && request.auth.uid == userId;
     }
 
     function isActiveRole(userId, role) {
@@ -149,12 +150,15 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow create: if isOwnProfile(userId) && validNewProfile(userId);
-      allow get: if isModerator() || isOwnProfile(userId) || isPublicTutorResource();
+      allow get: if isModerator()
+        || (signedIn() && isOwnProfile(userId))
+        || isPublicTutorResource();
       allow list: if isModerator() || isPublicTutorResource();
       allow update: if isOwner()
         || (isActiveAdmin() && validAdminTutorModeration())
         || (
-          isOwnProfile(userId)
+          signedIn()
+          && isOwnProfile(userId)
           && userExists(userId)
           && resource.data.status != 'blocked'
           && resource.data.status != 'deleted'

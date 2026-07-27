@@ -178,6 +178,9 @@ export async function POST(request: Request) {
       authorization.slice('Bearer '.length),
       true,
     )
+    if (!decoded.email_verified) {
+      return jsonError('Подтвердите электронную почту перед входом в занятие.', 403)
+    }
     const database = getFirebaseAdminDb()
     const [snapshot, userSnapshot] = await Promise.all([
       database.collection('bookings').doc(bookingId).get(),
