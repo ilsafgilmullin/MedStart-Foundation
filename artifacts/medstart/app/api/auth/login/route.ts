@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { firebasePublicConfig } from '@/lib/firebase-public-config'
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from '@/lib/server/firebase-admin'
 import {
   clientAddress,
@@ -11,9 +12,6 @@ import {
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const FIREBASE_API_KEY =
-  process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
-  'AIzaSyAt4F5JQAdQPw8kmY-0dorxcaT_JX2d3v0'
 const OWNER_UID = 'm8JbbeeXMmZzywUwHboOyMm9MnG2'
 
 interface IdentityResponse {
@@ -24,7 +22,7 @@ interface IdentityResponse {
 
 async function identityRequest(operation: string, body: unknown) {
   const response = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:${operation}?key=${encodeURIComponent(FIREBASE_API_KEY)}`,
+    `https://identitytoolkit.googleapis.com/v1/accounts:${operation}?key=${encodeURIComponent(firebasePublicConfig.apiKey)}`,
     {
       method: 'POST',
       headers: {
