@@ -65,7 +65,7 @@ export function useTutorRegistration() {
         bio,
         password,
       })
-      router.replace(ROUTES.DASHBOARD)
+      router.replace(`${ROUTES.LOGIN}?registered=1&tutor=1`)
     } catch (caught) {
       if (
         caught instanceof FirebaseError &&

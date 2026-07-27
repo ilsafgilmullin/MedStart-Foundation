@@ -1,7 +1,9 @@
 import {
   collection,
   doc,
+  limit,
   onSnapshot,
+  orderBy,
   query,
   serverTimestamp,
   where,
@@ -14,6 +16,9 @@ import {
   type ChatMessage,
   type Conversation,
 } from './domain'
+
+const MAX_VISIBLE_CONVERSATIONS = 100
+const MAX_REALTIME_MESSAGES = 200
 
 export function subscribeToConversations(
   uid: string,
@@ -35,7 +40,8 @@ export function subscribeToConversations(
             (left, right) =>
               timestampToMillis(right.updatedAt) -
               timestampToMillis(left.updatedAt),
-          ),
+          )
+          .slice(0, MAX_VISIBLE_CONVERSATIONS),
       ),
     onError,
   )
@@ -46,17 +52,19 @@ export function subscribeToMessages(
   onChange: (messages: ChatMessage[]) => void,
   onError?: (error: Error) => void,
 ): Unsubscribe {
-  return onSnapshot(
+  const source = query(
     collection(db, 'conversations', conversationId, 'messages'),
+    orderBy('createdAt', 'desc'),
+    limit(MAX_REALTIME_MESSAGES),
+  )
+
+  return onSnapshot(
+    source,
     (snapshot) =>
       onChange(
         snapshot.docs
           .map((item) => ({ id: item.id, ...item.data() }) as ChatMessage)
-          .sort(
-            (left, right) =>
-              timestampToMillis(left.createdAt) -
-              timestampToMillis(right.createdAt),
-          ),
+          .reverse(),
       ),
     onError,
   )

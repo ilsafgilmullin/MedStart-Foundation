@@ -48,7 +48,7 @@ export function useStudentRegistration() {
         fieldOfStudy: field,
         studyYear: year,
       })
-      router.replace(ROUTES.DASHBOARD)
+      router.replace(`${ROUTES.LOGIN}?registered=1`)
     } catch (caught) {
       setError(messageFor(caught))
     } finally {

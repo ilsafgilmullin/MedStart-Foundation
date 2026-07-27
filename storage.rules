@@ -3,7 +3,8 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     function signedIn() {
-      return request.auth != null;
+      return request.auth != null
+        && request.auth.token.email_verified == true;
     }
 
     function userExists(userId) {
@@ -110,8 +111,22 @@ service firebase.storage {
 
     function canReadMedicalAsset(bookingId) {
       return bookingExists(bookingId)
-        && medicalBooking(bookingId).status in ['accepted', 'completed']
-        && (isActiveMedicalParticipant(bookingId) || isModerator());
+        && (
+          isModerator()
+          || (
+            isActiveMedicalParticipant(bookingId)
+            && (
+              medicalBooking(bookingId).status == 'accepted'
+              || (
+                medicalBooking(bookingId).status == 'completed'
+                && medicalBooking(bookingId).completedAt is timestamp
+                && request.time
+                  < medicalBooking(bookingId).completedAt
+                    + duration.value(180, 'd')
+              )
+            )
+          )
+        );
     }
 
     match /medical-workspaces/{bookingId}/{userId}/{fileName} {

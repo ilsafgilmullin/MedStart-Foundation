@@ -233,19 +233,18 @@ export async function saveMedicalWorkspacePatch(
       )
     }
 
-    transaction.set(
-      workspaceRef,
-      {
-        bookingId,
-        ...patch,
-        updatedByUid: userUid,
-        createdAt: snapshot.exists()
-          ? current?.createdAt ?? serverTimestamp()
-          : serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    )
+    const normalizedCurrent = normalizeWorkspace(bookingId, current)
+
+    transaction.set(workspaceRef, {
+      ...normalizedCurrent,
+      ...patch,
+      bookingId,
+      updatedByUid: userUid,
+      createdAt: snapshot.exists()
+        ? current?.createdAt ?? serverTimestamp()
+        : serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
   })
 
   const saved = await getDoc(workspaceRef)

@@ -52,6 +52,8 @@ export function useLogin() {
           default:
             setError('Не удалось выполнить вход.')
         }
+      } else if (err instanceof Error) {
+        setError(err.message)
       } else {
         setError('Произошла неизвестная ошибка.')
       }

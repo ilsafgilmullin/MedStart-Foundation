@@ -9,6 +9,9 @@ import { createLessonToken } from '@/lib/server/livekit'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+const VIDEO_ROOM_OPEN_BEFORE_MS = 30 * 60 * 1000
+const VIDEO_ROOM_CLOSE_AFTER_MS = 4 * 60 * 60 * 1000
+
 interface TokenRequestBody {
   bookingId?: unknown
 }
@@ -57,6 +60,100 @@ function demoResponse(booking: Booking) {
   })
 }
 
+function timeZoneParts(instantMs: number, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  })
+  const values: Record<string, number> = {}
+  for (const part of formatter.formatToParts(new Date(instantMs))) {
+    if (part.type !== 'literal') values[part.type] = Number(part.value)
+  }
+  return {
+    year: values.year,
+    month: values.month,
+    day: values.day,
+    hour: values.hour,
+    minute: values.minute,
+    second: values.second,
+  }
+}
+
+function timeZoneOffsetMs(instantMs: number, timeZone: string) {
+  const parts = timeZoneParts(instantMs, timeZone)
+  const reconstructed = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+  )
+  return reconstructed - Math.floor(instantMs / 1000) * 1000
+}
+
+function lessonStartMs(booking: Booking) {
+  const date = booking.requestedDate
+  const time = booking.requestedTime
+  const timeZone = booking.timezone || 'Europe/Moscow'
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) {
+    return null
+  }
+
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date())
+  } catch {
+    return null
+  }
+
+  const [year, month, day] = date.split('-').map(Number)
+  const [hour, minute] = time.split(':').map(Number)
+  const localAsUtc = Date.UTC(year, month - 1, day, hour, minute, 0)
+  let instantMs = localAsUtc
+  for (let iteration = 0; iteration < 3; iteration += 1) {
+    instantMs = localAsUtc - timeZoneOffsetMs(instantMs, timeZone)
+  }
+
+  const verified = timeZoneParts(instantMs, timeZone)
+  if (
+    verified.year !== year ||
+    verified.month !== month ||
+    verified.day !== day ||
+    verified.hour !== hour ||
+    verified.minute !== minute
+  ) {
+    return null
+  }
+
+  return instantMs
+}
+
+function videoRoomWindowError(booking: Booking, nowMs = Date.now()) {
+  const startMs = lessonStartMs(booking)
+  const durationMinutes = Number(booking.durationMinutes)
+  if (startMs === null || !Number.isFinite(durationMinutes)) {
+    return 'В заявке не удалось определить время занятия.'
+  }
+
+  const opensAt = startMs - VIDEO_ROOM_OPEN_BEFORE_MS
+  const closesAt =
+    startMs + Math.max(30, durationMinutes) * 60 * 1000 + VIDEO_ROOM_CLOSE_AFTER_MS
+
+  if (nowMs < opensAt) {
+    return 'Видеокомната откроется за 30 минут до начала занятия.'
+  }
+  if (nowMs > closesAt) {
+    return 'Время доступа к видеокомнате завершилось. Материалы занятия доступны в архиве.'
+  }
+  return ''
+}
+
 export async function POST(request: Request) {
   const authorization = request.headers.get('authorization') || ''
   if (!authorization.startsWith('Bearer ')) {
@@ -81,6 +178,9 @@ export async function POST(request: Request) {
       authorization.slice('Bearer '.length),
       true,
     )
+    if (!decoded.email_verified) {
+      return jsonError('Подтвердите электронную почту перед входом в занятие.', 403)
+    }
     const database = getFirebaseAdminDb()
     const [snapshot, userSnapshot] = await Promise.all([
       database.collection('bookings').doc(bookingId).get(),
@@ -125,6 +225,9 @@ export async function POST(request: Request) {
     if (!isVideoServerEnabled()) {
       return demoResponse(booking)
     }
+
+    const windowError = videoRoomWindowError(booking)
+    if (windowError) return jsonError(windowError, 409)
 
     const participantName =
       participantRole === 'student' ? booking.studentName : booking.tutorName

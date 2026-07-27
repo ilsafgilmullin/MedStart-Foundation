@@ -38,6 +38,7 @@ yarn-error.log*
 .cache/
 .local/
 .config/
+.medstart-backups/
 artifacts/medstart_backup/
 artifacts/mockup-sandbox/
 MedStart-Foundation/

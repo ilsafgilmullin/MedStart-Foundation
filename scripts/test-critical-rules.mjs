@@ -157,6 +157,10 @@ async function run() {
     email: `${blockedUid}@example.test`,
     email_verified: true,
   })
+  const unverifiedStudent = environment.authenticatedContext(studentUid, {
+    email: `${studentUid}@example.test`,
+    email_verified: false,
+  })
 
   await assertSucceeds(getDoc(doc(student.firestore(), 'bookings', bookingId)))
   await assertSucceeds(
@@ -177,6 +181,37 @@ async function run() {
     getBytes(
       ref(
         blocked.storage(),
+        `medical-workspaces/${bookingId}/${studentUid}/seed.png`,
+      ),
+    ),
+  )
+
+  await assertFails(
+    getDoc(doc(unverifiedStudent.firestore(), 'users', studentUid)),
+  )
+  await assertFails(
+    getDoc(doc(unverifiedStudent.firestore(), 'bookings', bookingId)),
+  )
+  await assertFails(
+    getDoc(
+      doc(unverifiedStudent.firestore(), 'conversations', conversationId),
+    ),
+  )
+  await assertFails(
+    getDoc(
+      doc(
+        unverifiedStudent.firestore(),
+        'whiteboards',
+        bookingId,
+        'elements',
+        'seed',
+      ),
+    ),
+  )
+  await assertFails(
+    getBytes(
+      ref(
+        unverifiedStudent.storage(),
         `medical-workspaces/${bookingId}/${studentUid}/seed.png`,
       ),
     ),

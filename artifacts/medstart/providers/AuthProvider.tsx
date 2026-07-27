@@ -13,7 +13,6 @@ import { auth } from '@/lib/firebase'
 import {
   getUserProfile,
   subscribeToUserProfile,
-  updateUserProfile,
 } from '@/lib/firestore'
 import { isOwnerUid, logout as performLogout } from '@/lib/auth'
 import type { EffectiveUserRole, UserProfile } from '@/lib/user-profile'
@@ -44,6 +43,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let unsubscribeProfile: (() => void) | undefined
     let revokingAccess = false
 
+    const revokeSession = () => {
+      setProfile(null)
+      setUser(null)
+      setLoading(false)
+      unsubscribeProfile?.()
+      unsubscribeProfile = undefined
+      if (!revokingAccess) {
+        revokingAccess = true
+        void performLogout()
+      }
+    }
+
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       unsubscribeProfile?.()
       unsubscribeProfile = undefined
@@ -56,6 +67,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
 
+      if (!currentUser.emailVerified) {
+        revokeSession()
+        return
+      }
+
       unsubscribeProfile = subscribeToUserProfile(
         currentUser.uid,
         (nextProfile) => {
@@ -63,32 +79,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             nextProfile?.status === 'blocked' ||
             nextProfile?.status === 'deleted'
           ) {
-            setProfile(null)
-            setUser(null)
-            setLoading(false)
-            unsubscribeProfile?.()
-            unsubscribeProfile = undefined
-            if (!revokingAccess) {
-              revokingAccess = true
-              void performLogout()
-            }
+            revokeSession()
             return
           }
 
           setProfile(nextProfile)
           setLoading(false)
-          if (
-            nextProfile &&
-            isOwnerUid(currentUser.uid) &&
-            nextProfile.firstName.trim().toLocaleLowerCase('ru-RU') === 'олег'
-          ) {
-            const firstName = 'Ильсаф'
-            const lastName = nextProfile.lastName.trim()
-            void updateUserProfile(currentUser.uid, {
-              firstName,
-              displayName: `${firstName} ${lastName}`.trim(),
-            })
-          }
         },
         () => {
           setProfile(null)
