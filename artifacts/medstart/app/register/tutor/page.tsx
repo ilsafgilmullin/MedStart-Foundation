@@ -5,7 +5,7 @@ import { useTutorRegistration } from '@/hooks/useTutorRegistration'
 import { ROUTES } from '@/lib/constants'
 
 const inputClass =
-  'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100'
+  'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100 sm:text-sm'
 
 export default function RegisterTutorPage() {
   const form = useTutorRegistration()
@@ -27,6 +27,8 @@ export default function RegisterTutorPage() {
               <label className="space-y-2 text-sm font-medium">
                 Имя *
                 <input
+                  autoComplete="given-name"
+                  required
                   className={inputClass}
                   value={form.firstName}
                   onChange={(event) => form.setFirstName(event.target.value)}
@@ -35,6 +37,8 @@ export default function RegisterTutorPage() {
               <label className="space-y-2 text-sm font-medium">
                 Фамилия *
                 <input
+                  autoComplete="family-name"
+                  required
                   className={inputClass}
                   value={form.lastName}
                   onChange={(event) => form.setLastName(event.target.value)}
@@ -46,6 +50,7 @@ export default function RegisterTutorPage() {
               <input
                 type="email"
                 autoComplete="email"
+                required
                 className={inputClass}
                 value={form.email}
                 onChange={(event) => form.setEmail(event.target.value)}
@@ -53,9 +58,10 @@ export default function RegisterTutorPage() {
             </label>
             <label className="block space-y-2 text-sm font-medium">
               Специализация *
-              <input
-                className={inputClass}
-                placeholder="Например: анатомия и физиология"
+                              <input
+                  required
+                  className={inputClass}
+                  placeholder="Например: анатомия и физиология"
                 value={form.specialization}
                 onChange={(event) => form.setSpecialization(event.target.value)}
               />
@@ -103,6 +109,7 @@ export default function RegisterTutorPage() {
                 Стоимость занятия, ₽
                 <input
                   type="number"
+                  inputMode="numeric"
                   min="0"
                   step="100"
                   className={inputClass}
@@ -134,6 +141,7 @@ export default function RegisterTutorPage() {
                 <button
                   type="button"
                   onClick={() => form.setOnline(!form.online)}
+                  aria-pressed={form.online}
                   className={`rounded-2xl border px-4 py-3 text-left font-semibold ${
                     form.online
                       ? 'border-violet-500 bg-violet-50 text-violet-700'
@@ -145,6 +153,7 @@ export default function RegisterTutorPage() {
                 <button
                   type="button"
                   onClick={() => form.setInPerson(!form.inPerson)}
+                  aria-pressed={form.inPerson}
                   className={`rounded-2xl border px-4 py-3 text-left font-semibold ${
                     form.inPerson
                       ? 'border-violet-500 bg-violet-50 text-violet-700'
@@ -170,6 +179,7 @@ export default function RegisterTutorPage() {
                 <input
                   type="password"
                   autoComplete="new-password"
+                  required
                   className={inputClass}
                   value={form.password}
                   onChange={(event) => form.setPassword(event.target.value)}
@@ -180,6 +190,7 @@ export default function RegisterTutorPage() {
                 <input
                   type="password"
                   autoComplete="new-password"
+                  required
                   className={inputClass}
                   value={form.confirmPassword}
                   onChange={(event) =>
@@ -194,6 +205,7 @@ export default function RegisterTutorPage() {
               </p>
             )}
             <button
+              type="submit"
               disabled={form.loading}
               className="w-full rounded-2xl bg-violet-600 px-5 py-3.5 font-semibold text-white disabled:opacity-60"
             >

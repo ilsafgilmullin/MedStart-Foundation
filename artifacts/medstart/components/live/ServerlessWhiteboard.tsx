@@ -360,13 +360,13 @@ export default function ServerlessWhiteboard({
 
   const status = useMemo(() => {
     if (!online || syncState === 'offline') {
-      return { label: 'Офлайн — изменения в очереди', icon: WifiOff }
+      return { label: 'Офлайн — изменения не синхронизированы', icon: WifiOff }
     }
     if (syncState === 'saving') {
       return { label: 'Сохраняем…', icon: RotateCcw }
     }
     if (syncState === 'error') {
-      return { label: 'Сохранение будет повторено', icon: WifiOff }
+      return { label: 'Не удалось сохранить изменение', icon: WifiOff }
     }
     return { label: 'Доска сохранена', icon: Save }
   }, [online, syncState])
@@ -410,6 +410,7 @@ export default function ServerlessWhiteboard({
       await saveWhiteboardElement(bookingId, element)
       setSyncState(navigator.onLine ? 'saved' : 'offline')
     } catch {
+      setElements((current) => current.filter((item) => item.id !== element.id))
       setSyncState(navigator.onLine ? 'error' : 'offline')
     }
   }
@@ -477,6 +478,7 @@ export default function ServerlessWhiteboard({
       await deleteWhiteboardElement(bookingId, element.id)
       setSyncState(navigator.onLine ? 'saved' : 'offline')
     } catch {
+      setElements((current) => mergeElement(current, element))
       setSyncState(navigator.onLine ? 'error' : 'offline')
     }
   }
@@ -505,6 +507,7 @@ export default function ServerlessWhiteboard({
     ) {
       return
     }
+    const previousElements = elementsRef.current
     setElements([])
     redoRef.current = []
     setSyncState(navigator.onLine ? 'saving' : 'offline')
@@ -512,6 +515,7 @@ export default function ServerlessWhiteboard({
       await clearWhiteboard(bookingId)
       setSyncState(navigator.onLine ? 'saved' : 'offline')
     } catch {
+      setElements(previousElements)
       setSyncState(navigator.onLine ? 'error' : 'offline')
     }
   }
@@ -585,7 +589,7 @@ export default function ServerlessWhiteboard({
           </div>
         )}
 
-        <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
+        <div className="mt-3 flex snap-x snap-mandatory items-center gap-2 overflow-x-auto overscroll-x-contain pb-1">
           {toolItems.map((item) => {
             const Icon = item.icon
             return (
@@ -594,8 +598,9 @@ export default function ServerlessWhiteboard({
                 type="button"
                 title={item.label}
                 aria-label={item.label}
+                aria-pressed={tool === item.kind}
                 onClick={() => setTool(item.kind)}
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition ${
+                className={`flex h-10 w-10 snap-start shrink-0 items-center justify-center rounded-xl transition ${
                   tool === item.kind
                     ? 'bg-violet-600 text-white'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -612,8 +617,9 @@ export default function ServerlessWhiteboard({
               key={item}
               type="button"
               aria-label={`Цвет ${item}`}
+              aria-pressed={color === item}
               onClick={() => setColor(item)}
-              className={`h-7 w-7 shrink-0 rounded-full border-2 ${
+              className={`h-8 w-8 snap-start shrink-0 rounded-full border-2 ${
                 color === item
                   ? 'border-violet-600 ring-2 ring-violet-200'
                   : 'border-white'
@@ -680,7 +686,7 @@ export default function ServerlessWhiteboard({
               maxLength={500}
               onChange={(event) => setText(event.target.value)}
               placeholder="Введите текст, затем коснитесь доски"
-              className="min-w-0 flex-1 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-violet-500"
+              className="min-w-0 flex-1 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-base text-slate-900 outline-none focus:border-violet-500 sm:text-sm"
             />
           </div>
         )}
