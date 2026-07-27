@@ -1,4 +1,4 @@
-name: Apply MedStart button system
+name: Clean MedStart button audit transport
 
 on:
   pull_request:
@@ -6,20 +6,15 @@ on:
       - main
     paths:
       - '.github/workflows/button-system-apply.yml'
-  workflow_dispatch:
 
 permissions:
   contents: write
 
-concurrency:
-  group: medstart-button-system-apply
-  cancel-in-progress: false
-
 jobs:
-  apply:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+  cleanup:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - name: Checkout audit branch
         uses: actions/checkout@v4
@@ -27,31 +22,18 @@ jobs:
           ref: agent/unified-button-system-v11
           fetch-depth: 0
 
-      - name: Assemble reviewed patch batches
+      - name: Remove temporary audit transport
         run: |
-          : > /tmp/medstart-button-system.patch
-          for batch in .github/button-patches/0{0..8}.b64; do
-            test -s "$batch"
-            base64 --decode "$batch" | gzip --decompress >> /tmp/medstart-button-system.patch
-          done
+          rm -f .github/button-system.patch.gz.b64
+          rm -rf .github/button-patches
+          rm -f .github/workflows/button-system-snapshot.yml
+          rm -f .github/workflows/button-system-apply.yml
 
-      - name: Verify patch checksum
-        run: test "$(sha256sum /tmp/medstart-button-system.patch | cut -d' ' -f1)" = '97274e4f9a3211fff0f87b7f89832f22ae8d67f049c9d01e616e4ca9fecf591f'
-
-      - name: Verify patch scope
-        run: test "$(grep -c '^diff --git ' /tmp/medstart-button-system.patch)" -eq 32
-
-      - name: Verify patch applicability
-        run: git apply --check --verbose /tmp/medstart-button-system.patch
-
-      - name: Apply unified button system
-        run: git apply /tmp/medstart-button-system.patch
-
-      - name: Commit audited UI changes
+      - name: Commit clean branch
         run: |
           git config user.name 'MedStart UI Audit'
           git config user.email 'audit@medstart.local'
-          git add artifacts/medstart
+          git add -A .github
           git diff --cached --check
-          git commit -m 'Унифицировать все кнопки MedStart'
+          git commit -m 'Удалить временные файлы аудита кнопок'
           git push origin HEAD:agent/unified-button-system-v11
