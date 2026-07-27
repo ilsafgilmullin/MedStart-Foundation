@@ -9,11 +9,14 @@ import {
 } from '@/components/auth/AuthShell'
 import { PasswordField } from '@/components/auth/PasswordField'
 import { PasswordRequirements } from '@/components/auth/PasswordRequirements'
+import { useHydrated } from '@/hooks/useHydrated'
 import { useStudentRegistration } from '@/hooks/useStudentRegistration'
 import { ROUTES } from '@/lib/constants'
 
 export default function RegisterStudentPage() {
   const form = useStudentRegistration()
+  const hydrated = useHydrated()
+  const disabled = form.loading || !hydrated
 
   return (
     <AuthShell
@@ -43,7 +46,7 @@ export default function RegisterStudentPage() {
             <input
               autoComplete="given-name"
               required
-              disabled={form.loading}
+              disabled={disabled}
               className={authInputClass}
               value={form.firstName}
               onChange={(event) => form.setFirstName(event.target.value)}
@@ -54,7 +57,7 @@ export default function RegisterStudentPage() {
             <input
               autoComplete="family-name"
               required
-              disabled={form.loading}
+              disabled={disabled}
               className={authInputClass}
               value={form.lastName}
               onChange={(event) => form.setLastName(event.target.value)}
@@ -71,7 +74,7 @@ export default function RegisterStudentPage() {
             spellCheck={false}
             autoComplete="email"
             required
-            disabled={form.loading}
+            disabled={disabled}
             className={authInputClass}
             value={form.email}
             onChange={(event) => form.setEmail(event.target.value)}
@@ -85,7 +88,7 @@ export default function RegisterStudentPage() {
             <select
               className={authInputClass}
               value={form.field}
-              disabled={form.loading}
+              disabled={disabled}
               onChange={(event) => form.setField(event.target.value)}
             >
               <option value="medicine">Лечебное дело</option>
@@ -100,7 +103,7 @@ export default function RegisterStudentPage() {
             <select
               className={authInputClass}
               value={form.year}
-              disabled={form.loading}
+              disabled={disabled}
               onChange={(event) => form.setYear(event.target.value)}
             >
               {[1, 2, 3, 4, 5, 6].map((year) => (
@@ -117,7 +120,7 @@ export default function RegisterStudentPage() {
           value={form.password}
           onChange={form.setPassword}
           autoComplete="new-password"
-          disabled={form.loading}
+          disabled={disabled}
           errorId={form.error ? 'student-registration-error' : undefined}
         />
         <PasswordRequirements password={form.password} />
@@ -126,9 +129,19 @@ export default function RegisterStudentPage() {
           value={form.confirmPassword}
           onChange={form.setConfirmPassword}
           autoComplete="new-password"
-          disabled={form.loading}
+          disabled={disabled}
           errorId={form.error ? 'student-registration-error' : undefined}
         />
+
+        {!hydrated && (
+          <p
+            role="status"
+            aria-live="polite"
+            className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900"
+          >
+            Подключаем защищённую регистрацию MedStart…
+          </p>
+        )}
 
         {form.error && (
           <p
@@ -142,7 +155,7 @@ export default function RegisterStudentPage() {
 
         <button
           type="submit"
-          disabled={form.loading}
+          disabled={disabled}
           aria-busy={form.loading}
           className={authPrimaryButtonClass}
         >
@@ -151,8 +164,10 @@ export default function RegisterStudentPage() {
               <LoaderCircle className="mr-2 h-5 w-5 animate-spin" />
               Создаём защищённый аккаунт…
             </>
-          ) : (
+          ) : hydrated ? (
             'Создать аккаунт студента'
+          ) : (
+            'Подключаем регистрацию…'
           )}
         </button>
       </form>
