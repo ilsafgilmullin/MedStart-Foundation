@@ -81,6 +81,7 @@ jobs:
           grep -q "fetch('/api/bookings'" artifacts/medstart/lib/bookings.ts
           test -f scripts/test-critical-rules.mjs
           test -f scripts/test-medium-rules.mjs
+          test -f scripts/test-auth-rules.mjs
           test -f scripts/final-audit-invariants.mjs
 
       - name: Install dependencies
@@ -96,7 +97,7 @@ jobs:
           pnpm dlx firebase-tools@15.24.0 emulators:exec
           --only firestore,storage
           --project demo-medstart
-          "node scripts/test-critical-rules.mjs && node scripts/test-medium-rules.mjs"
+          "node scripts/test-critical-rules.mjs && node scripts/test-medium-rules.mjs && node scripts/test-auth-rules.mjs"
 
       - name: Lint MedStart
         run: pnpm --filter @workspace/medstart lint
