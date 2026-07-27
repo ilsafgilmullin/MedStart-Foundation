@@ -42,6 +42,10 @@ export interface AuthSession {
   profile: UserProfile
 }
 
+export interface RegistrationResult extends AuthSession {
+  verificationSent: boolean
+}
+
 export class EmailVerificationRequiredError extends Error {
   readonly verificationSent: boolean
 
@@ -121,9 +125,9 @@ async function assertAccess(profile: UserProfile) {
 async function assertVerifiedEmail(credential: UserCredential) {
   await credential.user.reload()
   if (credential.user.emailVerified) {
-    // Refresh the ID token after the verification link was used in another tab.
-    // This also causes AuthProvider's onIdTokenChanged listener to reconcile the
-    // verified session instead of keeping the temporary pre-reload state.
+    // Verification may have happened in another browser tab. A forced token
+    // refresh makes the email_verified claim immediately available to
+    // Firestore rules and to AuthProvider's token listener.
     await credential.user.getIdToken(true)
     return
   }
@@ -137,7 +141,7 @@ async function assertVerifiedEmail(credential: UserCredential) {
   } catch (error) {
     if (error instanceof EmailVerificationRequiredError) throw error
 
-    await secureSignOut()
+    await secureSignOut().catch(() => undefined)
 
     if (
       error instanceof FirebaseError &&
@@ -174,7 +178,7 @@ export function login(
       if (!profile) {
         await secureSignOut()
         throw new Error(
-          'Профиль пользователя не найден. Повторите регистрацию с той же почтой или обратитесь в поддержку.',
+          'Учётная запись существует, но профиль MedStart не найден. Обратитесь в поддержку и не создавайте второй аккаунт.',
         )
       }
       await assertAccess(profile)
@@ -192,36 +196,40 @@ async function registerWithProfile(
   email: string,
   password: string,
   createProfile: (uid: string) => Promise<UserProfile>,
-): Promise<AuthSession> {
+): Promise<RegistrationResult> {
   return runAuthTransition(async () => {
     const credential = await createUserWithEmailAndPassword(
       auth,
       normalizeAuthEmail(email),
       password,
     )
+
     let profile: UserProfile
     try {
       profile = await createProfile(credential.user.uid)
     } catch (error) {
+      // A failed profile write must not leave a login-only orphan account.
       await deleteUser(credential.user).catch(() => undefined)
       await secureSignOut().catch(() => undefined)
       throw error
     }
 
     auth.useDeviceLanguage()
+    let verificationSent = false
     try {
       await sendEmailVerification(credential.user)
-    } catch (error) {
-      await secureSignOut()
-      throw new Error(
-        error instanceof FirebaseError && error.code === 'auth/too-many-requests'
-          ? VERIFY_EMAIL_RATE_LIMIT_MESSAGE
-          : VERIFY_EMAIL_FAILED_MESSAGE,
-      )
+      verificationSent = true
+    } catch {
+      // The account and protected profile are already created. Treat delivery
+      // failure as a recoverable state: the next login attempt safely retries
+      // the verification email instead of trapping the user behind
+      // auth/email-already-in-use.
+      verificationSent = false
+    } finally {
+      await secureSignOut().catch(() => undefined)
     }
 
-    await secureSignOut()
-    return { credential, profile }
+    return { credential, profile, verificationSent }
   })
 }
 
@@ -276,22 +284,12 @@ export async function logout(): Promise<void> {
 
 export async function resetPassword(email: string): Promise<void> {
   auth.useDeviceLanguage()
-  const normalizedEmail = normalizeAuthEmail(email)
-  const continueUrl =
-    typeof window === 'undefined'
-      ? undefined
-      : `${window.location.origin}/login?passwordReset=1`
 
-  await sendPasswordResetEmail(
-    auth,
-    normalizedEmail,
-    continueUrl
-      ? {
-          url: continueUrl,
-          handleCodeInApp: false,
-        }
-      : undefined,
-  )
+  // Do not attach the current Replit preview origin as a continue URL. Replit
+  // development hostnames are dynamic and Firebase rejects unallowlisted
+  // domains before sending the email. The default Firebase action handler is
+  // stable, works from every preview, and returns the user to MedStart manually.
+  await sendPasswordResetEmail(auth, normalizeAuthEmail(email))
 }
 
 export async function resendEmailVerification(): Promise<void> {
