@@ -50,7 +50,8 @@ export default function DemoLessonRoom({
   onLeave,
 }: DemoLessonRoomProps) {
   const [mobileView, setMobileView] = useState<MobileView>('board')
-  const [now, setNow] = useState(Date.now())
+  const [sessionStartedAt] = useState(() => Date.now())
+  const [now, setNow] = useState(sessionStartedAt)
   const counterpart =
     participantRole === 'tutor' ? booking.studentName : booking.tutorName
 
@@ -60,13 +61,16 @@ export default function DemoLessonRoom({
   }, [])
 
   const timeLabel = useMemo(() => {
-    const startsAt = bookingDateTime(booking)
-    if (!startsAt || now < startsAt) {
+    const scheduledStart = bookingDateTime(booking)
+    if (!scheduledStart || now < scheduledStart) {
       return formatBookingDate(booking)
     }
-    const elapsed = Math.max(0, Math.floor((now - startsAt) / 60_000))
-    return `${elapsed} мин в занятии`
-  }, [booking, now])
+    const elapsed = Math.max(
+      0,
+      Math.floor((now - Math.max(sessionStartedAt, scheduledStart)) / 60_000),
+    )
+    return `${elapsed} мин в комнате`
+  }, [booking, now, sessionStartedAt])
 
   return (
     <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-slate-950 text-white">
