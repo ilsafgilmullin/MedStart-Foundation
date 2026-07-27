@@ -41,6 +41,8 @@ const requiredFiles = [
   'storage.rules',
   'scripts/test-critical-rules.mjs',
   'scripts/test-medium-rules.mjs',
+  'scripts/test-auth-rules.mjs',
+  'artifacts/medstart/scripts/live-auth-audit.mjs',
   'artifacts/medstart/app/forgot-password/page.tsx',
 ]
 for (const relativePath of requiredFiles) {
@@ -63,6 +65,10 @@ const authSource = await readFile(
   join(sourceRoot, 'lib', 'auth.ts'),
   'utf8',
 )
+const firebaseSource = await readFile(
+  join(sourceRoot, 'lib', 'firebase.ts'),
+  'utf8',
+)
 const authProviderSource = await readFile(
   join(sourceRoot, 'providers', 'AuthProvider.tsx'),
   'utf8',
@@ -71,6 +77,15 @@ const forgotPasswordSource = await readFile(
   join(sourceRoot, 'app', 'forgot-password', 'page.tsx'),
   'utf8',
 )
+const studentRegistrationSource = await readFile(
+  join(sourceRoot, 'hooks', 'useStudentRegistration.ts'),
+  'utf8',
+)
+const tutorRegistrationSource = await readFile(
+  join(sourceRoot, 'hooks', 'useTutorRegistration.ts'),
+  'utf8',
+)
+
 if (!authSource.includes('runAuthTransition')) {
   failures.push('Firebase login and registration are not serialized')
 }
@@ -80,8 +95,30 @@ if (!authSource.includes('activeAuthTransitions')) {
 if (!authSource.includes('getIdToken(true)')) {
   failures.push('Verified login does not refresh the Firebase ID token')
 }
-if (!authSource.includes('sendPasswordResetEmail')) {
-  failures.push('Firebase password recovery is missing')
+if (!authSource.includes('sendPasswordResetEmail(auth, normalizeAuthEmail(email))')) {
+  failures.push('Password reset does not use the preview-safe Firebase handler')
+}
+if (authSource.includes('window.location.origin') || authSource.includes('handleCodeInApp')) {
+  failures.push('Password reset can be rejected by a dynamic Replit continue URL')
+}
+if (!authSource.includes('verificationSent: boolean')) {
+  failures.push('Registration cannot report verification email delivery state')
+}
+if (!authSource.includes('A failed profile write must not leave a login-only orphan account')) {
+  failures.push('Registration orphan-account cleanup is missing')
+}
+if (!firebaseSource.includes('initializeAuth')) {
+  failures.push('Firebase Auth is not initialized with explicit persistence fallback')
+}
+for (const persistence of [
+  'indexedDBLocalPersistence',
+  'browserLocalPersistence',
+  'browserSessionPersistence',
+  'inMemoryPersistence',
+]) {
+  if (!firebaseSource.includes(persistence)) {
+    failures.push(`Firebase Auth persistence fallback is missing: ${persistence}`)
+  }
 }
 if (!authProviderSource.includes('isAuthTransitionInProgress()')) {
   failures.push('AuthProvider can interrupt login or registration transitions')
@@ -94,6 +131,15 @@ if (!authProviderSource.includes('onIdTokenChanged')) {
 }
 if (!forgotPasswordSource.includes('resetPassword')) {
   failures.push('Password recovery page is not connected to Firebase Auth')
+}
+if (!forgotPasswordSource.includes('Запрос принят Firebase')) {
+  failures.push('Password recovery does not expose a clear delivery status')
+}
+if (!studentRegistrationSource.includes('result.verificationSent')) {
+  failures.push('Student registration loses verification delivery status')
+}
+if (!tutorRegistrationSource.includes('result.verificationSent')) {
+  failures.push('Tutor registration loses verification delivery status')
 }
 
 if (failures.length) {

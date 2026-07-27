@@ -1,0 +1,112 @@
+name: Firebase live authentication audit
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'artifacts/medstart/lib/auth.ts'
+      - 'artifacts/medstart/lib/firebase.ts'
+      - 'artifacts/medstart/hooks/useLogin.ts'
+      - 'artifacts/medstart/hooks/useStudentRegistration.ts'
+      - 'artifacts/medstart/hooks/useTutorRegistration.ts'
+      - 'artifacts/medstart/app/login/page.tsx'
+      - 'artifacts/medstart/app/forgot-password/page.tsx'
+      - 'artifacts/medstart/scripts/live-auth-audit.mjs'
+      - 'firestore.secure.rules'
+      - 'firebase.json'
+      - '.github/workflows/auth-live-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: firebase-live-auth-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'fix/full-auth-audit-v2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --reporter=silent
+
+      - name: Prepare Firebase service account
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ]; then
+            echo "GitHub secret FIREBASE_SERVICE_ACCOUNT_JSON is not configured."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/firebase-service-account.json"
+          chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
+
+      - name: Deploy audited rules and test live Firebase authentication
+        id: live_audit
+        continue-on-error: true
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+          SEND_OWNER_RESET: 'true'
+        run: pnpm --dir artifacts/medstart exec node scripts/live-auth-audit.mjs
+
+      - name: Publish sanitized audit result
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          node - <<'NODE' > auth-live-audit-comment.md
+          const fs = require('node:fs')
+          const reportPath = 'artifacts/medstart/auth-live-audit-report.json'
+          console.log('### Firebase live authentication audit')
+          if (!fs.existsSync(reportPath)) {
+            console.log('\nThe audit stopped before producing its sanitized report.')
+            process.exit(0)
+          }
+          const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'))
+          const checks = report.checks
+            .map((item) => `- ${item.status === 'passed' ? '✅' : '❌'} ${item.name}`)
+            .join('\n')
+          console.log(`\nStatus: **${report.status}**`)
+          if (report.error) console.log(`\nFailure: \`${report.error}\``)
+          if (report.owner) {
+            console.log(`\nOwner: verified=${report.owner.emailVerified}, disabled=${report.owner.disabled}, profile=${report.owner.profileExists}, role=${report.owner.role}, status=${report.owner.status}`)
+          }
+          if (checks) console.log(`\n${checks}`)
+          NODE
+          gh pr comment "$PR_NUMBER" --body-file auth-live-audit-comment.md
+
+      - name: Upload sanitized audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: medstart-live-auth-audit
+          path: artifacts/medstart/auth-live-audit-report.json
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Verify live audit outcome
+        if: always()
+        env:
+          AUDIT_OUTCOME: ${{ steps.live_audit.outcome }}
+        run: test "$AUDIT_OUTCOME" = "success"

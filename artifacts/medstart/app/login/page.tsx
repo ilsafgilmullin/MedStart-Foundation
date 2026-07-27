@@ -11,6 +11,9 @@ const inputClass =
 export default function LoginPage() {
   const form = useLogin()
   const [showPassword, setShowPassword] = useState(false)
+  const recoveryHref = form.email.trim()
+    ? `/forgot-password?email=${encodeURIComponent(form.email.trim().toLowerCase())}`
+    : '/forgot-password'
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-slate-50 px-4 py-10 pt-[calc(2.5rem+env(safe-area-inset-top))]">
@@ -70,7 +73,7 @@ export default function LoginPage() {
               </div>
             </label>
             <div className="text-right text-sm">
-              <Link href="/forgot-password" className="font-medium text-violet-700">
+              <Link href={recoveryHref} className="font-medium text-violet-700">
                 Не помню пароль
               </Link>
             </div>
