@@ -12,7 +12,7 @@ on:
       - 'artifacts/medstart/hooks/useTutorRegistration.ts'
       - 'artifacts/medstart/app/login/page.tsx'
       - 'artifacts/medstart/app/forgot-password/page.tsx'
-      - 'scripts/live-auth-audit.mjs'
+      - 'artifacts/medstart/scripts/live-auth-audit.mjs'
       - '.github/workflows/auth-live-audit.yml'
   workflow_dispatch:
 
@@ -65,7 +65,7 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
           SEND_OWNER_RESET: 'true'
-        run: node scripts/live-auth-audit.mjs
+        run: pnpm --dir artifacts/medstart exec node scripts/live-auth-audit.mjs
 
       - name: Publish sanitized audit result
         if: always() && github.event_name == 'pull_request'
@@ -75,11 +75,12 @@ jobs:
         run: |
           node - <<'NODE' > auth-live-audit-comment.md
           const fs = require('node:fs')
-          if (!fs.existsSync('auth-live-audit-report.json')) {
+          const path = 'artifacts/medstart/auth-live-audit-report.json'
+          if (!fs.existsSync(path)) {
             console.log('### Firebase live authentication audit\n\nThe audit stopped before producing its sanitized report.')
             process.exit(0)
           }
-          const report = JSON.parse(fs.readFileSync('auth-live-audit-report.json', 'utf8'))
+          const report = JSON.parse(fs.readFileSync(path, 'utf8'))
           const checks = report.checks
             .map((item) => `- ${item.status === 'passed' ? '✅' : '❌'} ${item.name}`)
             .join('\n')
@@ -99,7 +100,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: medstart-live-auth-audit
-          path: auth-live-audit-report.json
+          path: artifacts/medstart/auth-live-audit-report.json
           if-no-files-found: warn
           retention-days: 3
 
