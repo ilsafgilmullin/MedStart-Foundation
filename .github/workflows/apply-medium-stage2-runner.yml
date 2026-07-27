@@ -80,6 +80,22 @@ workspace_path.write_text(workspace)'''
           Path('/tmp/apply-medium-stage2.py').write_text(script)
           EXTRACT
           python /tmp/apply-medium-stage2.py
+          python <<'FIX_RULE_NESTING'
+          from pathlib import Path
+
+          path = Path('firestore.secure.rules')
+          rules = path.read_text()
+          old = """      allow delete: if isOwner();
+    }
+
+      match /assets/{assetId} {"""
+          new = """      allow delete: if isOwner();
+
+      match /assets/{assetId} {"""
+          if old in rules:
+              rules = rules.replace(old, new, 1)
+          path.write_text(rules)
+          FIX_RULE_NESTING
       - uses: pnpm/action-setup@v4
         with:
           version: 10.26.1
