@@ -1,0 +1,35 @@
+name: MedStart button system snapshot
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Package UI source for button audit
+        run: |
+          zip -r medstart-button-source.zip \
+            artifacts/medstart/app \
+            artifacts/medstart/components \
+            artifacts/medstart/hooks \
+            artifacts/medstart/lib \
+            -x '*/.next/*' '*/node_modules/*'
+
+      - name: Upload protected source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: medstart-button-source
+          path: medstart-button-source.zip
+          if-no-files-found: error
+          retention-days: 1
