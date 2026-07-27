@@ -74,8 +74,10 @@ jobs:
           test -f storage.rules
           grep -q '"rules": "firestore.secure.rules"' firebase.json
           grep -q 'allow create, update: if false;' storage.rules
+          grep -A2 'match /users/{userId}' firestore.secure.rules | grep -q 'allow create: if false;'
           grep -A2 'match /bookings/{bookingId}' firestore.secure.rules | grep -q 'allow create: if false;'
           grep -A2 'match /conversations/{conversationId}' firestore.secure.rules | grep -q 'allow create: if false;'
+          grep -q "direct-client-profile-create-blocked" artifacts/medstart/scripts/live-auth-audit.mjs
           ! grep -q 'medstart-board-' artifacts/medstart/components/live/ServerlessWhiteboard.tsx
           test -f artifacts/medstart/app/api/bookings/route.ts
           grep -q "fetch('/api/bookings'" artifacts/medstart/lib/bookings.ts
