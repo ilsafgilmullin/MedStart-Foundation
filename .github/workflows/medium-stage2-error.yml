@@ -13,15 +13,17 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
           ref: fix/medium-audit-v1
-      - name: Extract and execute migration with diagnostics
+      - name: Extract and apply corrected migration
         shell: bash
         run: |
           python <<'EXTRACT'
           from pathlib import Path
+
           source = Path('.github/workflows/apply-medium-stage2-once.yml').read_text()
           start_marker = "          python <<'PY'\n"
           end_marker = "\n          PY"
@@ -29,15 +31,80 @@ jobs:
           end = source.index(end_marker, start)
           embedded = source[start:end]
           lines = [line[10:] if line.startswith('          ') else line for line in embedded.splitlines()]
-          Path('/tmp/apply-medium-stage2.py').write_text('\n'.join(lines) + '\n')
+          script = '\n'.join(lines) + '\n'
+
+          script = script.replace(
+              "'    match /medicalWorkspaces/{bookingId}/assets/{assetId} {'",
+              "'      match /assets/{assetId} {'",
+              1,
+          )
+          script = script.replace(
+              "                allow delete: if isOwner();\n              }''',\n              'medical workspace write rules',",
+              "                allow delete: if isOwner();''',\n              'medical workspace write rules',",
+              1,
+          )
+
+          tail_start = script.index("old_transaction = '''")
+          tail_end_marker = 'workspace_path.write_text(workspace)'
+          tail_end = script.index(tail_end_marker, tail_start) + len(tail_end_marker)
+          corrected_tail = '''transaction_start = workspace.index("    transaction.set(\\n")
+          transaction_end = workspace.index("\\n    )", transaction_start) + len("\\n    )")
+          new_transaction = """    const normalizedCurrent = normalizeWorkspace(bookingId, current)
+
+              transaction.set(workspaceRef, {
+                ...normalizedCurrent,
+                ...patch,
+                bookingId,
+                updatedByUid: userUid,
+                createdAt: snapshot.exists()
+                  ? current?.createdAt ?? serverTimestamp()
+                  : serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              })"""
+          workspace = workspace[:transaction_start] + new_transaction + workspace[transaction_end:]
+
+          loader_start = workspace.index(
+              "export async function loadMedicalAssetObjectUrl(asset: MedicalAsset) {"
+          )
+          loader_end_marker = "\\n}\\n\\nexport async function deleteMedicalAsset"
+          loader_end = workspace.index(loader_end_marker, loader_start) + 2
+          new_loader = """export async function loadMedicalAssetObjectUrl(asset: MedicalAsset) {
+            if (asset.mimeType === 'application/dicom') return ''
+            return getDownloadURL(ref(storage, asset.storagePath))
+          }"""
+          workspace = workspace[:loader_start] + new_loader + workspace[loader_end:]
+          workspace_path.write_text(workspace)'''
+          script = script[:tail_start] + corrected_tail + script[tail_end:]
+          Path('/tmp/apply-medium-stage2.py').write_text(script)
           EXTRACT
+          python /tmp/apply-medium-stage2.py
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Capture Firebase regression output
+        shell: bash
+        run: |
           set +e
-          python /tmp/apply-medium-stage2.py > medium-stage2-error.txt 2>&1
+          pnpm dlx firebase-tools@15.24.0 emulators:exec \
+            --only firestore,storage \
+            --project demo-medstart \
+            "node scripts/test-critical-rules.mjs && node scripts/test-medium-rules.mjs" \
+            > medium-stage2-rules-error.txt 2>&1
           status=$?
-          echo "exit_status=$status" >> medium-stage2-error.txt
+          echo "exit_status=$status" >> medium-stage2-rules-error.txt
           exit 0
       - uses: actions/upload-artifact@v4
         with:
-          name: medium-stage2-error
-          path: medium-stage2-error.txt
+          name: medium-stage2-rules-error
+          path: medium-stage2-rules-error.txt
           retention-days: 3
