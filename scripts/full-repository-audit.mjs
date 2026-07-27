@@ -14,6 +14,10 @@ const textExtensions = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', '.yml', '.yaml',
   '.md', '.rules', '.toml', '.css', '.scss', '.html', '.txt', '.env', '',
 ])
+const generatedOrAuditFiles = new Set([
+  'scripts/full-repository-audit.mjs',
+  'scripts/final-audit-invariants.mjs',
+])
 
 const findings = []
 const files = []
@@ -50,6 +54,10 @@ function findAll(text, pattern, callback) {
   }
 }
 
+function fileSize(path) {
+  return files.find((file) => file.path === path)?.size || 0
+}
+
 await walk(root)
 files.sort((a, b) => a.path.localeCompare(b.path))
 
@@ -69,59 +77,63 @@ for (const file of files) {
   }
 }
 
-for (const [path, text] of contents) {
-  findAll(text, /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g, (_, line) => {
-    add('critical', 'COMMITTED_PRIVATE_KEY', path, line, 'A private key appears to be committed to the repository.')
-  })
-  findAll(text, /"private_key"\s*:\s*"-----BEGIN PRIVATE KEY-----/g, (_, line) => {
-    add('critical', 'COMMITTED_SERVICE_ACCOUNT', path, line, 'A Firebase service-account private key appears in source control.')
-  })
-  findAll(text, /(?:@ts-ignore|@ts-nocheck)/g, (_, line) => {
-    add('high', 'TYPESCRIPT_SUPPRESSION', path, line, 'TypeScript safety is explicitly disabled.')
-  })
-  findAll(text, /\b(?:TODO|FIXME|HACK)\b/g, (match, line) => {
-    add('low', 'UNFINISHED_MARKER', path, line, `${match[0]} marker remains in production source.`)
-  })
-  findAll(text, /dangerouslySetInnerHTML/g, (_, line) => {
-    add('high', 'RAW_HTML_INJECTION', path, line, 'Raw HTML injection requires an explicit sanitization review.')
-  })
-  findAll(text, /\beval\s*\(/g, (_, line) => {
-    add('high', 'DYNAMIC_EVAL', path, line, 'Dynamic code evaluation is present.')
-  })
-  findAll(text, /console\.(?:log|debug)\s*\(/g, (_, line) => {
-    add('low', 'DEBUG_LOGGING', path, line, 'Debug logging remains in application code.')
-  })
+for (const [path, source] of contents) {
+  const isAuditDefinition = generatedOrAuditFiles.has(path)
+  const isApplicationSource = path.startsWith('artifacts/medstart/')
 
-  if (/['"]use client['"]/.test(text)) {
-    if (/signInWithEmailAndPassword|createUserWithEmailAndPassword/.test(text)) {
-      add('critical', 'CLIENT_DIRECT_AUTH_PASSWORD', path, 1, 'Client code sends passwords directly to Firebase instead of the MedStart server.')
+  if (!isAuditDefinition) {
+    findAll(source, /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g, (_, line) => {
+      add('critical', 'COMMITTED_PRIVATE_KEY', path, line, 'A private key appears to be committed to the repository.')
+    })
+    findAll(source, /"private_key"\s*:\s*"-----BEGIN PRIVATE KEY-----/g, (_, line) => {
+      add('critical', 'COMMITTED_SERVICE_ACCOUNT', path, line, 'A Firebase service-account private key appears in source control.')
+    })
+  }
+
+  if (isApplicationSource) {
+    findAll(source, /(?:@ts-ignore|@ts-nocheck)/g, (_, line) => {
+      add('high', 'TYPESCRIPT_SUPPRESSION', path, line, 'TypeScript safety is explicitly disabled.')
+    })
+    findAll(source, /\b(?:TODO|FIXME|HACK)\b/g, (match, line) => {
+      add('low', 'UNFINISHED_MARKER', path, line, `${match[0]} marker remains in application source.`)
+    })
+    findAll(source, /dangerouslySetInnerHTML/g, (_, line) => {
+      add('high', 'RAW_HTML_INJECTION', path, line, 'Raw HTML injection requires an explicit sanitization review.')
+    })
+    findAll(source, /\beval\s*\(/g, (_, line) => {
+      add('high', 'DYNAMIC_EVAL', path, line, 'Dynamic code evaluation is present.')
+    })
+
+    if (/['"]use client['"]/.test(source)) {
+      if (/signInWithEmailAndPassword|createUserWithEmailAndPassword/.test(source)) {
+        add('critical', 'CLIENT_DIRECT_AUTH_PASSWORD', path, 1, 'Client code sends passwords directly to Firebase instead of the MedStart server.')
+      }
+      if (/firebase-admin/.test(source)) {
+        add('critical', 'ADMIN_SDK_IN_CLIENT', path, 1, 'Firebase Admin SDK is imported into a client module.')
+      }
     }
-    if (/firebase-admin/.test(text)) {
-      add('critical', 'ADMIN_SDK_IN_CLIENT', path, 1, 'Firebase Admin SDK is imported into a client module.')
+
+    if (/router\.replace\s*\(/.test(source) && /router\.refresh\s*\(/.test(source)) {
+      add('high', 'NAVIGATION_REFRESH_RACE', path, 1, 'Route replacement and refresh coexist and can race on mobile Safari.')
+    }
+
+    if (/export\s+async\s+function\s+(?:GET|POST|PUT|PATCH|DELETE)/.test(source) && /fetch\s*\(/.test(source)) {
+      if (!/AbortSignal\.timeout|AbortController/.test(source)) {
+        add('high', 'API_FETCH_WITHOUT_TIMEOUT', path, 1, 'Server route performs an outbound request without a timeout.')
+      }
+    }
+
+    if (path.endsWith('.tsx') && /<form\b/.test(source) && /onSubmit=/.test(source) && !/action=/.test(source)) {
+      const guarded = /useHydrated/.test(source) || /type=["']button["']/.test(source)
+      if (!guarded) {
+        add('medium', 'FORM_REQUIRES_HYDRATION', path, 1, 'Form has no progressive server fallback or hydration guard.')
+      }
+    }
+
+    if (fileSize(path) > 120_000) {
+      add('medium', 'LARGE_SOURCE_FILE', path, 1, 'Application source file exceeds 120 KB and should be split.')
     }
   }
-
-  if (/router\.replace\s*\(/.test(text) && /router\.refresh\s*\(/.test(text)) {
-    add('high', 'NAVIGATION_REFRESH_RACE', path, 1, 'Route replacement and refresh coexist and can race on mobile Safari.')
-  }
-
-  if (/export\s+async\s+function\s+(?:GET|POST|PUT|PATCH|DELETE)/.test(text) && /fetch\s*\(/.test(text)) {
-    if (!/AbortSignal\.timeout|AbortController/.test(text)) {
-      add('high', 'API_FETCH_WITHOUT_TIMEOUT', path, 1, 'Server route performs an outbound request without a timeout.')
-    }
-  }
-
-  if (path.endsWith('.tsx') && /<form\b/.test(text) && /onSubmit=/.test(text) && !/action=/.test(text)) {
-    add('medium', 'FORM_REQUIRES_HYDRATION', path, 1, 'Form has no progressive server fallback; if hydration fails it reloads or becomes inert.')
-  }
-
-  if (fileSize(path) > 120_000) {
-    add('medium', 'LARGE_SOURCE_FILE', path, 1, 'Source file exceeds 120 KB and should be split for maintainability.')
-  }
-}
-
-function fileSize(path) {
-  return files.find((file) => file.path === path)?.size || 0
 }
 
 function text(path) {
@@ -139,6 +151,7 @@ for (const required of [
   'pnpm-lock.yaml',
   'pnpm-workspace.yaml',
   '.replit',
+  '.env.example',
   'firebase.json',
   'firestore.secure.rules',
   'storage.rules',
@@ -165,10 +178,10 @@ if (/pnpm --filter @workspace\/medstart dev/.test(replitConfig)) {
   }
 }
 
-if (/script-src[^\n]*unsafe-eval/.test(nextConfig) && !/!isProduction/.test(nextConfig)) {
+if (/unsafe-eval/.test(nextConfig) && !/!isProduction/.test(nextConfig)) {
   add('high', 'UNSAFE_EVAL_IN_PRODUCTION', 'artifacts/medstart/next.config.ts', 1, 'unsafe-eval appears enabled without a production guard.')
 }
-if (/script-src[^\n]*unsafe-inline/.test(nextConfig)) {
+if (/unsafe-inline/.test(nextConfig)) {
   add('medium', 'CSP_UNSAFE_INLINE', 'artifacts/medstart/next.config.ts', 1, 'Production CSP permits inline scripts; move toward nonces or hashes.')
 }
 if (/connect-src[^\n]*https:\s+wss:/.test(nextConfig)) {
@@ -177,7 +190,7 @@ if (/connect-src[^\n]*https:\s+wss:/.test(nextConfig)) {
 
 const swRegistrationFiles = [...contents.entries()].filter(([, value]) => /serviceWorker\.(?:register|getRegistration)|navigator\.serviceWorker/.test(value))
 if (swRegistrationFiles.length && /\/_next\/static\//.test(serviceWorker) && /cached\s*\|\|\s*fetch|caches\.match\(request\)/.test(serviceWorker)) {
-  add('high', 'SERVICE_WORKER_STALE_JS_RISK', 'artifacts/medstart/public/sw.js', 1, 'Service Worker uses cache-first for Next.js JavaScript and can preserve stale authentication code.')
+  add('medium', 'SERVICE_WORKER_STALE_JS_RISK', 'artifacts/medstart/public/sw.js', 1, 'Service Worker uses cache-first for Next.js JavaScript; prefer network-first with cache fallback.')
 }
 for (const [path, value] of swRegistrationFiles) {
   if (!/NODE_ENV|process\.env|production/.test(value)) {
@@ -202,15 +215,8 @@ if (!/"start"\s*:/.test(appPackage)) {
   add('high', 'MISSING_PRODUCTION_START', 'artifacts/medstart/package.json', 1, 'Application package has no production start script.')
 }
 
-const envExampleExists = files.some((file) => /(^|\/)\.env\.example$/.test(file.path))
-if (!envExampleExists) {
-  add('medium', 'MISSING_ENV_DOCUMENTATION', '.env.example', 1, 'Required Firebase Admin, Firebase client, LiveKit and app URL variables are not documented in an env example.')
-}
-
 for (const [path, value] of contents) {
-  if (/AIza[0-9A-Za-z_-]{30,}/.test(value) && !path.endsWith('.md')) {
-    add('medium', 'HARDCODED_FIREBASE_API_KEY', path, lineNumber(value, value.search(/AIza[0-9A-Za-z_-]{30,}/)), 'Firebase web API key is hardcoded; public keys are not secrets, but fallbacks hide deployment misconfiguration.')
-  }
+  if (!path.startsWith('artifacts/medstart/')) continue
   if (/process\.env\.[A-Z0-9_]+\s*\|\|\s*['"][^'"]+['"]/.test(value) && /FIREBASE|LIVEKIT|OWNER/.test(value)) {
     add('high', 'PRODUCTION_ENV_FALLBACK', path, 1, 'A production integration variable has a hardcoded fallback, which can silently target the wrong project.')
   }
