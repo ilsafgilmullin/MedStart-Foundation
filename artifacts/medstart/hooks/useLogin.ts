@@ -20,6 +20,8 @@ function messageFor(error: unknown) {
         return 'Слишком много попыток входа. Подождите и повторите позже.'
       case 'PROFILE_MISSING':
         return 'Аккаунт найден, но профиль MedStart повреждён. Не создавайте новый аккаунт — обратитесь в поддержку.'
+      case 'AUTH_CONFIGURATION_ERROR':
+        return 'Сервер MedStart не подключён к Firebase Admin. Администратору необходимо проверить Secret FIREBASE_SERVICE_ACCOUNT_JSON.'
       case 'AUTH_SERVICE_UNAVAILABLE':
         return 'Сервис авторизации временно недоступен. Проверьте интернет и повторите.'
       default:
