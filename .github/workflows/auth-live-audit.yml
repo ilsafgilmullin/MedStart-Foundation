@@ -61,20 +61,7 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/firebase-service-account.json"
           chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
 
-      - name: Reconcile deployed Firestore rules with audited repository rules
-        id: deploy_rules
-        continue-on-error: true
-        shell: bash
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
-        run: |
-          set -o pipefail
-          pnpm dlx firebase-tools@15.24.0 deploy \
-            --project medstart-e9bfe \
-            --only firestore:rules \
-            --non-interactive 2>&1 | tee firebase-rules-deploy.log
-
-      - name: Audit live Firebase authentication and request owner reset
+      - name: Deploy audited rules and test live Firebase authentication
         id: live_audit
         continue-on-error: true
         env:
@@ -87,31 +74,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          DEPLOY_OUTCOME: ${{ steps.deploy_rules.outcome }}
         run: |
           node - <<'NODE' > auth-live-audit-comment.md
           const fs = require('node:fs')
           const reportPath = 'artifacts/medstart/auth-live-audit-report.json'
           console.log('### Firebase live authentication audit')
-          console.log('')
-          console.log(`Firestore rules deployment: **${process.env.DEPLOY_OUTCOME}**`)
-          if (process.env.DEPLOY_OUTCOME !== 'success' && fs.existsSync('firebase-rules-deploy.log')) {
-            const lines = fs.readFileSync('firebase-rules-deploy.log', 'utf8')
-              .split(/\r?\n/)
-              .filter((line) => line.trim())
-              .slice(-12)
-              .map((line) => line.replace(/[A-Za-z0-9_-]{30,}/g, '[redacted]'))
-            console.log(`\nDeployment diagnostics:\n\n\`\`\`text\n${lines.join('\n')}\n\`\`\``)
-          }
           if (!fs.existsSync(reportPath)) {
-            console.log('\nThe authentication audit stopped before producing its sanitized report.')
+            console.log('\nThe audit stopped before producing its sanitized report.')
             process.exit(0)
           }
           const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'))
           const checks = report.checks
             .map((item) => `- ${item.status === 'passed' ? '✅' : '❌'} ${item.name}`)
             .join('\n')
-          console.log(`\nAuthentication status: **${report.status}**`)
+          console.log(`\nStatus: **${report.status}**`)
           if (report.error) console.log(`\nFailure: \`${report.error}\``)
           if (report.owner) {
             console.log(`\nOwner: verified=${report.owner.emailVerified}, disabled=${report.owner.disabled}, profile=${report.owner.profileExists}, role=${report.owner.role}, status=${report.owner.status}`)
@@ -120,17 +96,17 @@ jobs:
           NODE
           gh pr comment "$PR_NUMBER" --body-file auth-live-audit-comment.md
 
-      - name: Upload sanitized audit reports
+      - name: Upload sanitized audit report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: medstart-live-auth-audit
-          path: |
-            artifacts/medstart/auth-live-audit-report.json
-            firebase-rules-deploy.log
+          path: artifacts/medstart/auth-live-audit-report.json
           if-no-files-found: warn
           retention-days: 3
 
-      - name: Fail workflow when deployment or live audit failed
-        if: steps.deploy_rules.outcome != 'success' || steps.live_audit.outcome != 'success'
-        run: exit 1
+      - name: Verify live audit outcome
+        if: always()
+        env:
+          AUDIT_OUTCOME: ${{ steps.live_audit.outcome }}
+        run: test "$AUDIT_OUTCOME" = "success"
