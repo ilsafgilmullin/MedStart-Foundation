@@ -56,9 +56,19 @@ service cloud.firestore {
     }
 
     function validNewProfile(userId) {
-      return request.resource.data.keys().hasAll([
+      return request.resource.data.keys().hasOnly([
           'uid', 'firstName', 'lastName', 'displayName', 'email', 'role',
-          'status', 'rating', 'reviewsCount', 'isPublic',
+          'status', 'statusBeforeBlock', 'avatar', 'fieldOfStudy',
+          'studyYear', 'title', 'specialization', 'subjects',
+          'institution', 'experience', 'bio', 'city', 'lessonPrice',
+          'lessonDuration', 'lessonFormats', 'timezone', 'rating',
+          'reviewsCount', 'isPublic', 'notificationPreferences',
+          'moderationNote', 'moderatedBy', 'moderatedAt',
+          'onboardingCompleted', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'uid', 'firstName', 'lastName', 'displayName', 'email', 'role',
+          'status', 'avatar', 'rating', 'reviewsCount', 'isPublic',
           'onboardingCompleted', 'createdAt', 'updatedAt'
         ])
         && request.resource.data.uid == userId
@@ -72,6 +82,8 @@ service cloud.firestore {
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() > 0
         && request.resource.data.displayName.size() <= 160
+        && request.resource.data.avatar is string
+        && request.resource.data.avatar.size() <= 2000
         && request.resource.data.rating == 0
         && request.resource.data.reviewsCount == 0
         && request.resource.data.isPublic == false
@@ -83,8 +95,7 @@ service cloud.firestore {
             request.resource.data.role == 'student'
             && request.resource.data.status == 'active'
           )
-          ||
-          (
+          || (
             request.resource.data.role == 'tutor'
             && request.resource.data.status == 'pending'
           )
@@ -94,10 +105,12 @@ service cloud.firestore {
     function safeSelfUpdate() {
       return request.resource.data.uid == resource.data.uid
         && request.resource.data.email == resource.data.email
-        && request.resource.data.diff(resource.data).affectedKeys().hasNone([
-          'uid', 'email', 'role', 'status', 'statusBeforeBlock', 'rating',
-          'reviewsCount', 'isPublic', 'moderationNote', 'moderatedBy',
-          'moderatedAt', 'createdAt'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'firstName', 'lastName', 'displayName', 'avatar',
+          'fieldOfStudy', 'studyYear', 'title', 'specialization',
+          'subjects', 'institution', 'experience', 'bio', 'city',
+          'lessonPrice', 'lessonDuration', 'lessonFormats', 'timezone',
+          'notificationPreferences', 'onboardingCompleted', 'updatedAt'
         ]);
     }
 
@@ -412,12 +425,13 @@ service cloud.firestore {
     }
 
     function validAvailability(data, tutorId) {
-      return data.keys().hasAll(['tutorUid', 'timezone', 'days', 'updatedAt'])
+      return data.keys().hasOnly(['tutorUid', 'timezone', 'days', 'updatedAt'])
         && data.tutorUid == tutorId
         && data.timezone is string
         && data.timezone.size() > 0
         && data.timezone.size() <= 80
         && data.days is map
+        && data.days.size() <= 7
         && data.updatedAt is timestamp;
     }
 
@@ -459,6 +473,13 @@ service cloud.firestore {
         && request.resource.data.url is string
         && request.resource.data.url.size() <= 2000
         && request.resource.data.kind in ['link', 'document', 'video', 'note']
+        && (
+          (request.resource.data.kind == 'note' && request.resource.data.url == '')
+          || (
+            request.resource.data.kind in ['link', 'document', 'video']
+            && request.resource.data.url.matches('https://.+')
+          )
+        )
         && request.resource.data.createdAt is timestamp
         && request.resource.data.updatedAt is timestamp;
     }
@@ -478,6 +499,16 @@ service cloud.firestore {
       allow update: if isActiveRole(request.auth.uid, 'tutor')
         && resource.data.tutorUid == request.auth.uid
         && request.resource.data.updatedAt is timestamp
+        && request.resource.data.kind in ['link', 'document', 'video', 'note']
+        && request.resource.data.url is string
+        && request.resource.data.url.size() <= 2000
+        && (
+          (request.resource.data.kind == 'note' && request.resource.data.url == '')
+          || (
+            request.resource.data.kind in ['link', 'document', 'video']
+            && request.resource.data.url.matches('https://.+')
+          )
+        )
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'title', 'description', 'url', 'kind', 'updatedAt'
         ]);
@@ -638,8 +669,22 @@ service cloud.firestore {
 
     function canReadLessonData(bookingId) {
       return bookingExists(bookingId)
-        && whiteboardBooking(bookingId).status in ['accepted', 'completed']
-        && (isActiveLessonParticipant(bookingId) || isModerator());
+        && (
+          isModerator()
+          || (
+            isActiveLessonParticipant(bookingId)
+            && (
+              whiteboardBooking(bookingId).status == 'accepted'
+              || (
+                whiteboardBooking(bookingId).status == 'completed'
+                && whiteboardBooking(bookingId).completedAt is timestamp
+                && request.time
+                  < whiteboardBooking(bookingId).completedAt
+                    + duration.value(180, 'd')
+              )
+            )
+          )
+        );
     }
 
     function canWriteLessonData(bookingId) {

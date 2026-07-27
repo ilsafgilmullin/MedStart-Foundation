@@ -217,6 +217,13 @@ function anatomyDataUri(layer: AnatomyLayer, region: string, view: AnatomyView) 
   )}`
 }
 
+function parseOptionalNumber(value: string) {
+  const normalized = value.trim().replace(',', '.')
+  if (!normalized) return null
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 function SectionShell({
   title,
   description,
@@ -1100,17 +1107,19 @@ export default function MedicalWorkspace({
           >
             <div className="space-y-3">
               {workspace.labs.map((row) => {
-                const numericValue = Number(row.value.replace(',', '.'))
-                const low = Number(row.referenceLow.replace(',', '.'))
-                const high = Number(row.referenceHigh.replace(',', '.'))
+                const numericValue = parseOptionalNumber(row.value)
+                const low = parseOptionalNumber(row.referenceLow)
+                const high = parseOptionalNumber(row.referenceHigh)
                 const flag =
-                  Number.isFinite(numericValue) && Number.isFinite(low) && numericValue < low
-                    ? 'Ниже нормы'
-                    : Number.isFinite(numericValue) &&
-                        Number.isFinite(high) &&
-                        numericValue > high
-                      ? 'Выше нормы'
-                      : 'В пределах диапазона'
+                  numericValue === null
+                    ? 'Не заполнено'
+                    : low !== null && numericValue < low
+                      ? 'Ниже нормы'
+                      : high !== null && numericValue > high
+                        ? 'Выше нормы'
+                        : low === null && high === null
+                          ? 'Нет референсов'
+                          : 'В пределах диапазона'
                 return (
                   <div
                     key={row.id}
@@ -1156,7 +1165,9 @@ export default function MedicalWorkspace({
                         className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
                           flag === 'В пределах диапазона'
                             ? 'bg-emerald-500/15 text-emerald-300'
-                            : 'bg-amber-500/15 text-amber-200'
+                            : flag === 'Ниже нормы' || flag === 'Выше нормы'
+                              ? 'bg-amber-500/15 text-amber-200'
+                              : 'bg-slate-500/15 text-slate-300'
                         }`}
                       >
                         {flag}
@@ -1242,6 +1253,9 @@ export default function MedicalWorkspace({
                 />
               </svg>
             </div>
+            <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs leading-5 text-amber-100">
+              Кривая генерируется как учебная иллюстрация и не является клинической ЭКГ, диагностикой или медицинским заключением.
+            </p>
             <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {(
                 [
