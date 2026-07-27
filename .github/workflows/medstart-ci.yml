@@ -48,13 +48,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - name: Checkout
+      - name: Checkout critical branch
         uses: actions/checkout@v4
         with:
+          ref: fix/critical-audit-v1
           fetch-depth: 0
 
       - name: Apply final critical source patch
-        if: github.event_name == 'push' && github.ref_name == 'fix/critical-audit-v1' && github.actor != 'github-actions[bot]'
+        if: github.actor != 'github-actions[bot]'
         shell: bash
         run: |
           python - <<'PY'
@@ -156,7 +157,7 @@ jobs:
         run: pnpm --filter @workspace/medstart build
 
       - name: Commit validated critical patch
-        if: github.event_name == 'push' && github.ref_name == 'fix/critical-audit-v1' && github.actor != 'github-actions[bot]'
+        if: github.actor != 'github-actions[bot]'
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
