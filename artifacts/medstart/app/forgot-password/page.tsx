@@ -15,8 +15,7 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState('')
   const [sent, setSent] = useState(false)
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  async function requestReset() {
     setError('')
 
     const normalizedEmail = email.trim().toLowerCase()
@@ -49,6 +48,11 @@ export default function ForgotPasswordPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    void requestReset()
   }
 
   return (
@@ -87,11 +91,16 @@ export default function ForgotPasswordPage() {
               <button
                 type="button"
                 disabled={loading}
-                onClick={() => void handleSubmit({ preventDefault() {} } as FormEvent<HTMLFormElement>)}
+                onClick={() => void requestReset()}
                 className="mt-5 w-full rounded-2xl border border-violet-200 px-5 py-3.5 font-semibold text-violet-700 disabled:opacity-60"
               >
                 {loading ? 'Отправляем…' : 'Отправить письмо ещё раз'}
               </button>
+              {error && (
+                <p role="alert" className="mt-4 rounded-2xl bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
+                  {error}
+                </p>
+              )}
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="mt-8 space-y-5" noValidate>
