@@ -1,0 +1,334 @@
+name: Apply medium audit fixes once
+
+on:
+  push:
+    branches:
+      - fix/medium-audit-v1
+    paths:
+      - '.github/workflows/apply-medium-fixes-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout medium branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/medium-audit-v1
+          fetch-depth: 0
+
+      - name: Apply targeted fixes
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, found {count}')
+              return text.replace(old, new, 1)
+
+          rules_path = Path('firestore.secure.rules')
+          rules = rules_path.read_text()
+
+          old_profile = """    function validNewProfile(userId) {
+                return request.resource.data.keys().hasAll([
+                    'uid', 'firstName', 'lastName', 'displayName', 'email', 'role',
+                    'status', 'rating', 'reviewsCount', 'isPublic',
+                    'onboardingCompleted', 'createdAt', 'updatedAt'
+                  ])
+          """
+          new_profile = """    function validNewProfile(userId) {
+                return request.resource.data.keys().hasOnly([
+                    'uid', 'firstName', 'lastName', 'displayName', 'email', 'role',
+                    'status', 'statusBeforeBlock', 'avatar', 'fieldOfStudy',
+                    'studyYear', 'title', 'specialization', 'subjects',
+                    'institution', 'experience', 'bio', 'city', 'lessonPrice',
+                    'lessonDuration', 'lessonFormats', 'timezone', 'rating',
+                    'reviewsCount', 'isPublic', 'notificationPreferences',
+                    'moderationNote', 'moderatedBy', 'moderatedAt',
+                    'onboardingCompleted', 'createdAt', 'updatedAt'
+                  ])
+                  && request.resource.data.keys().hasAll([
+                    'uid', 'firstName', 'lastName', 'displayName', 'email', 'role',
+                    'status', 'avatar', 'rating', 'reviewsCount', 'isPublic',
+                    'onboardingCompleted', 'createdAt', 'updatedAt'
+                  ])
+          """
+          rules = replace_once(rules, old_profile, new_profile, 'profile key allowlist')
+
+          old_self_update = """    function safeSelfUpdate() {
+                return request.resource.data.uid == resource.data.uid
+                  && request.resource.data.email == resource.data.email
+                  && request.resource.data.diff(resource.data).affectedKeys().hasNone([
+                    'uid', 'email', 'role', 'status', 'statusBeforeBlock', 'rating',
+                    'reviewsCount', 'isPublic', 'moderationNote', 'moderatedBy',
+                    'moderatedAt', 'createdAt'
+                  ]);
+              }
+          """
+          new_self_update = """    function safeSelfUpdate() {
+                return request.resource.data.uid == resource.data.uid
+                  && request.resource.data.email == resource.data.email
+                  && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                    'firstName', 'lastName', 'displayName', 'avatar',
+                    'fieldOfStudy', 'studyYear', 'title', 'specialization',
+                    'subjects', 'institution', 'experience', 'bio', 'city',
+                    'lessonPrice', 'lessonDuration', 'lessonFormats', 'timezone',
+                    'notificationPreferences', 'onboardingCompleted', 'updatedAt'
+                  ]);
+              }
+          """
+          rules = replace_once(rules, old_self_update, new_self_update, 'profile self-update allowlist')
+
+          old_availability = """    function validAvailability(data, tutorId) {
+                return data.keys().hasAll(['tutorUid', 'timezone', 'days', 'updatedAt'])
+                  && data.tutorUid == tutorId
+                  && data.timezone is string
+                  && data.timezone.size() > 0
+                  && data.timezone.size() <= 80
+                  && data.days is map
+                  && data.updatedAt is timestamp;
+              }
+          """
+          new_availability = """    function validAvailability(data, tutorId) {
+                return data.keys().hasOnly(['tutorUid', 'timezone', 'days', 'updatedAt'])
+                  && data.tutorUid == tutorId
+                  && data.timezone is string
+                  && data.timezone.size() > 0
+                  && data.timezone.size() <= 80
+                  && data.days is map
+                  && data.days.size() <= 7
+                  && data.updatedAt is timestamp;
+              }
+          """
+          rules = replace_once(rules, old_availability, new_availability, 'availability shape')
+
+          old_material_url = """        && request.resource.data.url is string
+                  && request.resource.data.url.size() <= 2000
+                  && request.resource.data.kind in ['link', 'document', 'video', 'note']
+          """
+          new_material_url = """        && request.resource.data.url is string
+                  && request.resource.data.url.size() <= 2000
+                  && request.resource.data.kind in ['link', 'document', 'video', 'note']
+                  && (
+                    (request.resource.data.kind == 'note' && request.resource.data.url == '')
+                    || (
+                      request.resource.data.kind in ['link', 'document', 'video']
+                      && request.resource.data.url.matches('https://.+')
+                    )
+                  )
+          """
+          rules = replace_once(rules, old_material_url, new_material_url, 'material https create')
+
+          old_material_update = """      allow update: if isActiveRole(request.auth.uid, 'tutor')
+                && resource.data.tutorUid == request.auth.uid
+                && request.resource.data.updatedAt is timestamp
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          """
+          new_material_update = """      allow update: if isActiveRole(request.auth.uid, 'tutor')
+                && resource.data.tutorUid == request.auth.uid
+                && request.resource.data.updatedAt is timestamp
+                && request.resource.data.kind in ['link', 'document', 'video', 'note']
+                && request.resource.data.url is string
+                && request.resource.data.url.size() <= 2000
+                && (
+                  (request.resource.data.kind == 'note' && request.resource.data.url == '')
+                  || (
+                    request.resource.data.kind in ['link', 'document', 'video']
+                    && request.resource.data.url.matches('https://.+')
+                  )
+                )
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          """
+          rules = replace_once(rules, old_material_update, new_material_update, 'material https update')
+
+          old_lesson_read = """    function canReadLessonData(bookingId) {
+                return bookingExists(bookingId)
+                  && whiteboardBooking(bookingId).status in ['accepted', 'completed']
+                  && (isActiveLessonParticipant(bookingId) || isModerator());
+              }
+          """
+          new_lesson_read = """    function canReadLessonData(bookingId) {
+                return bookingExists(bookingId)
+                  && (
+                    isModerator()
+                    || (
+                      isActiveLessonParticipant(bookingId)
+                      && (
+                        whiteboardBooking(bookingId).status == 'accepted'
+                        || (
+                          whiteboardBooking(bookingId).status == 'completed'
+                          && whiteboardBooking(bookingId).completedAt is timestamp
+                          && request.time
+                            < whiteboardBooking(bookingId).completedAt
+                              + duration.value(180, 'd')
+                        )
+                      )
+                    )
+                  );
+              }
+          """
+          rules = replace_once(rules, old_lesson_read, new_lesson_read, 'lesson archive retention')
+          rules_path.write_text(rules)
+
+          storage_path = Path('storage.rules')
+          storage = storage_path.read_text()
+          old_storage_read = """    function canReadMedicalAsset(bookingId) {
+                return bookingExists(bookingId)
+                  && medicalBooking(bookingId).status in ['accepted', 'completed']
+                  && (isActiveMedicalParticipant(bookingId) || isModerator());
+              }
+          """
+          new_storage_read = """    function canReadMedicalAsset(bookingId) {
+                return bookingExists(bookingId)
+                  && (
+                    isModerator()
+                    || (
+                      isActiveMedicalParticipant(bookingId)
+                      && (
+                        medicalBooking(bookingId).status == 'accepted'
+                        || (
+                          medicalBooking(bookingId).status == 'completed'
+                          && medicalBooking(bookingId).completedAt is timestamp
+                          && request.time
+                            < medicalBooking(bookingId).completedAt
+                              + duration.value(180, 'd')
+                        )
+                      )
+                    )
+                  );
+              }
+          """
+          storage = replace_once(storage, old_storage_read, new_storage_read, 'storage archive retention')
+          storage_path.write_text(storage)
+
+          workspace_path = Path('artifacts/medstart/components/live/MedicalWorkspace.tsx')
+          workspace = workspace_path.read_text()
+          helper_anchor = """function anatomyDataUri(layer: AnatomyLayer, region: string, view: AnatomyView) {
+            return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+              anatomySvgMarkup(layer, region, view),
+            )}`
+          }
+          """
+          helper_replacement = helper_anchor + """
+          function parseOptionalNumber(value: string) {
+            const normalized = value.trim().replace(',', '.')
+            if (!normalized) return null
+            const parsed = Number(normalized)
+            return Number.isFinite(parsed) ? parsed : null
+          }
+          """
+          workspace = replace_once(workspace, helper_anchor, helper_replacement, 'numeric parser')
+
+          old_lab = """                const numericValue = Number(row.value.replace(',', '.'))
+                          const low = Number(row.referenceLow.replace(',', '.'))
+                          const high = Number(row.referenceHigh.replace(',', '.'))
+                          const flag =
+                            Number.isFinite(numericValue) && Number.isFinite(low) && numericValue < low
+                              ? 'Ниже нормы'
+                              : Number.isFinite(numericValue) &&
+                                  Number.isFinite(high) &&
+                                  numericValue > high
+                                ? 'Выше нормы'
+                                : 'В пределах диапазона'
+          """
+          new_lab = """                const numericValue = parseOptionalNumber(row.value)
+                          const low = parseOptionalNumber(row.referenceLow)
+                          const high = parseOptionalNumber(row.referenceHigh)
+                          const flag =
+                            numericValue === null
+                              ? 'Не заполнено'
+                              : low !== null && numericValue < low
+                                ? 'Ниже нормы'
+                                : high !== null && numericValue > high
+                                  ? 'Выше нормы'
+                                  : low === null && high === null
+                                    ? 'Нет референсов'
+                                    : 'В пределах диапазона'
+          """
+          workspace = replace_once(workspace, old_lab, new_lab, 'lab empty values')
+
+          old_badge = """                          flag === 'В пределах диапазона'
+                                      ? 'bg-emerald-500/15 text-emerald-300'
+                                      : 'bg-amber-500/15 text-amber-200'
+          """
+          new_badge = """                          flag === 'В пределах диапазона'
+                                      ? 'bg-emerald-500/15 text-emerald-300'
+                                      : flag === 'Ниже нормы' || flag === 'Выше нормы'
+                                        ? 'bg-amber-500/15 text-amber-200'
+                                        : 'bg-slate-500/15 text-slate-300'
+          """
+          workspace = replace_once(workspace, old_badge, new_badge, 'lab badge state')
+
+          old_ecg = """              </svg>
+                        </div>
+                        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          """
+          new_ecg = """              </svg>
+                        </div>
+                        <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs leading-5 text-amber-100">
+                          Кривая генерируется как учебная иллюстрация и не является клинической ЭКГ, диагностикой или медицинским заключением.
+                        </p>
+                        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          """
+          workspace = replace_once(workspace, old_ecg, new_ecg, 'ECG educational warning')
+          workspace_path.write_text(workspace)
+          PY
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Firebase rules
+        run: >-
+          pnpm dlx firebase-tools@15.24.0 emulators:exec
+          --only firestore,storage
+          --project demo-medstart
+          "node scripts/test-critical-rules.mjs"
+
+      - name: Typecheck
+        run: pnpm --filter @workspace/medstart typecheck
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: test-api-key
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: example.firebaseapp.com
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: example
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: example.appspot.com
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '123456789'
+          NEXT_PUBLIC_FIREBASE_APP_ID: 1:123456789:web:test
+          NEXT_PUBLIC_OWNER_UID: test-owner
+        run: pnpm --filter @workspace/medstart build
+
+      - name: Commit validated fixes and remove temporary workflows
+        shell: bash
+        run: |
+          rm -f .github/workflows/apply-medium-fixes-once.yml
+          rm -f .github/workflows/medium-diagnostics.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: resolve remaining medium audit findings"
+          git push origin HEAD:fix/medium-audit-v1
