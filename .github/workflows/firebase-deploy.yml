@@ -2,6 +2,14 @@ name: Deploy Firebase rules
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - firebase.json
+      - firestore.secure.rules
+      - firestore.indexes.json
+      - storage.rules
 
 permissions:
   contents: read
