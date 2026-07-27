@@ -42,7 +42,7 @@ const requiredFiles = [
   'scripts/test-critical-rules.mjs',
   'scripts/test-medium-rules.mjs',
   'scripts/test-auth-rules.mjs',
-  'scripts/live-auth-audit.mjs',
+  'artifacts/medstart/scripts/live-auth-audit.mjs',
   'artifacts/medstart/app/forgot-password/page.tsx',
 ]
 for (const relativePath of requiredFiles) {
