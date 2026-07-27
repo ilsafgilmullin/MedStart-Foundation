@@ -21,6 +21,8 @@ const OWNER_EMAIL = 'ilsafgilmullin@yandex.ru'
 
 type Role = 'student' | 'tutor'
 type LessonFormat = 'online' | 'in_person'
+type AdminAuth = ReturnType<typeof getFirebaseAdminAuth>
+type AdminDb = ReturnType<typeof getFirebaseAdminDb>
 
 interface RegistrationBody {
   role?: unknown
@@ -144,11 +146,14 @@ export async function POST(request: Request) {
     )
   }
 
-  const adminAuth = getFirebaseAdminAuth()
-  const adminDb = getFirebaseAdminDb()
+  let adminAuth: AdminAuth | undefined
+  let adminDb: AdminDb | undefined
   let createdUid = ''
 
   try {
+    adminAuth = getFirebaseAdminAuth()
+    adminDb = getFirebaseAdminDb()
+
     const user = await adminAuth.createUser({
       email,
       password,
@@ -158,7 +163,10 @@ export async function POST(request: Request) {
     })
     createdUid = user.uid
 
-    const lessonPrice = Math.max(0, Math.min(1_000_000, Number(body.lessonPrice) || 0))
+    const lessonPrice = Math.max(
+      0,
+      Math.min(1_000_000, Number(body.lessonPrice) || 0),
+    )
     const lessonDuration = Math.max(
       30,
       Math.min(180, Math.round(Number(body.lessonDuration) || 60)),
@@ -233,7 +241,7 @@ export async function POST(request: Request) {
         ? String((error as { code?: unknown }).code || '')
         : ''
 
-    if (createdUid) {
+    if (createdUid && adminAuth && adminDb) {
       await Promise.allSettled([
         adminDb.collection('users').doc(createdUid).delete(),
         adminAuth.deleteUser(createdUid),
