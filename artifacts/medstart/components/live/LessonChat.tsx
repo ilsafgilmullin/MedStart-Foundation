@@ -61,13 +61,13 @@ export default function LessonChat({ booking, userUid }: LessonChatProps) {
   }
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+    <section className="flex min-h-0 max-w-full flex-1 flex-col overflow-hidden overscroll-contain rounded-2xl border border-white/10 bg-white/5">
       <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-sm font-semibold text-white">
         <MessageCircle className="h-4 w-4 text-violet-300" />
         Чат занятия
       </div>
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
         {loading ? (
           <div className="flex h-full items-center justify-center">
             <LoaderCircle className="h-6 w-6 animate-spin text-violet-300" />
@@ -129,20 +129,20 @@ export default function LessonChat({ booking, userUid }: LessonChatProps) {
 
       <form
         onSubmit={submit}
-        className="flex gap-2 border-t border-white/10 p-3"
+        className="flex shrink-0 gap-2 border-t border-white/10 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
       >
         <input
           value={text}
           maxLength={2_000}
           onChange={(event) => setText(event.target.value)}
           placeholder="Сообщение…"
-          className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-xs text-white outline-none placeholder:text-slate-500 focus:border-violet-400"
+          className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-base text-white outline-none placeholder:text-slate-500 focus:border-violet-400 sm:text-xs"
         />
         <button
           type="submit"
           disabled={!text.trim() || sending}
           aria-label="Отправить сообщение"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white disabled:opacity-40"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white disabled:opacity-40 sm:h-10 sm:w-10"
         >
           {sending ? (
             <LoaderCircle className="h-4 w-4 animate-spin" />
