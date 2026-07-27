@@ -25,15 +25,16 @@ self.addEventListener('activate', (event) => {
 })
 
 async function networkFirst(request) {
+  const cache = await caches.open(CACHE_NAME)
   try {
     const response = await fetch(request)
     if (response.ok) {
       const copy = response.clone()
-      void caches.open(CACHE_NAME).then((cache) => cache.put(request, copy))
+      void cache.put(request, copy)
     }
     return response
   } catch {
-    const cached = await caches.match(request)
+    const cached = await cache.match(request)
     if (cached) return cached
     throw new Error('NETWORK_AND_CACHE_UNAVAILABLE')
   }
@@ -69,8 +70,9 @@ self.addEventListener('fetch', (event) => {
           return response
         })
         .catch(async () => {
-          const cached = await caches.match(request)
-          return cached || caches.match('/offline')
+          const cache = await caches.open(CACHE_NAME)
+          const cached = await cache.match(request)
+          return cached || cache.match('/offline')
         }),
     )
   }
