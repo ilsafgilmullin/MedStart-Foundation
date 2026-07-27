@@ -1,0 +1,60 @@
+name: MedStart owner auth repair v2
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - artifacts/medstart/scripts/repair-owner-auth.mjs
+      - .github/workflows/auth-owner-repair-v2.yml
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    if: github.head_ref == 'fix/auth-full-audit-v2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --reporter=silent
+
+      - name: Prepare Firebase service account
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ]; then
+            echo "Missing FIREBASE_SERVICE_ACCOUNT_JSON"
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/firebase-service-account.json"
+          chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
+
+      - name: Repair and verify owner authentication
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+        run: pnpm --dir artifacts/medstart exec node scripts/repair-owner-auth.mjs
+
+      - name: Upload repair report
+        uses: actions/upload-artifact@v4
+        with:
+          name: medstart-owner-auth-repair-v2
+          path: artifacts/medstart/auth-owner-repair-report.json
+          if-no-files-found: error
+          retention-days: 3
