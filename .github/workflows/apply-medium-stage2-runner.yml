@@ -94,6 +94,8 @@ workspace_path.write_text(workspace)'''
       match /assets/{assetId} {"""
           if old in rules:
               rules = rules.replace(old, new, 1)
+          if rules.rstrip().endswith('}\n}\n}'):
+              raise SystemExit('generated Firestore rules still contain an extra closing brace')
           path.write_text(rules)
           FIX_RULE_NESTING
       - uses: pnpm/action-setup@v4
@@ -131,6 +133,7 @@ workspace_path.write_text(workspace)'''
         run: |
           rm -f .github/workflows/apply-medium-stage2-once.yml
           rm -f .github/workflows/apply-medium-stage2-runner.yml
+          rm -f .github/workflows/apply-medium-stage2-v3.yml
           rm -f .github/workflows/medium-stage2-error.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
