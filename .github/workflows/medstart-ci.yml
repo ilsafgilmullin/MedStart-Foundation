@@ -82,6 +82,9 @@ jobs:
           test -f scripts/test-critical-rules.mjs
           test -f scripts/test-medium-rules.mjs
 
+      - name: Verify medium-stage invariants
+        run: node scripts/verify-medium-stage-final.mjs
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
