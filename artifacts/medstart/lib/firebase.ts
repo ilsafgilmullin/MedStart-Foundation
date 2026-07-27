@@ -1,11 +1,20 @@
-import { initializeApp, getApps, getApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
-import { getFirestore, initializeFirestore, memoryLocalCache } from 'firebase/firestore'
+import { getApp, getApps, initializeApp } from 'firebase/app'
+import {
+  browserLocalPersistence,
+  getAuth,
+  inMemoryPersistence,
+  setPersistence,
+} from 'firebase/auth'
+import {
+  getFirestore,
+  initializeFirestore,
+  memoryLocalCache,
+} from 'firebase/firestore'
 
 /**
- * Firebase's web configuration is public client metadata. Keeping it here
- * makes local builds, Replit previews, and deployments use the same project
- * without depending on when Replit injects environment variables.
+ * Firebase web configuration is public client metadata. Keeping a stable
+ * fallback prevents Replit preview restarts from silently pointing Auth and
+ * Firestore at different projects when environment injection is delayed.
  */
 const firebaseConfig = {
   apiKey:
@@ -28,6 +37,24 @@ const firebaseConfig = {
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
 
 export const auth = getAuth(app)
+
+/**
+ * All auth commands await this promise. Safari, private mode and embedded
+ * Replit previews can reject IndexedDB/local persistence. In that case Auth
+ * remains functional with an in-memory session instead of hanging or failing
+ * before login, registration or password reset reaches Firebase.
+ */
+export const authReady = (async () => {
+  try {
+    await setPersistence(auth, browserLocalPersistence)
+  } catch {
+    await setPersistence(auth, inMemoryPersistence).catch(() => undefined)
+  }
+
+  if (typeof auth.authStateReady === 'function') {
+    await auth.authStateReady()
+  }
+})()
 
 function createFirestore() {
   try {
