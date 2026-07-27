@@ -1,6 +1,10 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { NextResponse } from 'next/server'
-import { getFirebaseAdminAuth, getFirebaseAdminDb } from '@/lib/server/firebase-admin'
+import {
+  FirebaseAdminConfigurationError,
+  getFirebaseAdminAuth,
+  getFirebaseAdminDb,
+} from '@/lib/server/firebase-admin'
 import { firebaseIdentityRequest } from '@/lib/server/firebase-identity'
 import {
   cleanText,
@@ -223,6 +227,12 @@ export async function POST(request: Request) {
       ])
     }
 
+    if (error instanceof FirebaseAdminConfigurationError) {
+      return NextResponse.json(
+        { ok: false, code: 'AUTH_CONFIGURATION_ERROR' },
+        { status: 503, headers: noStoreHeaders() },
+      )
+    }
     if (code.includes('email-already-exists')) {
       return NextResponse.json(
         { ok: false, code: 'ACCOUNT_UNAVAILABLE' },
