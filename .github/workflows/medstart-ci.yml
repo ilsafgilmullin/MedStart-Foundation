@@ -37,7 +37,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: medstart-ci-${{ github.ref }}
@@ -48,48 +48,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - name: Checkout critical branch
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: fix/critical-audit-v1
-          fetch-depth: 0
-
-      - name: Apply final critical source patch
-        if: github.actor != 'github-actions[bot]'
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          rules = Path('firestore.secure.rules')
-          source = rules.read_text(encoding='utf-8')
-          source = source.replace(
-              'allow create: if signedIn() && validBookingCreate();',
-              'allow create: if false;',
-              1,
-          )
-          source = source.replace(
-              'allow create: if signedIn() && validConversationCreate(conversationId);',
-              'allow create: if false;',
-              1,
-          )
-          rules.write_text(source, encoding='utf-8')
-
-          board = Path('artifacts/medstart/components/live/ServerlessWhiteboard.tsx')
-          source = board.read_text(encoding='utf-8')
-          source = source.replace('const CACHE_LIMIT = 400\n', '', 1)
-          start = source.find('  useEffect(() => {\n    const cacheKey = `medstart-board-${bookingId}`')
-          end_marker = '  }, [bookingId, elements])\n\n'
-          if start >= 0:
-              end = source.find(end_marker, start)
-              if end < 0:
-                  raise SystemExit('Whiteboard cache block end was not found')
-              replacement = '''  useEffect(\n    () =>\n      subscribeToWhiteboard(\n        bookingId,\n        (next) => {\n          setElements(next.filter(isBoardElement))\n          setSyncState(navigator.onLine ? 'saved' : 'offline')\n        },\n        () => setSyncState(navigator.onLine ? 'error' : 'offline'),\n      ),\n    [bookingId],\n  )\n\n'''
-              source = source[:start] + replacement + source[end + len(end_marker):]
-          board.write_text(source, encoding='utf-8')
-
-          Path('.github/workflows/apply-critical-stage3.yml').unlink(missing_ok=True)
-          PY
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -117,6 +77,8 @@ jobs:
           grep -A2 'match /bookings/{bookingId}' firestore.secure.rules | grep -q 'allow create: if false;'
           grep -A2 'match /conversations/{conversationId}' firestore.secure.rules | grep -q 'allow create: if false;'
           ! grep -q 'medstart-board-' artifacts/medstart/components/live/ServerlessWhiteboard.tsx
+          test -f artifacts/medstart/app/api/bookings/route.ts
+          grep -q "fetch('/api/bookings'" artifacts/medstart/lib/bookings.ts
 
       - name: Compile Firebase security rules
         env:
@@ -155,15 +117,3 @@ jobs:
           NEXT_PUBLIC_FIREBASE_APP_ID: 1:123456789:web:test
           NEXT_PUBLIC_OWNER_UID: test-owner
         run: pnpm --filter @workspace/medstart build
-
-      - name: Commit validated critical patch
-        if: github.actor != 'github-actions[bot]'
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if ! git diff --cached --quiet; then
-            git commit -m "security: enforce server-only booking creation"
-            git push origin HEAD:fix/critical-audit-v1
-          fi
