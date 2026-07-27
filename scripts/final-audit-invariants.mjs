@@ -74,6 +74,7 @@ const registerRouteSource = await readFile(join(sourceRoot, 'app', 'api', 'auth'
 const resetRouteSource = await readFile(join(sourceRoot, 'app', 'api', 'auth', 'password-reset', 'route.ts'), 'utf8')
 const loginPageSource = await readFile(join(sourceRoot, 'app', 'login', 'page.tsx'), 'utf8')
 const forgotPasswordSource = await readFile(join(sourceRoot, 'app', 'forgot-password', 'page.tsx'), 'utf8')
+const loginHookSource = await readFile(join(sourceRoot, 'hooks', 'useLogin.ts'), 'utf8')
 const studentRegistrationSource = await readFile(join(sourceRoot, 'hooks', 'useStudentRegistration.ts'), 'utf8')
 const tutorRegistrationSource = await readFile(join(sourceRoot, 'hooks', 'useTutorRegistration.ts'), 'utf8')
 
@@ -107,6 +108,22 @@ if (!studentRegistrationSource.includes('isStrongPassword')) failures.push('Stud
 if (!tutorRegistrationSource.includes('isStrongPassword')) failures.push('Tutor registration does not enforce password policy')
 if (!studentRegistrationSource.includes('result.verificationSent')) failures.push('Student registration loses verification delivery status')
 if (!tutorRegistrationSource.includes('result.verificationSent')) failures.push('Tutor registration loses verification delivery status')
+
+for (const [label, source] of [
+  ['login', loginHookSource],
+  ['student registration', studentRegistrationSource],
+  ['tutor registration', tutorRegistrationSource],
+]) {
+  if (!source.includes('window.location.replace')) {
+    failures.push(`${label} does not use deterministic post-auth navigation`)
+  }
+  if (source.includes('router.refresh()')) {
+    failures.push(`${label} can race navigation with router.refresh()`)
+  }
+  if (!source.includes('navigationStarted')) {
+    failures.push(`${label} can re-enable its form while navigation is starting`)
+  }
+}
 
 if (failures.length) throw new Error(`Final audit invariants failed:\n${failures.join('\n')}`)
 console.log(`Final audit invariants passed for ${files.length} application files.`)

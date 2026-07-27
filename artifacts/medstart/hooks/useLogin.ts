@@ -1,7 +1,6 @@
 'use client'
 
 import { FormEvent, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { FirebaseError } from 'firebase/app'
 import {
   EmailVerificationRequiredError,
@@ -39,7 +38,6 @@ function messageFor(error: unknown) {
 }
 
 export function useLogin() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -77,11 +75,15 @@ export function useLogin() {
       return
     }
 
+    let navigationStarted = false
     try {
       setLoading(true)
       await login(normalizedEmail, password)
-      router.replace(ROUTES.DASHBOARD)
-      router.refresh()
+
+      // A single hard navigation avoids a mobile Safari race between a route
+      // transition and a simultaneous refresh of the current form.
+      navigationStarted = true
+      window.location.replace(ROUTES.DASHBOARD)
     } catch (caught) {
       if (caught instanceof EmailVerificationRequiredError) {
         if (caught.verificationSent) setVerificationNotice(caught.message)
@@ -90,7 +92,7 @@ export function useLogin() {
         setError(messageFor(caught))
       }
     } finally {
-      setLoading(false)
+      if (!navigationStarted) setLoading(false)
     }
   }
 

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, type FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
 import { MedStartAuthError, registerTutor } from '@/lib/auth'
 import { ROUTES } from '@/lib/constants'
 import { isStrongPassword } from '@/lib/password-policy'
@@ -10,15 +9,15 @@ function messageFor(error: unknown) {
   if (error instanceof MedStartAuthError) {
     switch (error.code) {
       case 'ACCOUNT_UNAVAILABLE':
-        return 'Создать аккаунт с этими данными нельзя. Войдите или восстановите пароль.'
+        return 'Создать аккаунт с этими данными нельзя. Возможно, аккаунт уже создан — войдите или восстановите пароль.'
       case 'INVALID_REGISTRATION':
         return 'Проверьте заполненные данные и требования к паролю.'
       case 'TOO_MANY_REQUESTS':
         return 'Слишком много попыток регистрации. Подождите и повторите позже.'
       case 'AUTH_SERVICE_UNAVAILABLE':
-        return 'Сервис регистрации временно недоступен. Повторите попытку позже.'
+        return 'Сервис регистрации временно недоступен. Введённые данные сохранены — повторите попытку позже.'
       default:
-        return 'Не удалось создать профиль репетитора. Повторите попытку.'
+        return 'Не удалось создать профиль репетитора. Введённые данные сохранены.'
     }
   }
   return error instanceof Error
@@ -27,7 +26,6 @@ function messageFor(error: unknown) {
 }
 
 export function useTutorRegistration() {
-  const router = useRouter()
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
@@ -74,12 +72,14 @@ export function useTutorRegistration() {
       return
     }
 
+    let navigationStarted = false
     try {
       setLoading(true)
+      const normalizedEmail = email.trim().toLowerCase()
       const result = await registerTutor({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         specialization: specialization.trim(),
         subjects: subjects
           .split(',')
@@ -100,14 +100,14 @@ export function useTutorRegistration() {
         bio: bio.trim(),
         password,
       })
-      router.replace(
-        `${ROUTES.LOGIN}?registered=1&tutor=1&email=${encodeURIComponent(email.trim().toLowerCase())}&verificationSent=${result.verificationSent ? '1' : '0'}`,
-      )
-      router.refresh()
+
+      const nextUrl = `${ROUTES.LOGIN}?registered=1&tutor=1&email=${encodeURIComponent(normalizedEmail)}&verificationSent=${result.verificationSent ? '1' : '0'}`
+      navigationStarted = true
+      window.location.replace(nextUrl)
     } catch (caught) {
       setError(messageFor(caught))
     } finally {
-      setLoading(false)
+      if (!navigationStarted) setLoading(false)
     }
   }
 
