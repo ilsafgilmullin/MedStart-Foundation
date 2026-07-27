@@ -1,6 +1,12 @@
 name: MedStart owner auth repair v2
 
 on:
+  push:
+    branches:
+      - fix/auth-full-audit-v2
+    paths:
+      - artifacts/medstart/scripts/repair-owner-auth.mjs
+      - .github/workflows/auth-owner-repair-v2.yml
   pull_request:
     branches:
       - main
@@ -13,7 +19,7 @@ permissions:
 
 jobs:
   repair:
-    if: github.head_ref == 'fix/auth-full-audit-v2'
+    if: github.ref == 'refs/heads/fix/auth-full-audit-v2' || github.head_ref == 'fix/auth-full-audit-v2'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
