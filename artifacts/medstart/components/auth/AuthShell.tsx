@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { HeartPulse, LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { AuthHealthBanner } from '@/components/auth/AuthHealthBanner'
 import { ROUTES } from '@/lib/constants'
 
 interface AuthShellProps {
@@ -87,7 +88,10 @@ export function AuthShell({
               {description}
             </p>
 
-            <div className="mt-8">{children}</div>
+            <div className="mt-8">
+              <AuthHealthBanner />
+              {children}
+            </div>
             {footer && <div className="mt-7 border-t border-slate-200 pt-6">{footer}</div>}
           </div>
         </section>
