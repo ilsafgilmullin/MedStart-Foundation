@@ -37,7 +37,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: medstart-ci-${{ github.ref }}
@@ -48,11 +48,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout critical branch
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: fix/critical-audit-v1
-          fetch-depth: 0
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -71,13 +68,6 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Add pinned security-test dependencies
-        if: github.actor != 'github-actions[bot]'
-        run: >-
-          pnpm add -Dw --save-exact
-          @firebase/rules-unit-testing@5.0.1
-          firebase@12.16.0
-
       - name: Verify hardened Firebase configuration
         run: |
           test -f firestore.secure.rules
@@ -91,6 +81,9 @@ jobs:
           grep -q "fetch('/api/bookings'" artifacts/medstart/lib/bookings.ts
           test -f scripts/test-critical-rules.mjs
 
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Compile and test Firebase security rules
         env:
           CI: 'true'
@@ -99,9 +92,6 @@ jobs:
           --only firestore,storage
           --project demo-medstart
           "node scripts/test-critical-rules.mjs"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Typecheck MedStart
         shell: bash
@@ -128,15 +118,3 @@ jobs:
           NEXT_PUBLIC_FIREBASE_APP_ID: 1:123456789:web:test
           NEXT_PUBLIC_OWNER_UID: test-owner
         run: pnpm --filter @workspace/medstart build
-
-      - name: Commit validated security-test lockfile
-        if: github.actor != 'github-actions[bot]'
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json pnpm-lock.yaml
-          if ! git diff --cached --quiet; then
-            git commit -m "test: pin critical Firebase rules suite"
-            git push origin HEAD:fix/critical-audit-v1
-          fi
