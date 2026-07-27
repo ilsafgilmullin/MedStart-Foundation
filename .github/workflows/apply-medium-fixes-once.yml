@@ -33,17 +33,23 @@ jobs:
                   raise SystemExit(f'{label}: expected 1 match, found {count}')
               return text.replace(old, new, 1)
 
+          def replace_section(text: str, start: str, end: str, replacement: str, label: str) -> str:
+              start_index = text.find(start)
+              if start_index < 0:
+                  raise SystemExit(f'{label}: start marker missing')
+              end_index = text.find(end, start_index + len(start))
+              if end_index < 0:
+                  raise SystemExit(f'{label}: end marker missing')
+              return text[:start_index] + replacement.rstrip() + '\n\n' + text[end_index:]
+
           rules_path = Path('firestore.secure.rules')
           rules = rules_path.read_text()
 
-          old_profile = """    function validNewProfile(userId) {
-                return request.resource.data.keys().hasAll([
-                    'uid', 'firstName', 'lastName', 'displayName', 'email', 'role',
-                    'status', 'rating', 'reviewsCount', 'isPublic',
-                    'onboardingCompleted', 'createdAt', 'updatedAt'
-                  ])
-          """
-          new_profile = """    function validNewProfile(userId) {
+          rules = replace_section(
+              rules,
+              '    function validNewProfile(userId) {',
+              '    function safeSelfUpdate() {',
+              '''    function validNewProfile(userId) {
                 return request.resource.data.keys().hasOnly([
                     'uid', 'firstName', 'lastName', 'displayName', 'email', 'role',
                     'status', 'statusBeforeBlock', 'avatar', 'fieldOfStudy',
@@ -59,20 +65,44 @@ jobs:
                     'status', 'avatar', 'rating', 'reviewsCount', 'isPublic',
                     'onboardingCompleted', 'createdAt', 'updatedAt'
                   ])
-          """
-          rules = replace_once(rules, old_profile, new_profile, 'profile key allowlist')
+                  && request.resource.data.uid == userId
+                  && request.resource.data.email == request.auth.token.email
+                  && request.resource.data.firstName is string
+                  && request.resource.data.firstName.size() > 0
+                  && request.resource.data.firstName.size() <= 80
+                  && request.resource.data.lastName is string
+                  && request.resource.data.lastName.size() > 0
+                  && request.resource.data.lastName.size() <= 80
+                  && request.resource.data.displayName is string
+                  && request.resource.data.displayName.size() > 0
+                  && request.resource.data.displayName.size() <= 160
+                  && request.resource.data.avatar is string
+                  && request.resource.data.avatar.size() <= 2000
+                  && request.resource.data.rating == 0
+                  && request.resource.data.reviewsCount == 0
+                  && request.resource.data.isPublic == false
+                  && request.resource.data.onboardingCompleted is bool
+                  && request.resource.data.createdAt is timestamp
+                  && request.resource.data.updatedAt is timestamp
+                  && (
+                    (
+                      request.resource.data.role == 'student'
+                      && request.resource.data.status == 'active'
+                    )
+                    || (
+                      request.resource.data.role == 'tutor'
+                      && request.resource.data.status == 'pending'
+                    )
+                  );
+              }''',
+              'profile key allowlist',
+          )
 
-          old_self_update = """    function safeSelfUpdate() {
-                return request.resource.data.uid == resource.data.uid
-                  && request.resource.data.email == resource.data.email
-                  && request.resource.data.diff(resource.data).affectedKeys().hasNone([
-                    'uid', 'email', 'role', 'status', 'statusBeforeBlock', 'rating',
-                    'reviewsCount', 'isPublic', 'moderationNote', 'moderatedBy',
-                    'moderatedAt', 'createdAt'
-                  ]);
-              }
-          """
-          new_self_update = """    function safeSelfUpdate() {
+          rules = replace_section(
+              rules,
+              '    function safeSelfUpdate() {',
+              '    function validTutorResubmission() {',
+              '''    function safeSelfUpdate() {
                 return request.resource.data.uid == resource.data.uid
                   && request.resource.data.email == resource.data.email
                   && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -82,21 +112,15 @@ jobs:
                     'lessonPrice', 'lessonDuration', 'lessonFormats', 'timezone',
                     'notificationPreferences', 'onboardingCompleted', 'updatedAt'
                   ]);
-              }
-          """
-          rules = replace_once(rules, old_self_update, new_self_update, 'profile self-update allowlist')
+              }''',
+              'profile self-update allowlist',
+          )
 
-          old_availability = """    function validAvailability(data, tutorId) {
-                return data.keys().hasAll(['tutorUid', 'timezone', 'days', 'updatedAt'])
-                  && data.tutorUid == tutorId
-                  && data.timezone is string
-                  && data.timezone.size() > 0
-                  && data.timezone.size() <= 80
-                  && data.days is map
-                  && data.updatedAt is timestamp;
-              }
-          """
-          new_availability = """    function validAvailability(data, tutorId) {
+          rules = replace_section(
+              rules,
+              '    function validAvailability(data, tutorId) {',
+              '    match /availability/{tutorId} {',
+              '''    function validAvailability(data, tutorId) {
                 return data.keys().hasOnly(['tutorUid', 'timezone', 'days', 'updatedAt'])
                   && data.tutorUid == tutorId
                   && data.timezone is string
@@ -105,15 +129,18 @@ jobs:
                   && data.days is map
                   && data.days.size() <= 7
                   && data.updatedAt is timestamp;
-              }
-          """
-          rules = replace_once(rules, old_availability, new_availability, 'availability shape')
+              }''',
+              'availability shape',
+          )
 
-          old_material_url = """        && request.resource.data.url is string
+          rules = replace_once(
+              rules,
+              """        && request.resource.data.url is string
                   && request.resource.data.url.size() <= 2000
                   && request.resource.data.kind in ['link', 'document', 'video', 'note']
-          """
-          new_material_url = """        && request.resource.data.url is string
+                  && request.resource.data.createdAt is timestamp
+              """,
+              """        && request.resource.data.url is string
                   && request.resource.data.url.size() <= 2000
                   && request.resource.data.kind in ['link', 'document', 'video', 'note']
                   && (
@@ -123,15 +150,19 @@ jobs:
                       && request.resource.data.url.matches('https://.+')
                     )
                   )
-          """
-          rules = replace_once(rules, old_material_url, new_material_url, 'material https create')
+                  && request.resource.data.createdAt is timestamp
+              """,
+              'material HTTPS create',
+          )
 
-          old_material_update = """      allow update: if isActiveRole(request.auth.uid, 'tutor')
+          rules = replace_once(
+              rules,
+              """      allow update: if isActiveRole(request.auth.uid, 'tutor')
                 && resource.data.tutorUid == request.auth.uid
                 && request.resource.data.updatedAt is timestamp
                 && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          """
-          new_material_update = """      allow update: if isActiveRole(request.auth.uid, 'tutor')
+              """,
+              """      allow update: if isActiveRole(request.auth.uid, 'tutor')
                 && resource.data.tutorUid == request.auth.uid
                 && request.resource.data.updatedAt is timestamp
                 && request.resource.data.kind in ['link', 'document', 'video', 'note']
@@ -145,16 +176,15 @@ jobs:
                   )
                 )
                 && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          """
-          rules = replace_once(rules, old_material_update, new_material_update, 'material https update')
+              """,
+              'material HTTPS update',
+          )
 
-          old_lesson_read = """    function canReadLessonData(bookingId) {
-                return bookingExists(bookingId)
-                  && whiteboardBooking(bookingId).status in ['accepted', 'completed']
-                  && (isActiveLessonParticipant(bookingId) || isModerator());
-              }
-          """
-          new_lesson_read = """    function canReadLessonData(bookingId) {
+          rules = replace_section(
+              rules,
+              '    function canReadLessonData(bookingId) {',
+              '    function canWriteLessonData(bookingId) {',
+              '''    function canReadLessonData(bookingId) {
                 return bookingExists(bookingId)
                   && (
                     isModerator()
@@ -172,20 +202,18 @@ jobs:
                       )
                     )
                   );
-              }
-          """
-          rules = replace_once(rules, old_lesson_read, new_lesson_read, 'lesson archive retention')
+              }''',
+              'lesson archive retention',
+          )
           rules_path.write_text(rules)
 
           storage_path = Path('storage.rules')
           storage = storage_path.read_text()
-          old_storage_read = """    function canReadMedicalAsset(bookingId) {
-                return bookingExists(bookingId)
-                  && medicalBooking(bookingId).status in ['accepted', 'completed']
-                  && (isActiveMedicalParticipant(bookingId) || isModerator());
-              }
-          """
-          new_storage_read = """    function canReadMedicalAsset(bookingId) {
+          storage = replace_section(
+              storage,
+              '    function canReadMedicalAsset(bookingId) {',
+              '    match /medical-workspaces/{bookingId}/{userId}/{fileName} {',
+              '''    function canReadMedicalAsset(bookingId) {
                 return bookingExists(bookingId)
                   && (
                     isModerator()
@@ -203,9 +231,9 @@ jobs:
                       )
                     )
                   );
-              }
-          """
-          storage = replace_once(storage, old_storage_read, new_storage_read, 'storage archive retention')
+              }''',
+              'storage archive retention',
+          )
           storage_path.write_text(storage)
 
           workspace_path = Path('artifacts/medstart/components/live/MedicalWorkspace.tsx')
@@ -216,17 +244,23 @@ jobs:
             )}`
           }
           """
-          helper_replacement = helper_anchor + """
+          workspace = replace_once(
+              workspace,
+              helper_anchor,
+              helper_anchor + """
           function parseOptionalNumber(value: string) {
             const normalized = value.trim().replace(',', '.')
             if (!normalized) return null
             const parsed = Number(normalized)
             return Number.isFinite(parsed) ? parsed : null
           }
-          """
-          workspace = replace_once(workspace, helper_anchor, helper_replacement, 'numeric parser')
+          """,
+              'numeric parser',
+          )
 
-          old_lab = """                const numericValue = Number(row.value.replace(',', '.'))
+          workspace = replace_once(
+              workspace,
+              """                const numericValue = Number(row.value.replace(',', '.'))
                           const low = Number(row.referenceLow.replace(',', '.'))
                           const high = Number(row.referenceHigh.replace(',', '.'))
                           const flag =
@@ -237,8 +271,8 @@ jobs:
                                   numericValue > high
                                 ? 'Выше нормы'
                                 : 'В пределах диапазона'
-          """
-          new_lab = """                const numericValue = parseOptionalNumber(row.value)
+              """,
+              """                const numericValue = parseOptionalNumber(row.value)
                           const low = parseOptionalNumber(row.referenceLow)
                           const high = parseOptionalNumber(row.referenceHigh)
                           const flag =
@@ -251,33 +285,40 @@ jobs:
                                   : low === null && high === null
                                     ? 'Нет референсов'
                                     : 'В пределах диапазона'
-          """
-          workspace = replace_once(workspace, old_lab, new_lab, 'lab empty values')
+              """,
+              'lab empty values',
+          )
 
-          old_badge = """                          flag === 'В пределах диапазона'
+          workspace = replace_once(
+              workspace,
+              """                          flag === 'В пределах диапазона'
                                       ? 'bg-emerald-500/15 text-emerald-300'
                                       : 'bg-amber-500/15 text-amber-200'
-          """
-          new_badge = """                          flag === 'В пределах диапазона'
+              """,
+              """                          flag === 'В пределах диапазона'
                                       ? 'bg-emerald-500/15 text-emerald-300'
                                       : flag === 'Ниже нормы' || flag === 'Выше нормы'
                                         ? 'bg-amber-500/15 text-amber-200'
                                         : 'bg-slate-500/15 text-slate-300'
-          """
-          workspace = replace_once(workspace, old_badge, new_badge, 'lab badge state')
+              """,
+              'lab badge state',
+          )
 
-          old_ecg = """              </svg>
+          workspace = replace_once(
+              workspace,
+              """              </svg>
                         </div>
                         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          """
-          new_ecg = """              </svg>
+              """,
+              """              </svg>
                         </div>
                         <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs leading-5 text-amber-100">
                           Кривая генерируется как учебная иллюстрация и не является клинической ЭКГ, диагностикой или медицинским заключением.
                         </p>
                         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          """
-          workspace = replace_once(workspace, old_ecg, new_ecg, 'ECG educational warning')
+              """,
+              'ECG educational warning',
+          )
           workspace_path.write_text(workspace)
           PY
 
