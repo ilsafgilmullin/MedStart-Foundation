@@ -158,7 +158,15 @@ export function registerTutor(input: TutorRegistrationInput) {
   )
 }
 
-export const logout = secureSignOut
+export async function logout(): Promise<void> {
+  await secureSignOut()
+  if (typeof window !== 'undefined') {
+    // A full navigation destroys the in-memory Firestore cache so a subsequent
+    // account on the same device cannot receive stale private snapshots.
+    window.location.replace('/login?loggedOut=1')
+  }
+}
+
 export const resetPassword = (email: string) =>
   sendPasswordResetEmail(auth, email.trim().toLowerCase())
 export async function resendEmailVerification(): Promise<void> {
