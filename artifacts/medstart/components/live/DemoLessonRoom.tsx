@@ -74,7 +74,7 @@ export default function DemoLessonRoom({
 
   return (
     <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-slate-950 text-white">
-      <header className="shrink-0 border-b border-white/10 bg-slate-950/95 px-3 py-3 backdrop-blur sm:px-5">
+      <header className="shrink-0 border-b border-white/10 bg-slate-950/95 px-3 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] backdrop-blur sm:px-5">
         <div className="mx-auto flex max-w-[1800px] items-center gap-3">
           <button
             type="button"
@@ -123,6 +123,7 @@ export default function DemoLessonRoom({
               key={view}
               type="button"
               onClick={() => setMobileView(view)}
+              aria-pressed={mobileView === view}
               className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-semibold ${
                 mobileView === view
                   ? 'bg-violet-600 text-white'
@@ -170,7 +171,7 @@ export default function DemoLessonRoom({
         )}
       </main>
 
-      <footer className="shrink-0 border-t border-white/10 bg-slate-950/95 px-3 py-2 text-center text-[11px] text-slate-500 backdrop-blur">
+      <footer className="shrink-0 border-t border-white/10 bg-slate-950/95 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] text-center text-[11px] text-slate-500 backdrop-blur">
         <span className="inline-flex items-center gap-1.5">
           <MonitorUp className="h-3.5 w-3.5 text-violet-300" />
           Учебный режим без видеосвязи. Совместные данные сохраняются в Firebase.

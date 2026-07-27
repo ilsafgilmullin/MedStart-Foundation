@@ -5,7 +5,7 @@ import { useStudentRegistration } from '@/hooks/useStudentRegistration'
 import { ROUTES } from '@/lib/constants'
 
 const inputClass =
-  'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100'
+  'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100 sm:text-sm'
 
 export default function RegisterStudentPage() {
   const form = useStudentRegistration()
@@ -27,6 +27,8 @@ export default function RegisterStudentPage() {
               <label className="space-y-2 text-sm font-medium">
                 Имя
                 <input
+                  autoComplete="given-name"
+                  required
                   className={inputClass}
                   value={form.firstName}
                   onChange={(e) => form.setFirstName(e.target.value)}
@@ -35,6 +37,8 @@ export default function RegisterStudentPage() {
               <label className="space-y-2 text-sm font-medium">
                 Фамилия
                 <input
+                  autoComplete="family-name"
+                  required
                   className={inputClass}
                   value={form.lastName}
                   onChange={(e) => form.setLastName(e.target.value)}
@@ -45,6 +49,8 @@ export default function RegisterStudentPage() {
               Электронная почта
               <input
                 type="email"
+                autoComplete="email"
+                required
                 className={inputClass}
                 value={form.email}
                 onChange={(e) => form.setEmail(e.target.value)}
@@ -84,6 +90,8 @@ export default function RegisterStudentPage() {
               Пароль
               <input
                 type="password"
+                autoComplete="new-password"
+                required
                 className={inputClass}
                 value={form.password}
                 onChange={(e) => form.setPassword(e.target.value)}
@@ -93,6 +101,8 @@ export default function RegisterStudentPage() {
               Подтвердите пароль
               <input
                 type="password"
+                autoComplete="new-password"
+                required
                 className={inputClass}
                 value={form.confirmPassword}
                 onChange={(e) => form.setConfirmPassword(e.target.value)}
@@ -104,6 +114,7 @@ export default function RegisterStudentPage() {
               </p>
             )}
             <button
+              type="submit"
               disabled={form.loading}
               className="w-full rounded-2xl bg-violet-600 px-5 py-3.5 font-semibold text-white disabled:opacity-60"
             >

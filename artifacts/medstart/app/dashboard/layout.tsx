@@ -76,12 +76,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       </div>
     )
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-dvh bg-slate-50">
       <MobileSidebar open={open} onClose={() => setOpen(false)} />
       <Sidebar />
       <div className="lg:ml-72">
         <Header onMenuClick={() => setOpen(true)} />
-        <main className="min-h-[calc(100vh-64px)] p-5 lg:p-8">{children}</main>
+        <main className="min-h-[calc(100dvh-64px)] p-4 sm:p-5 lg:p-8">{children}</main>
       </div>
     </div>
   )
