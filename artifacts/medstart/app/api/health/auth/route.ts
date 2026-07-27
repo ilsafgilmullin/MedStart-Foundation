@@ -13,16 +13,23 @@ export const dynamic = 'force-dynamic'
 const OWNER_UID = 'm8JbbeeXMmZzywUwHboOyMm9MnG2'
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
-  return Promise.race([
-    promise,
-    new Promise<never>((_, reject) => {
-      const timer = setTimeout(
-        () => reject(new Error('AUTH_HEALTH_TIMEOUT')),
-        timeoutMs,
-      )
-      timer.unref?.()
-    }),
-  ])
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error('AUTH_HEALTH_TIMEOUT')),
+      timeoutMs,
+    )
+
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
 }
 
 export async function GET() {
@@ -37,8 +44,7 @@ export async function GET() {
       8_000,
     )
 
-    const healthy =
-      !owner.disabled && owner.emailVerified && profile.exists
+    const healthy = !owner.disabled && owner.emailVerified && profile.exists
 
     return NextResponse.json(
       {
