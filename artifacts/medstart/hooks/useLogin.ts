@@ -3,31 +3,60 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { FirebaseError } from 'firebase/app'
-
 import {
   EmailVerificationRequiredError,
+  MedStartAuthError,
   login,
 } from '@/lib/auth'
 import { ROUTES } from '@/lib/constants'
 
+function messageFor(error: unknown) {
+  if (error instanceof MedStartAuthError) {
+    switch (error.code) {
+      case 'INVALID_CREDENTIALS':
+        return 'Неверная почта или пароль. Проверьте данные либо восстановите пароль.'
+      case 'ACCOUNT_UNAVAILABLE':
+        return 'Вход в этот аккаунт недоступен. Обратитесь в поддержку MedStart.'
+      case 'TOO_MANY_REQUESTS':
+        return 'Слишком много попыток входа. Подождите и повторите позже.'
+      case 'PROFILE_MISSING':
+        return 'Аккаунт найден, но профиль MedStart повреждён. Не создавайте новый аккаунт — обратитесь в поддержку.'
+      case 'AUTH_SERVICE_UNAVAILABLE':
+        return 'Сервис авторизации временно недоступен. Проверьте интернет и повторите.'
+      default:
+        return 'Не удалось выполнить вход. Повторите попытку.'
+    }
+  }
+
+  if (error instanceof FirebaseError) {
+    if (error.code === 'auth/network-request-failed') {
+      return 'Не удалось завершить защищённую сессию. Проверьте интернет и повторите.'
+    }
+    return 'Не удалось завершить вход. Повторите попытку.'
+  }
+
+  return error instanceof Error ? error.message : 'Не удалось выполнить вход.'
+}
+
 export function useLogin() {
   const router = useRouter()
-
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [verificationNotice, setVerificationNotice] = useState('')
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
+    const requestedEmail = params.get('email')
+    if (requestedEmail) setEmail(requestedEmail.trim().toLowerCase())
+
     if (params.get('passwordReset') === '1') {
       setVerificationNotice('Пароль изменён. Теперь войдите с новым паролем.')
     } else if (params.get('registered') === '1') {
       setVerificationNotice(
         params.get('verificationSent') === '0'
-          ? 'Аккаунт создан, но первое письмо не отправилось. Введите ту же почту и пароль и нажмите «Войти» — MedStart безопасно отправит письмо повторно.'
+          ? 'Аккаунт создан, но письмо подтверждения пока не отправлено. Введите почту и пароль — сервер MedStart повторит отправку.'
           : 'Аккаунт создан. Подтвердите почту по ссылке из письма, затем войдите.',
       )
     } else if (params.get('loggedOut') === '1') {
@@ -35,63 +64,30 @@ export function useLogin() {
     }
   }, [])
 
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (loading) return
 
     setError('')
     setVerificationNotice('')
 
-    if (!email.trim() || !password) {
+    const normalizedEmail = email.trim().toLowerCase()
+    if (!normalizedEmail || !password) {
       setError('Заполните электронную почту и пароль.')
       return
     }
 
     try {
       setLoading(true)
-      await login(email, password)
+      await login(normalizedEmail, password)
       router.replace(ROUTES.DASHBOARD)
       router.refresh()
-    } catch (err) {
-      if (err instanceof EmailVerificationRequiredError) {
-        if (err.verificationSent) setVerificationNotice(err.message)
-        else setError(err.message)
-      } else if (err instanceof FirebaseError) {
-        switch (err.code) {
-          case 'auth/user-not-found':
-          case 'auth/wrong-password':
-          case 'auth/invalid-credential':
-            setError(
-              'Неверная почта или пароль. Проверьте данные либо восстановите пароль.',
-            )
-            break
-
-          case 'auth/invalid-email':
-            setError('Некорректный адрес электронной почты.')
-            break
-
-          case 'auth/user-disabled':
-            setError('Этот аккаунт отключён. Обратитесь в поддержку MedStart.')
-            break
-
-          case 'auth/too-many-requests':
-            setError('Слишком много попыток входа. Повторите позже или восстановите пароль.')
-            break
-
-          case 'auth/network-request-failed':
-            setError('Не удалось связаться с сервером. Проверьте интернет и повторите вход.')
-            break
-
-          case 'auth/operation-not-allowed':
-            setError('Вход по почте временно недоступен. Обратитесь в поддержку MedStart.')
-            break
-
-          default:
-            setError(`Не удалось выполнить вход (${err.code}).`)
-        }
-      } else if (err instanceof Error) {
-        setError(err.message)
+    } catch (caught) {
+      if (caught instanceof EmailVerificationRequiredError) {
+        if (caught.verificationSent) setVerificationNotice(caught.message)
+        else setError(caught.message)
       } else {
-        setError('Произошла неизвестная ошибка при входе.')
+        setError(messageFor(caught))
       }
     } finally {
       setLoading(false)
@@ -101,14 +97,11 @@ export function useLogin() {
   return {
     email,
     setEmail,
-
     password,
     setPassword,
-
     loading,
     error,
     verificationNotice,
-
     handleSubmit,
   }
 }
