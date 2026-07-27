@@ -58,6 +58,27 @@ if (firebase.firestore?.rules !== 'firestore.secure.rules') {
   failures.push('firebase.json does not use firestore.secure.rules')
 }
 
+const authSource = await readFile(
+  join(sourceRoot, 'lib', 'auth.ts'),
+  'utf8',
+)
+const authProviderSource = await readFile(
+  join(sourceRoot, 'providers', 'AuthProvider.tsx'),
+  'utf8',
+)
+if (!authSource.includes('runAuthTransition')) {
+  failures.push('Firebase login and registration are not serialized')
+}
+if (!authSource.includes('activeAuthTransitions')) {
+  failures.push('Firebase auth transition state is missing')
+}
+if (!authProviderSource.includes('isAuthTransitionInProgress()')) {
+  failures.push('AuthProvider can interrupt login or registration transitions')
+}
+if (!authProviderSource.includes('if (!currentUser.emailVerified)')) {
+  failures.push('AuthProvider does not isolate unverified sessions')
+}
+
 if (failures.length) {
   throw new Error(`Final audit invariants failed:\n${failures.join('\n')}`)
 }
