@@ -20,6 +20,20 @@ jobs:
           ref: fix/low-audit-v1
           fetch-depth: 0
 
+      - name: Repair low-audit migration selector
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply-low-audit.py')
+          text = path.read_text()
+          old = '"                <input\\n                  className={inputClass}\\n                  placeholder=\\"Например: анатомия и физиология\\""'
+          new = '"              <input\\n                  className={inputClass}\\n                  placeholder=\\"Например: анатомия и физиология\\""'
+          if old not in text:
+              raise SystemExit('low-audit tutor specialization selector not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+
       - name: Apply low-level UX and reliability fixes
         run: python scripts/apply-low-audit.py
 
@@ -65,6 +79,7 @@ jobs:
         shell: bash
         run: |
           rm -f .github/workflows/apply-low-audit-once.yml
+          rm -f .github/workflows/low-audit-diagnostics.yml
           rm -f scripts/apply-low-audit.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
