@@ -46,7 +46,7 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -81,9 +81,13 @@ jobs:
           grep -q "fetch('/api/bookings'" artifacts/medstart/lib/bookings.ts
           test -f scripts/test-critical-rules.mjs
           test -f scripts/test-medium-rules.mjs
+          test -f scripts/final-audit-invariants.mjs
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Run final static audit invariants
+        run: node scripts/final-audit-invariants.mjs
 
       - name: Compile and test Firebase security rules
         env:
@@ -93,6 +97,9 @@ jobs:
           --only firestore,storage
           --project demo-medstart
           "node scripts/test-critical-rules.mjs && node scripts/test-medium-rules.mjs"
+
+      - name: Lint MedStart
+        run: pnpm --filter @workspace/medstart lint
 
       - name: Typecheck MedStart
         shell: bash
