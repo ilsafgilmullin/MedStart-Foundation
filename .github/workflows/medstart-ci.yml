@@ -53,69 +53,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      # TEMP MEDIUM APPLY START
-      - name: Apply remaining medium-level hardening
+      - name: Apply final medium migration
         if: github.event_name == 'push' && github.ref == 'refs/heads/fix/medium-audit-v1'
         shell: bash
         run: |
-          python <<'EXTRACT'
-          from pathlib import Path
-
-          source = Path('.github/workflows/apply-medium-stage2-once.yml').read_text()
-          start_marker = "          python <<'PY'\n"
-          end_marker = "\n          PY"
-          start = source.index(start_marker) + len(start_marker)
-          end = source.index(end_marker, start)
-          embedded = source[start:end]
-          lines = [line[10:] if line.startswith('          ') else line for line in embedded.splitlines()]
-          script = '\n'.join(lines) + '\n'
-
-          script = script.replace(
-              "'    match /medicalWorkspaces/{bookingId}/assets/{assetId} {'",
-              "'      match /assets/{assetId} {'",
-              1,
-          )
-          script = script.replace(
-              "      allow delete: if isOwner();\n    }''',\n    'medical workspace write rules',",
-              "      allow delete: if isOwner();''',\n    'medical workspace write rules',",
-              1,
-          )
-
-          tail_start = script.index("old_transaction = '''")
-          tail_end_marker = 'workspace_path.write_text(workspace)'
-          tail_end = script.index(tail_end_marker, tail_start) + len(tail_end_marker)
-          corrected_tail = '''transaction_start = workspace.index("    transaction.set(\\n")
-transaction_end = workspace.index("\\n    )", transaction_start) + len("\\n    )")
-new_transaction = """    const normalizedCurrent = normalizeWorkspace(bookingId, current)
-
-    transaction.set(workspaceRef, {
-      ...normalizedCurrent,
-      ...patch,
-      bookingId,
-      updatedByUid: userUid,
-      createdAt: snapshot.exists()
-        ? current?.createdAt ?? serverTimestamp()
-        : serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    })"""
-workspace = workspace[:transaction_start] + new_transaction + workspace[transaction_end:]
-
-loader_start = workspace.index(
-    "export async function loadMedicalAssetObjectUrl(asset: MedicalAsset) {"
-)
-loader_end_marker = "\\n}\\n\\nexport async function deleteMedicalAsset"
-loader_end = workspace.index(loader_end_marker, loader_start) + 2
-new_loader = """export async function loadMedicalAssetObjectUrl(asset: MedicalAsset) {
-  if (asset.mimeType === 'application/dicom') return ''
-  return getDownloadURL(ref(storage, asset.storagePath))
-}"""
-workspace = workspace[:loader_start] + new_loader + workspace[loader_end:]
-workspace_path.write_text(workspace)'''
-          script = script[:tail_start] + corrected_tail + script[tail_end:]
-          Path('/tmp/apply-medium-stage2.py').write_text(script)
-          EXTRACT
-          python /tmp/apply-medium-stage2.py
-      # TEMP MEDIUM APPLY END
+          if [ -f scripts/apply-medium-stage2-final.py ]; then
+            python scripts/apply-medium-stage2-final.py
+          fi
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -186,31 +130,20 @@ workspace_path.write_text(workspace)'''
           NEXT_PUBLIC_OWNER_UID: test-owner
         run: pnpm --filter @workspace/medstart build
 
-      # TEMP MEDIUM COMMIT START
-      - name: Commit validated medium-level hardening
+      - name: Commit validated medium migration
         if: github.event_name == 'push' && github.ref == 'refs/heads/fix/medium-audit-v1'
         shell: bash
         run: |
+          if [ ! -f scripts/apply-medium-stage2-final.py ]; then
+            exit 0
+          fi
+          rm -f scripts/apply-medium-stage2-final.py
           rm -f .github/workflows/apply-medium-stage2-once.yml
           rm -f .github/workflows/apply-medium-stage2-runner.yml
           rm -f .github/workflows/apply-medium-stage2-v3.yml
           rm -f .github/workflows/apply-medium-stage2-v4.yml
           rm -f .github/workflows/apply-verified-access.yml
           rm -f .github/workflows/medium-stage2-error.yml
-          python <<'PY'
-          from pathlib import Path
-          path = Path('.github/workflows/medstart-ci.yml')
-          text = path.read_text()
-          text = text.replace('permissions:\n  contents: write', 'permissions:\n  contents: read', 1)
-          for start_marker, end_marker in [
-              ('      # TEMP MEDIUM APPLY START\n', '      # TEMP MEDIUM APPLY END\n'),
-              ('      # TEMP MEDIUM COMMIT START\n', '      # TEMP MEDIUM COMMIT END\n'),
-          ]:
-              start = text.index(start_marker)
-              end = text.index(end_marker, start) + len(end_marker)
-              text = text[:start] + text[end:]
-          path.write_text(text)
-          PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
@@ -218,4 +151,3 @@ workspace_path.write_text(workspace)'''
           git fetch origin fix/medium-audit-v1
           git rebase origin/fix/medium-audit-v1
           git push origin HEAD:fix/medium-audit-v1
-      # TEMP MEDIUM COMMIT END
