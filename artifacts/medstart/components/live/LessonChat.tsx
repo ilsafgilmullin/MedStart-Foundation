@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { LoaderCircle, MessageCircle, Send, WifiOff } from 'lucide-react'
+import { useHydrated } from '@/hooks/useHydrated'
 import { sendMessage, subscribeToMessages } from '@/lib/conversations'
 import { formatMessageTime, type Booking, type ChatMessage } from '@/lib/domain'
 
@@ -11,6 +12,7 @@ interface LessonChatProps {
 }
 
 export default function LessonChat({ booking, userUid }: LessonChatProps) {
+  const hydrated = useHydrated()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(true)
@@ -42,7 +44,7 @@ export default function LessonChat({ booking, userUid }: LessonChatProps) {
   async function submit(event: FormEvent) {
     event.preventDefault()
     const value = text.trim()
-    if (!value || sending) return
+    if (!hydrated || !value || sending) return
 
     setSending(true)
     setError('')
@@ -134,13 +136,14 @@ export default function LessonChat({ booking, userUid }: LessonChatProps) {
         <input
           value={text}
           maxLength={2_000}
+          disabled={!hydrated || sending}
           onChange={(event) => setText(event.target.value)}
-          placeholder="Сообщение…"
-          className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-base text-white outline-none placeholder:text-slate-500 focus:border-violet-400 sm:text-xs"
+          placeholder={hydrated ? 'Сообщение…' : 'Подключаем чат…'}
+          className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-base text-white outline-none placeholder:text-slate-500 focus:border-violet-400 disabled:cursor-wait disabled:opacity-60 sm:text-xs"
         />
         <button
           type="submit"
-          disabled={!text.trim() || sending}
+          disabled={!hydrated || !text.trim() || sending}
           aria-label="Отправить сообщение"
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white disabled:opacity-40 sm:h-10 sm:w-10"
         >
