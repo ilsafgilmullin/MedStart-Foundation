@@ -1,0 +1,33 @@
+name: Low audit diagnostics
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'scripts/apply-low-audit.py'
+      - '.github/workflows/low-audit-diagnostics.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/low-audit-v1
+      - name: Capture migration output
+        shell: bash
+        run: |
+          set +e
+          python scripts/apply-low-audit.py > low-audit-diagnostics.txt 2>&1
+          status=$?
+          echo "exit_status=$status" >> low-audit-diagnostics.txt
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: low-audit-diagnostics
+          path: low-audit-diagnostics.txt
+          retention-days: 3
