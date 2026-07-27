@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { onAuthStateChanged, type User } from 'firebase/auth'
+import { onIdTokenChanged, type User } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import {
   getUserProfile,
@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribeAuth = onIdTokenChanged(auth, (currentUser) => {
       unsubscribeProfile?.()
       unsubscribeProfile = undefined
       setLoading(true)
@@ -74,14 +74,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!currentUser.emailVerified) {
         setProfile(null)
-        setUser(null)
-        setLoading(false)
 
-        // Login and registration temporarily create an unverified Firebase
-        // session so they can send the verification email and create the
-        // initial profile. Interrupting that transition here races the form,
-        // signs the user out too early and makes both flows fail.
-        if (!isAuthTransitionInProgress()) revokeSession()
+        // Login and registration briefly create an unverified session. During
+        // that protected transition we keep loading until auth.ts either signs
+        // out or reloads the verified user and refreshes the ID token. The
+        // resulting token event then resumes profile loading without a redirect
+        // loop or a false anonymous state.
+        if (isAuthTransitionInProgress()) return
+
+        revokeSession()
         return
       }
 
