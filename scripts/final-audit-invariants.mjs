@@ -41,6 +41,7 @@ const requiredFiles = [
   'storage.rules',
   'scripts/test-critical-rules.mjs',
   'scripts/test-medium-rules.mjs',
+  'artifacts/medstart/app/forgot-password/page.tsx',
 ]
 for (const relativePath of requiredFiles) {
   await readFile(join(root, relativePath), 'utf8').catch(() => {
@@ -66,17 +67,33 @@ const authProviderSource = await readFile(
   join(sourceRoot, 'providers', 'AuthProvider.tsx'),
   'utf8',
 )
+const forgotPasswordSource = await readFile(
+  join(sourceRoot, 'app', 'forgot-password', 'page.tsx'),
+  'utf8',
+)
 if (!authSource.includes('runAuthTransition')) {
   failures.push('Firebase login and registration are not serialized')
 }
 if (!authSource.includes('activeAuthTransitions')) {
   failures.push('Firebase auth transition state is missing')
 }
+if (!authSource.includes('getIdToken(true)')) {
+  failures.push('Verified login does not refresh the Firebase ID token')
+}
+if (!authSource.includes('sendPasswordResetEmail')) {
+  failures.push('Firebase password recovery is missing')
+}
 if (!authProviderSource.includes('isAuthTransitionInProgress()')) {
   failures.push('AuthProvider can interrupt login or registration transitions')
 }
 if (!authProviderSource.includes('if (!currentUser.emailVerified)')) {
   failures.push('AuthProvider does not isolate unverified sessions')
+}
+if (!authProviderSource.includes('onIdTokenChanged')) {
+  failures.push('AuthProvider cannot reconcile email verification token refreshes')
+}
+if (!forgotPasswordSource.includes('resetPassword')) {
+  failures.push('Password recovery page is not connected to Firebase Auth')
 }
 
 if (failures.length) {

@@ -76,6 +76,10 @@ async function runAuthTransition<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
+function normalizeAuthEmail(email: string) {
+  return email.trim().toLowerCase()
+}
+
 function clearSensitiveBrowserState() {
   if (typeof window === 'undefined') return
 
@@ -116,7 +120,13 @@ async function assertAccess(profile: UserProfile) {
 
 async function assertVerifiedEmail(credential: UserCredential) {
   await credential.user.reload()
-  if (credential.user.emailVerified) return
+  if (credential.user.emailVerified) {
+    // Refresh the ID token after the verification link was used in another tab.
+    // This also causes AuthProvider's onIdTokenChanged listener to reconcile the
+    // verified session instead of keeping the temporary pre-reload state.
+    await credential.user.getIdToken(true)
+    return
+  }
 
   auth.useDeviceLanguage()
 
@@ -153,7 +163,7 @@ export function login(
   return runAuthTransition(async () => {
     const credential = await signInWithEmailAndPassword(
       auth,
-      email.trim().toLowerCase(),
+      normalizeAuthEmail(email),
       password,
     )
 
@@ -186,7 +196,7 @@ async function registerWithProfile(
   return runAuthTransition(async () => {
     const credential = await createUserWithEmailAndPassword(
       auth,
-      email.trim().toLowerCase(),
+      normalizeAuthEmail(email),
       password,
     )
     let profile: UserProfile
@@ -264,8 +274,25 @@ export async function logout(): Promise<void> {
   }
 }
 
-export const resetPassword = (email: string) =>
-  sendPasswordResetEmail(auth, email.trim().toLowerCase())
+export async function resetPassword(email: string): Promise<void> {
+  auth.useDeviceLanguage()
+  const normalizedEmail = normalizeAuthEmail(email)
+  const continueUrl =
+    typeof window === 'undefined'
+      ? undefined
+      : `${window.location.origin}/login?passwordReset=1`
+
+  await sendPasswordResetEmail(
+    auth,
+    normalizedEmail,
+    continueUrl
+      ? {
+          url: continueUrl,
+          handleCodeInApp: false,
+        }
+      : undefined,
+  )
+}
 
 export async function resendEmailVerification(): Promise<void> {
   if (!auth.currentUser) throw new Error('Сначала войдите в аккаунт.')
