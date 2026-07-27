@@ -61,6 +61,21 @@ const VERIFY_EMAIL_RATE_LIMIT_MESSAGE =
 const VERIFY_EMAIL_FAILED_MESSAGE =
   'Почта не подтверждена, но новое письмо сейчас отправить не удалось. Повторите попытку позже.'
 
+let activeAuthTransitions = 0
+
+export function isAuthTransitionInProgress() {
+  return activeAuthTransitions > 0
+}
+
+async function runAuthTransition<T>(operation: () => Promise<T>): Promise<T> {
+  activeAuthTransitions += 1
+  try {
+    return await operation()
+  } finally {
+    activeAuthTransitions = Math.max(0, activeAuthTransitions - 1)
+  }
+}
+
 function clearSensitiveBrowserState() {
   if (typeof window === 'undefined') return
 
@@ -131,24 +146,36 @@ async function assertVerifiedEmail(credential: UserCredential) {
   }
 }
 
-export async function login(
+export function login(
   email: string,
   password: string,
 ): Promise<AuthSession> {
-  const credential = await signInWithEmailAndPassword(
-    auth,
-    email.trim().toLowerCase(),
-    password,
-  )
-  await assertVerifiedEmail(credential)
+  return runAuthTransition(async () => {
+    const credential = await signInWithEmailAndPassword(
+      auth,
+      email.trim().toLowerCase(),
+      password,
+    )
 
-  const profile = await getUserProfile(credential.user.uid)
-  if (!profile) {
-    await secureSignOut()
-    throw new Error('Профиль пользователя не найден. Обратитесь в поддержку.')
-  }
-  await assertAccess(profile)
-  return { credential, profile }
+    try {
+      await assertVerifiedEmail(credential)
+
+      const profile = await getUserProfile(credential.user.uid)
+      if (!profile) {
+        await secureSignOut()
+        throw new Error(
+          'Профиль пользователя не найден. Повторите регистрацию с той же почтой или обратитесь в поддержку.',
+        )
+      }
+      await assertAccess(profile)
+      return { credential, profile }
+    } catch (error) {
+      if (auth.currentUser?.uid === credential.user.uid) {
+        await secureSignOut().catch(() => undefined)
+      }
+      throw error
+    }
+  })
 }
 
 async function registerWithProfile(
@@ -156,34 +183,36 @@ async function registerWithProfile(
   password: string,
   createProfile: (uid: string) => Promise<UserProfile>,
 ): Promise<AuthSession> {
-  const credential = await createUserWithEmailAndPassword(
-    auth,
-    email.trim().toLowerCase(),
-    password,
-  )
-  let profile: UserProfile
-  try {
-    profile = await createProfile(credential.user.uid)
-  } catch (error) {
-    await deleteUser(credential.user).catch(() => undefined)
-    clearSensitiveBrowserState()
-    throw error
-  }
-
-  auth.useDeviceLanguage()
-  try {
-    await sendEmailVerification(credential.user)
-  } catch (error) {
-    await secureSignOut()
-    throw new Error(
-      error instanceof FirebaseError && error.code === 'auth/too-many-requests'
-        ? VERIFY_EMAIL_RATE_LIMIT_MESSAGE
-        : VERIFY_EMAIL_FAILED_MESSAGE,
+  return runAuthTransition(async () => {
+    const credential = await createUserWithEmailAndPassword(
+      auth,
+      email.trim().toLowerCase(),
+      password,
     )
-  }
+    let profile: UserProfile
+    try {
+      profile = await createProfile(credential.user.uid)
+    } catch (error) {
+      await deleteUser(credential.user).catch(() => undefined)
+      await secureSignOut().catch(() => undefined)
+      throw error
+    }
 
-  await secureSignOut()
-  return { credential, profile }
+    auth.useDeviceLanguage()
+    try {
+      await sendEmailVerification(credential.user)
+    } catch (error) {
+      await secureSignOut()
+      throw new Error(
+        error instanceof FirebaseError && error.code === 'auth/too-many-requests'
+          ? VERIFY_EMAIL_RATE_LIMIT_MESSAGE
+          : VERIFY_EMAIL_FAILED_MESSAGE,
+      )
+    }
+
+    await secureSignOut()
+    return { credential, profile }
+  })
 }
 
 export function registerStudent(input: StudentRegistrationInput) {
