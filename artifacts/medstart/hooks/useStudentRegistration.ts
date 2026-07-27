@@ -2,27 +2,23 @@
 
 import { useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { FirebaseError } from 'firebase/app'
-import { registerStudent } from '@/lib/auth'
+import { MedStartAuthError, registerStudent } from '@/lib/auth'
 import { ROUTES } from '@/lib/constants'
+import { isStrongPassword } from '@/lib/password-policy'
 
 function messageFor(error: unknown) {
-  if (error instanceof FirebaseError) {
+  if (error instanceof MedStartAuthError) {
     switch (error.code) {
-      case 'auth/email-already-in-use':
-        return 'Аккаунт с такой почтой уже существует. Войдите или восстановите пароль.'
-      case 'auth/invalid-email':
-        return 'Проверьте адрес электронной почты.'
-      case 'auth/weak-password':
-        return 'Пароль должен содержать не менее 8 символов.'
-      case 'auth/network-request-failed':
-        return 'Не удалось связаться с сервером. Проверьте интернет и повторите.'
-      case 'auth/operation-not-allowed':
-        return 'Регистрация по почте временно недоступна. Обратитесь в поддержку MedStart.'
-      case 'auth/too-many-requests':
-        return 'Слишком много попыток. Подождите и повторите позже.'
+      case 'ACCOUNT_UNAVAILABLE':
+        return 'Создать аккаунт с этими данными нельзя. Войдите или восстановите пароль.'
+      case 'INVALID_REGISTRATION':
+        return 'Проверьте заполненные данные и требования к паролю.'
+      case 'TOO_MANY_REQUESTS':
+        return 'Слишком много попыток регистрации. Подождите и повторите позже.'
+      case 'AUTH_SERVICE_UNAVAILABLE':
+        return 'Сервис регистрации временно недоступен. Повторите попытку позже.'
       default:
-        return `Не удалось создать аккаунт (${error.code}).`
+        return 'Не удалось создать аккаунт. Повторите попытку.'
     }
   }
   return error instanceof Error ? error.message : 'Не удалось создать аккаунт.'
@@ -42,12 +38,21 @@ export function useStudentRegistration() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (loading) return
     setError('')
-    if (!firstName.trim() || !lastName.trim() || !email.trim() || !password)
-      return setError('Заполните обязательные поля.')
-    if (password.length < 8)
-      return setError('Пароль должен содержать не менее 8 символов.')
-    if (password !== confirmPassword) return setError('Пароли не совпадают.')
+
+    if (!firstName.trim() || !lastName.trim() || !email.trim() || !password) {
+      setError('Заполните обязательные поля.')
+      return
+    }
+    if (!isStrongPassword(password)) {
+      setError('Пароль должен содержать минимум 10 символов, букву и цифру.')
+      return
+    }
+    if (password !== confirmPassword) {
+      setError('Пароли не совпадают.')
+      return
+    }
 
     try {
       setLoading(true)
@@ -60,7 +65,7 @@ export function useStudentRegistration() {
         studyYear: year,
       })
       router.replace(
-        `${ROUTES.LOGIN}?registered=1&verificationSent=${result.verificationSent ? '1' : '0'}`,
+        `${ROUTES.LOGIN}?registered=1&email=${encodeURIComponent(email.trim().toLowerCase())}&verificationSent=${result.verificationSent ? '1' : '0'}`,
       )
       router.refresh()
     } catch (caught) {
