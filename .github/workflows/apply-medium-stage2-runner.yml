@@ -19,105 +19,29 @@ jobs:
         with:
           ref: fix/medium-audit-v1
           fetch-depth: 0
-      - name: Extract and apply corrected stage two migration
-        shell: bash
-        run: |
-          python <<'EXTRACT'
-          from pathlib import Path
 
-          source = Path('.github/workflows/apply-medium-stage2-once.yml').read_text()
-          start_marker = "          python <<'PY'\n"
-          end_marker = "\n          PY"
-          start = source.index(start_marker) + len(start_marker)
-          end = source.index(end_marker, start)
-          embedded = source[start:end]
-          lines = [line[10:] if line.startswith('          ') else line for line in embedded.splitlines()]
-          script = '\n'.join(lines) + '\n'
+      - name: Apply deterministic medium migration
+        run: python scripts/apply-medium-stage2.py
 
-          script = script.replace(
-              "'    match /medicalWorkspaces/{bookingId}/assets/{assetId} {'",
-              "'      match /assets/{assetId} {'",
-              1,
-          )
-          script = script.replace(
-              "      allow delete: if isOwner();\n    }''',\n    'medical workspace write rules',",
-              "      allow delete: if isOwner();''',\n    'medical workspace write rules',",
-              1,
-          )
-
-          tail_start = script.index("old_transaction = '''")
-          tail_end_marker = 'workspace_path.write_text(workspace)'
-          tail_end = script.index(tail_end_marker, tail_start) + len(tail_end_marker)
-          corrected_tail = '''transaction_start = workspace.index("    transaction.set(\\n")
-transaction_end = workspace.index("\\n    )", transaction_start) + len("\\n    )")
-new_transaction = """    const normalizedCurrent = normalizeWorkspace(bookingId, current)
-
-    transaction.set(workspaceRef, {
-      ...normalizedCurrent,
-      ...patch,
-      bookingId,
-      updatedByUid: userUid,
-      createdAt: snapshot.exists()
-        ? current?.createdAt ?? serverTimestamp()
-        : serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    })"""
-workspace = workspace[:transaction_start] + new_transaction + workspace[transaction_end:]
-
-loader_start = workspace.index(
-    "export async function loadMedicalAssetObjectUrl(asset: MedicalAsset) {"
-)
-loader_end_marker = "\\n}\\n\\nexport async function deleteMedicalAsset"
-loader_end = workspace.index(loader_end_marker, loader_start) + 2
-new_loader = """export async function loadMedicalAssetObjectUrl(asset: MedicalAsset) {
-  if (asset.mimeType === 'application/dicom') return ''
-  return getDownloadURL(ref(storage, asset.storagePath))
-}"""
-workspace = workspace[:loader_start] + new_loader + workspace[loader_end:]
-workspace_path.write_text(workspace)'''
-          script = script[:tail_start] + corrected_tail + script[tail_end:]
-
-          Path('/tmp/apply-medium-stage2.py').write_text(script)
-          EXTRACT
-          python /tmp/apply-medium-stage2.py
-          python <<'FIX_RULE_NESTING'
-          from pathlib import Path
-
-          path = Path('firestore.secure.rules')
-          rules = path.read_text()
-          old = """      allow delete: if isOwner();
-    }
-
-      match /assets/{assetId} {"""
-          new = """      allow delete: if isOwner();
-
-      match /assets/{assetId} {"""
-          if old in rules:
-              rules = rules.replace(old, new, 1)
-          path.write_text(rules)
-          FIX_RULE_NESTING
       - uses: pnpm/action-setup@v4
         with:
           version: 10.26.1
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Validate Firebase rules
-        run: >-
-          pnpm dlx firebase-tools@15.24.0 emulators:exec
-          --only firestore,storage
-          --project demo-medstart
-          "node scripts/test-critical-rules.mjs && node scripts/test-medium-rules.mjs"
-      - name: Typecheck
-        run: pnpm --filter @workspace/medstart typecheck
-      - name: Build
+
+      - name: Validate, build, and persist result
+        shell: bash
         env:
           NEXT_PUBLIC_FIREBASE_API_KEY: test-api-key
           NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: example.firebaseapp.com
@@ -126,16 +50,55 @@ workspace_path.write_text(workspace)'''
           NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '123456789'
           NEXT_PUBLIC_FIREBASE_APP_ID: 1:123456789:web:test
           NEXT_PUBLIC_OWNER_UID: test-owner
-        run: pnpm --filter @workspace/medstart build
-      - name: Commit validated stage two fixes
         run: |
+          set +e
+          {
+            echo '=== Firebase rules ==='
+            pnpm dlx firebase-tools@15.24.0 emulators:exec \
+              --only firestore,storage \
+              --project demo-medstart \
+              "node scripts/test-critical-rules.mjs && node scripts/test-medium-rules.mjs"
+            rules_status=$?
+            echo "rules_status=$rules_status"
+
+            echo '=== TypeScript ==='
+            pnpm --filter @workspace/medstart typecheck
+            type_status=$?
+            echo "type_status=$type_status"
+
+            echo '=== Production build ==='
+            pnpm --filter @workspace/medstart build
+            build_status=$?
+            echo "build_status=$build_status"
+
+            if [ "$rules_status" -ne 0 ] || [ "$type_status" -ne 0 ] || [ "$build_status" -ne 0 ]; then
+              exit 1
+            fi
+          } > medium-stage2-validation.log 2>&1
+          status=$?
+          set -e
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [ "$status" -ne 0 ]; then
+            cp medium-stage2-validation.log MEDIUM_STAGE2_FAILURE.txt
+            git add MEDIUM_STAGE2_FAILURE.txt
+            git commit -m "ci: record medium stage two validation failure"
+            git fetch origin fix/medium-audit-v1
+            git rebase origin/fix/medium-audit-v1
+            git push origin HEAD:fix/medium-audit-v1
+            exit 0
+          fi
+
+          rm -f MEDIUM_STAGE2_FAILURE.txt
           rm -f .github/workflows/apply-medium-stage2-once.yml
           rm -f .github/workflows/apply-medium-stage2-runner.yml
           rm -f .github/workflows/apply-medium-stage2-v3.yml
+          rm -f .github/workflows/apply-medium-stage2-v4.yml
           rm -f .github/workflows/apply-verified-access.yml
           rm -f .github/workflows/medium-stage2-error.yml
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f scripts/apply-medium-stage2.py
           git add -A
           git commit -m "fix: harden medium-level data validation"
           git fetch origin fix/medium-audit-v1
