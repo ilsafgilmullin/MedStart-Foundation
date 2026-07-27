@@ -27,17 +27,17 @@ jobs:
           ref: agent/unified-button-system-v11
           fetch-depth: 0
 
-      - name: Decode and verify reviewed patch
-        run: |
-          set -euxo pipefail
-          base64 --decode .github/button-system.patch.gz.b64 | gzip --decompress > /tmp/medstart-button-system.patch
-          actual_sha="$(sha256sum /tmp/medstart-button-system.patch | cut -d' ' -f1)"
-          echo "Patch SHA-256: ${actual_sha}"
-          test "${actual_sha}" = '97274e4f9a3211fff0f87b7f89832f22ae8d67f049c9d01e616e4ca9fecf591f'
-          changed_files="$(grep -c '^diff --git ' /tmp/medstart-button-system.patch)"
-          echo "Patch file count: ${changed_files}"
-          test "${changed_files}" -eq 32
-          git apply --check --verbose /tmp/medstart-button-system.patch
+      - name: Decode reviewed patch
+        run: base64 --decode .github/button-system.patch.gz.b64 | gzip --decompress > /tmp/medstart-button-system.patch
+
+      - name: Verify patch checksum
+        run: test "$(sha256sum /tmp/medstart-button-system.patch | cut -d' ' -f1)" = '97274e4f9a3211fff0f87b7f89832f22ae8d67f049c9d01e616e4ca9fecf591f'
+
+      - name: Verify patch scope
+        run: test "$(grep -c '^diff --git ' /tmp/medstart-button-system.patch)" -eq 32
+
+      - name: Verify patch applicability
+        run: git apply --check --verbose /tmp/medstart-button-system.patch
 
       - name: Apply unified button system
         run: git apply /tmp/medstart-button-system.patch
