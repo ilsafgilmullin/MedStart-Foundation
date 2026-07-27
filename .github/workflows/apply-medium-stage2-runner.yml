@@ -1,0 +1,68 @@
+name: Apply medium stage two runner
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/apply-medium-stage2-runner.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-validate-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/medium-audit-v1
+          fetch-depth: 0
+      - name: Extract and apply stage two migration
+        shell: bash
+        run: |
+          awk '/^[[:space:]]*python <<'"'"'PY'"'"'/{capture=1; next} /^[[:space:]]*PY$/{capture=0} capture{sub(/^[[:space:]]{10}/, ""); print}' .github/workflows/apply-medium-stage2-once.yml > /tmp/apply-medium-stage2.py
+          python /tmp/apply-medium-stage2.py
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Validate Firebase rules
+        run: >-
+          pnpm dlx firebase-tools@15.24.0 emulators:exec
+          --only firestore,storage
+          --project demo-medstart
+          "node scripts/test-critical-rules.mjs && node scripts/test-medium-rules.mjs"
+      - name: Typecheck
+        run: pnpm --filter @workspace/medstart typecheck
+      - name: Build
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: test-api-key
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: example.firebaseapp.com
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: example
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: example.appspot.com
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '123456789'
+          NEXT_PUBLIC_FIREBASE_APP_ID: 1:123456789:web:test
+          NEXT_PUBLIC_OWNER_UID: test-owner
+        run: pnpm --filter @workspace/medstart build
+      - name: Commit validated stage two fixes
+        run: |
+          rm -f .github/workflows/apply-medium-stage2-once.yml
+          rm -f .github/workflows/apply-medium-stage2-runner.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: harden medium-level data validation"
+          git fetch origin fix/medium-audit-v1
+          git rebase origin/fix/medium-audit-v1
+          git push origin HEAD:fix/medium-audit-v1
