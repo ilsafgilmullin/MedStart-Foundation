@@ -301,7 +301,7 @@ async function run() {
     setDoc(doc(tutor.firestore(), 'availability', tutorUid), {
       tutorUid,
       timezone: 'Europe/Moscow',
-      days: availabilityDays(availabilityDay(true, '18:00', '09:00')),
+      days: availabilityDays(availabilityDay(true, '25:00', '09:00')),
       updatedAt: serverTimestamp(),
     }),
   )
