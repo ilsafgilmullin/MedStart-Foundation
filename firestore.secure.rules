@@ -210,7 +210,7 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow create: if isOwnProfile(userId) && validNewProfile(userId);
+      allow create: if false;
       allow get: if isModerator()
         || (signedIn() && isOwnProfile(userId))
         || isPublicTutorResource();

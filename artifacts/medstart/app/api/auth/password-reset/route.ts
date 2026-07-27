@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { firebaseIdentityRequest } from '@/lib/server/firebase-identity'
 import {
   clientAddress,
   isValidEmail,
@@ -9,10 +10,6 @@ import {
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-const FIREBASE_API_KEY =
-  process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
-  'AIzaSyAt4F5JQAdQPw8kmY-0dorxcaT_JX2d3v0'
 
 export async function POST(request: Request) {
   let body: { email?: unknown }
@@ -48,23 +45,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const response = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${encodeURIComponent(FIREBASE_API_KEY)}`,
-      {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-firebase-locale': 'ru',
-        },
-        body: JSON.stringify({ requestType: 'PASSWORD_RESET', email }),
-        cache: 'no-store',
-        signal: AbortSignal.timeout(15_000),
-      },
-    )
-
-    const payload = (await response.json().catch(() => ({}))) as {
-      error?: { message?: string }
-    }
+    const { response, payload } = await firebaseIdentityRequest('sendOobCode', {
+      requestType: 'PASSWORD_RESET',
+      email,
+    })
 
     if (!response.ok) {
       const firebaseCode = payload.error?.message || 'RESET_REQUEST_FAILED'

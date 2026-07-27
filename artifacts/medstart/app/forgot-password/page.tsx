@@ -8,6 +8,7 @@ import {
   authInputClass,
   authPrimaryButtonClass,
 } from '@/components/auth/AuthShell'
+import { useHydrated } from '@/hooks/useHydrated'
 import { MedStartAuthError, resetPassword } from '@/lib/auth'
 
 function messageFor(error: unknown) {
@@ -29,10 +30,12 @@ function messageFor(error: unknown) {
 }
 
 export default function ForgotPasswordPage() {
+  const hydrated = useHydrated()
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [sent, setSent] = useState(false)
+  const disabled = loading || !hydrated
 
   useEffect(() => {
     const requestedEmail = new URLSearchParams(window.location.search).get('email')
@@ -40,7 +43,7 @@ export default function ForgotPasswordPage() {
   }, [])
 
   async function requestReset() {
-    if (loading) return
+    if (disabled) return
     setError('')
     const normalizedEmail = email.trim().toLowerCase()
     if (!normalizedEmail) {
@@ -108,7 +111,7 @@ export default function ForgotPasswordPage() {
 
           <button
             type="button"
-            disabled={loading}
+            disabled={disabled}
             onClick={() => void requestReset()}
             className="mt-5 inline-flex w-full items-center justify-center rounded-2xl border border-teal-200 bg-white px-5 py-3.5 font-semibold text-teal-800 transition hover:bg-teal-50 disabled:cursor-wait disabled:opacity-60"
           >
@@ -133,7 +136,7 @@ export default function ForgotPasswordPage() {
               spellCheck={false}
               autoComplete="email"
               required
-              disabled={loading}
+              disabled={disabled}
               aria-invalid={Boolean(error)}
               aria-describedby={error ? 'reset-error' : undefined}
               className={authInputClass}
@@ -142,6 +145,16 @@ export default function ForgotPasswordPage() {
               placeholder="name@example.ru"
             />
           </label>
+
+          {!hydrated && (
+            <p
+              role="status"
+              aria-live="polite"
+              className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900"
+            >
+              Подключаем защищённое восстановление доступа…
+            </p>
+          )}
 
           {error && (
             <p
@@ -155,7 +168,7 @@ export default function ForgotPasswordPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={disabled}
             aria-busy={loading}
             className={authPrimaryButtonClass}
           >
@@ -164,8 +177,10 @@ export default function ForgotPasswordPage() {
                 <LoaderCircle className="mr-2 h-5 w-5 animate-spin" />
                 Отправляем запрос…
               </>
-            ) : (
+            ) : hydrated ? (
               'Получить ссылку'
+            ) : (
+              'Подключаем восстановление…'
             )}
           </button>
         </form>

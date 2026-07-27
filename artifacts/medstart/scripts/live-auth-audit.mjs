@@ -223,7 +223,7 @@ function profileUrl(uid) {
   return `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${uid}`
 }
 
-async function writeProfileWithToken(uid, email, idToken) {
+async function writeProfileWithToken(uid, email, idToken, expectedStatus) {
   const response = await fetch(profileUrl(uid), {
     method: 'PATCH',
     headers: {
@@ -233,9 +233,9 @@ async function writeProfileWithToken(uid, email, idToken) {
     body: JSON.stringify(profileDocument(uid, email)),
   })
   const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
+  if (response.status !== expectedStatus) {
     throw new Error(
-      `Firestore registration profile write failed: ${String(payload?.error?.message || response.status)}`,
+      `Firestore profile write returned ${response.status}, expected ${expectedStatus}: ${String(payload?.error?.message || '')}`,
     )
   }
 }
@@ -309,11 +309,8 @@ try {
   if (!auditUid || !signUp.idToken) throw new Error('Firebase sign-up returned incomplete credentials')
   check('email-password-provider-enabled')
 
-  await writeProfileWithToken(auditUid, auditEmail, signUp.idToken)
-  check('unverified-registration-profile-write')
-
-  await readProfileWithToken(auditUid, signUp.idToken, 403)
-  check('unverified-private-profile-read-blocked')
+  await writeProfileWithToken(auditUid, auditEmail, signUp.idToken, 403)
+  check('direct-client-profile-create-blocked')
 
   await identityRequest('sendOobCode', {
     requestType: 'VERIFY_EMAIL',
@@ -331,8 +328,6 @@ try {
   if (!decoded.email_verified) throw new Error('Refreshed ID token lacks email_verified=true')
   check('verified-token-refresh')
 
-  await readProfileWithToken(auditUid, verifiedSignIn.idToken, 200)
-  check('verified-profile-read')
 
   await identityRequest(
     'signInWithPassword',
@@ -354,13 +349,6 @@ try {
   })
   check('password-reset-with-default-handler')
 
-  if (process.env.SEND_OWNER_RESET === 'true') {
-    await identityRequest('sendOobCode', {
-      requestType: 'PASSWORD_RESET',
-      email: OWNER_EMAIL,
-    })
-    check('owner-password-reset-requested')
-  }
 
   report.status = 'passed'
   console.log('AUTH_LIVE_STATUS=passed')

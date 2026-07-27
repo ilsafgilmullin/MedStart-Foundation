@@ -59,7 +59,7 @@ function studentProfile(uid, email) {
 async function run() {
   await environment.clearFirestore()
 
-  const uid = 'auth-unverified-registration'
+  const uid = 'auth-server-only-registration'
   const email = `${uid}@example.test`
   const unverified = environment.authenticatedContext(uid, {
     email,
@@ -70,18 +70,26 @@ async function run() {
     email_verified: true,
   })
 
-  // Registration creates the protected profile before the verification email is
-  // clicked. This write must work, while reading private data must remain blocked.
-  await assertSucceeds(
+  // Profile creation is server-only. Neither verified nor unverified clients may
+  // bypass the MedStart registration API and create their own active profile.
+  await assertFails(
     setDoc(doc(unverified.firestore(), 'users', uid), studentProfile(uid, email)),
   )
+  await assertFails(
+    setDoc(doc(verified.firestore(), 'users', uid), studentProfile(uid, email)),
+  )
+
+  await environment.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), 'users', uid), studentProfile(uid, email))
+  })
+
   await assertFails(getDoc(doc(unverified.firestore(), 'users', uid)))
   await assertSucceeds(getDoc(doc(verified.firestore(), 'users', uid)))
 
   const mismatchedUid = 'auth-email-mismatch'
   const mismatched = environment.authenticatedContext(mismatchedUid, {
     email: `${mismatchedUid}@example.test`,
-    email_verified: false,
+    email_verified: true,
   })
   await assertFails(
     setDoc(
@@ -94,7 +102,7 @@ async function run() {
   const privilegedEmail = `${privilegedUid}@example.test`
   const privileged = environment.authenticatedContext(privilegedUid, {
     email: privilegedEmail,
-    email_verified: false,
+    email_verified: true,
   })
   await assertFails(
     setDoc(doc(privileged.firestore(), 'users', privilegedUid), {
@@ -103,7 +111,7 @@ async function run() {
     }),
   )
 
-  console.log('Authentication and registration Firebase rules suite passed.')
+  console.log('Authentication and server-only registration Firebase rules suite passed.')
 }
 
 try {

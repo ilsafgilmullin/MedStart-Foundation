@@ -8,10 +8,13 @@ import {
   authPrimaryButtonClass,
 } from '@/components/auth/AuthShell'
 import { PasswordField } from '@/components/auth/PasswordField'
+import { useHydrated } from '@/hooks/useHydrated'
 import { useLogin } from '@/hooks/useLogin'
 
 export default function LoginPage() {
   const form = useLogin()
+  const hydrated = useHydrated()
+  const disabled = form.loading || !hydrated
   const recoveryHref = form.email.trim()
     ? `/forgot-password?email=${encodeURIComponent(form.email.trim().toLowerCase())}`
     : '/forgot-password'
@@ -45,7 +48,7 @@ export default function LoginPage() {
             spellCheck={false}
             autoComplete="email"
             required
-            disabled={form.loading}
+            disabled={disabled}
             aria-invalid={Boolean(form.error)}
             aria-describedby={form.error ? 'login-error' : undefined}
             className={authInputClass}
@@ -60,7 +63,7 @@ export default function LoginPage() {
           value={form.password}
           onChange={form.setPassword}
           autoComplete="current-password"
-          disabled={form.loading}
+          disabled={disabled}
           errorId={form.error ? 'login-error' : undefined}
         />
 
@@ -73,6 +76,16 @@ export default function LoginPage() {
             Не помню пароль
           </Link>
         </div>
+
+        {!hydrated && (
+          <p
+            role="status"
+            aria-live="polite"
+            className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900"
+          >
+            Подключаем защищённый интерфейс MedStart…
+          </p>
+        )}
 
         {form.verificationNotice && (
           <p
@@ -96,7 +109,7 @@ export default function LoginPage() {
 
         <button
           type="submit"
-          disabled={form.loading}
+          disabled={disabled}
           aria-busy={form.loading}
           className={authPrimaryButtonClass}
         >
@@ -105,8 +118,10 @@ export default function LoginPage() {
               <LoaderCircle className="mr-2 h-5 w-5 animate-spin" />
               Проверяем аккаунт…
             </>
-          ) : (
+          ) : hydrated ? (
             'Войти в MedStart'
+          ) : (
+            'Подключаем интерфейс…'
           )}
         </button>
       </form>

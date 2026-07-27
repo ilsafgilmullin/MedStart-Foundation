@@ -1,6 +1,11 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { NextResponse } from 'next/server'
-import { getFirebaseAdminAuth, getFirebaseAdminDb } from '@/lib/server/firebase-admin'
+import {
+  FirebaseAdminConfigurationError,
+  getFirebaseAdminAuth,
+  getFirebaseAdminDb,
+} from '@/lib/server/firebase-admin'
+import { firebaseIdentityRequest } from '@/lib/server/firebase-identity'
 import {
   cleanText,
   clientAddress,
@@ -14,9 +19,6 @@ import {
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const FIREBASE_API_KEY =
-  process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
-  'AIzaSyAt4F5JQAdQPw8kmY-0dorxcaT_JX2d3v0'
 const OWNER_EMAIL = 'ilsafgilmullin@yandex.ru'
 
 type Role = 'student' | 'tutor'
@@ -41,29 +43,6 @@ interface RegistrationBody {
   lessonPrice?: unknown
   lessonDuration?: unknown
   lessonFormats?: unknown
-}
-
-interface IdentityResponse {
-  idToken?: string
-  error?: { message?: string }
-}
-
-async function identityRequest(operation: string, body: unknown) {
-  const response = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:${operation}?key=${encodeURIComponent(FIREBASE_API_KEY)}`,
-    {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-firebase-locale': 'ru',
-      },
-      body: JSON.stringify(body),
-      cache: 'no-store',
-      signal: AbortSignal.timeout(15_000),
-    },
-  )
-  const payload = (await response.json().catch(() => ({}))) as IdentityResponse
-  return { response, payload }
 }
 
 function normalizeSubjects(value: unknown) {
@@ -216,7 +195,7 @@ export async function POST(request: Request) {
       transaction.set(profileRef, profile)
     })
 
-    const signedIn = await identityRequest('signInWithPassword', {
+    const signedIn = await firebaseIdentityRequest('signInWithPassword', {
       email,
       password,
       returnSecureToken: true,
@@ -224,7 +203,7 @@ export async function POST(request: Request) {
 
     let verificationSent = false
     if (signedIn.response.ok && signedIn.payload.idToken) {
-      const verification = await identityRequest('sendOobCode', {
+      const verification = await firebaseIdentityRequest('sendOobCode', {
         requestType: 'VERIFY_EMAIL',
         idToken: signedIn.payload.idToken,
       })
@@ -248,6 +227,12 @@ export async function POST(request: Request) {
       ])
     }
 
+    if (error instanceof FirebaseAdminConfigurationError) {
+      return NextResponse.json(
+        { ok: false, code: 'AUTH_CONFIGURATION_ERROR' },
+        { status: 503, headers: noStoreHeaders() },
+      )
+    }
     if (code.includes('email-already-exists')) {
       return NextResponse.json(
         { ok: false, code: 'ACCOUNT_UNAVAILABLE' },

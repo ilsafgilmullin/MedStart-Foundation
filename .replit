@@ -26,7 +26,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pnpm --filter @workspace/medstart dev"
+args = "pnpm --filter @workspace/medstart build && pnpm --filter @workspace/medstart start"
 waitForPort = 3000
 
 [workflows.workflow.metadata]

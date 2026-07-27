@@ -1,19 +1,51 @@
 import type { NextConfig } from 'next'
 
 const isProduction = process.env.NODE_ENV === 'production'
+
+function configuredOrigin(value: string | undefined) {
+  if (!value?.trim()) return null
+  try {
+    return new URL(value.trim()).origin
+  } catch {
+    throw new Error('LIVEKIT_URL must be a valid absolute URL.')
+  }
+}
+
+const liveKitOrigin = configuredOrigin(process.env.LIVEKIT_URL)
+const scriptSources = [
+  "'self'",
+  "'unsafe-inline'",
+  ...(!isProduction ? ["'unsafe-eval'"] : []),
+].join(' ')
+const connectSources = [
+  "'self'",
+  'https://identitytoolkit.googleapis.com',
+  'https://securetoken.googleapis.com',
+  'https://firestore.googleapis.com',
+  'https://firebasestorage.googleapis.com',
+  'https://*.googleapis.com',
+  'https://*.firebaseio.com',
+  'wss://*.firebaseio.com',
+  'https://*.firebaseapp.com',
+  'https://*.firebasestorage.app',
+  'https://*.livekit.cloud',
+  'wss://*.livekit.cloud',
+  ...(liveKitOrigin ? [liveKitOrigin] : []),
+  ...(!isProduction ? ['ws:', 'wss:'] : []),
+].join(' ')
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
   "object-src 'none'",
-  "script-src 'self' 'unsafe-inline'",
+  `script-src ${scriptSources}`,
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
   "img-src 'self' data: blob: https://firebasestorage.googleapis.com https://*.firebasestorage.app",
   "media-src 'self' blob:",
   "worker-src 'self' blob:",
-  "connect-src 'self' https: wss:",
+  `connect-src ${connectSources}`,
   ...(isProduction ? ['upgrade-insecure-requests'] : []),
 ].join('; ')
 
