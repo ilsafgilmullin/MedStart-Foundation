@@ -1,6 +1,8 @@
 'use client'
 
 import Link from 'next/link'
+import { useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import { useLogin } from '@/hooks/useLogin'
 
 const inputClass =
@@ -8,8 +10,10 @@ const inputClass =
 
 export default function LoginPage() {
   const form = useLogin()
+  const [showPassword, setShowPassword] = useState(false)
+
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-slate-50 px-4 py-10">
+    <main className="flex min-h-dvh items-center justify-center bg-slate-50 px-4 py-10 pt-[calc(2.5rem+env(safe-area-inset-top))]">
       <div className="w-full max-w-md">
         <Link href="/" className="text-xl font-bold text-violet-700">
           MedStart
@@ -20,13 +24,18 @@ export default function LoginPage() {
             Войдите в свой аккаунт MedStart. Для нового аккаунта сначала
             подтвердите почту по ссылке из письма.
           </p>
-          <form onSubmit={form.handleSubmit} className="mt-8 space-y-5">
+          <form onSubmit={form.handleSubmit} className="mt-8 space-y-5" noValidate>
             <label className="block space-y-2 text-sm font-medium">
               Электронная почта
               <input
                 type="email"
+                inputMode="email"
+                autoCapitalize="none"
+                spellCheck={false}
                 autoComplete="email"
                 required
+                aria-invalid={Boolean(form.error)}
+                aria-describedby={form.error ? 'login-error' : undefined}
                 className={inputClass}
                 value={form.email}
                 onChange={(event) => form.setEmail(event.target.value)}
@@ -34,14 +43,31 @@ export default function LoginPage() {
             </label>
             <label className="block space-y-2 text-sm font-medium">
               Пароль
-              <input
-                type="password"
-                autoComplete="current-password"
-                required
-                className={inputClass}
-                value={form.password}
-                onChange={(event) => form.setPassword(event.target.value)}
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  required
+                  aria-invalid={Boolean(form.error)}
+                  aria-describedby={form.error ? 'login-error' : undefined}
+                  className={`${inputClass} pr-14`}
+                  value={form.password}
+                  onChange={(event) => form.setPassword(event.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((current) => !current)}
+                  aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+                  aria-pressed={showPassword}
+                  className="absolute inset-y-0 right-1 flex w-12 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
             </label>
             <div className="text-right text-sm">
               <Link href="/forgot-password" className="font-medium text-violet-700">
@@ -51,6 +77,7 @@ export default function LoginPage() {
             {form.verificationNotice && (
               <p
                 role="status"
+                aria-live="polite"
                 className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-800"
               >
                 {form.verificationNotice}
@@ -58,6 +85,7 @@ export default function LoginPage() {
             )}
             {form.error && (
               <p
+                id="login-error"
                 role="alert"
                 className="rounded-2xl bg-red-50 px-4 py-3 text-sm leading-6 text-red-700"
               >
@@ -68,7 +96,7 @@ export default function LoginPage() {
               type="submit"
               disabled={form.loading}
               aria-busy={form.loading}
-              className="w-full rounded-2xl bg-violet-600 px-5 py-3.5 font-semibold text-white disabled:opacity-60"
+              className="w-full rounded-2xl bg-violet-600 px-5 py-3.5 font-semibold text-white disabled:cursor-wait disabled:opacity-60"
             >
               {form.loading ? 'Проверяем аккаунт…' : 'Войти'}
             </button>
