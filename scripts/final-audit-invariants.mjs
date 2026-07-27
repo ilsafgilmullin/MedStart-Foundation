@@ -43,8 +43,14 @@ const requiredFiles = [
   'scripts/test-medium-rules.mjs',
   'scripts/test-auth-rules.mjs',
   'artifacts/medstart/scripts/live-auth-audit.mjs',
-  'artifacts/medstart/app/forgot-password/page.tsx',
+  'artifacts/medstart/lib/server/firebase-admin.ts',
+  'artifacts/medstart/lib/server/auth-security.ts',
+  'artifacts/medstart/app/api/auth/login/route.ts',
+  'artifacts/medstart/app/api/auth/register/route.ts',
   'artifacts/medstart/app/api/auth/password-reset/route.ts',
+  'artifacts/medstart/components/auth/AuthShell.tsx',
+  'artifacts/medstart/components/auth/PasswordField.tsx',
+  'artifacts/medstart/components/auth/PasswordRequirements.tsx',
 ]
 for (const relativePath of requiredFiles) {
   await readFile(join(root, relativePath), 'utf8').catch(() => {
@@ -63,28 +69,42 @@ if (firebase.firestore?.rules !== 'firestore.secure.rules') {
 const authSource = await readFile(join(sourceRoot, 'lib', 'auth.ts'), 'utf8')
 const firebaseSource = await readFile(join(sourceRoot, 'lib', 'firebase.ts'), 'utf8')
 const authProviderSource = await readFile(join(sourceRoot, 'providers', 'AuthProvider.tsx'), 'utf8')
-const forgotPasswordSource = await readFile(join(sourceRoot, 'app', 'forgot-password', 'page.tsx'), 'utf8')
+const loginRouteSource = await readFile(join(sourceRoot, 'app', 'api', 'auth', 'login', 'route.ts'), 'utf8')
+const registerRouteSource = await readFile(join(sourceRoot, 'app', 'api', 'auth', 'register', 'route.ts'), 'utf8')
 const resetRouteSource = await readFile(join(sourceRoot, 'app', 'api', 'auth', 'password-reset', 'route.ts'), 'utf8')
+const loginPageSource = await readFile(join(sourceRoot, 'app', 'login', 'page.tsx'), 'utf8')
+const forgotPasswordSource = await readFile(join(sourceRoot, 'app', 'forgot-password', 'page.tsx'), 'utf8')
 const studentRegistrationSource = await readFile(join(sourceRoot, 'hooks', 'useStudentRegistration.ts'), 'utf8')
 const tutorRegistrationSource = await readFile(join(sourceRoot, 'hooks', 'useTutorRegistration.ts'), 'utf8')
 
-if (!authSource.includes('runAuthTransition')) failures.push('Firebase login and registration are not serialized')
-if (!authSource.includes('activeAuthTransitions')) failures.push('Firebase auth transition state is missing')
-if (!authSource.includes('getIdToken(true)')) failures.push('Verified login does not refresh the Firebase ID token')
-if (!authSource.includes('verificationSent: boolean')) failures.push('Registration cannot report verification email delivery state')
-if (!authSource.includes('A failed profile write must not leave a login-only orphan account')) failures.push('Registration orphan-account cleanup is missing')
-if (!firebaseSource.includes('initializeAuth')) failures.push('Firebase Auth is not initialized with explicit persistence fallback')
+if (!authSource.includes("authRequest('/api/auth/login'")) failures.push('Login bypasses the MedStart server')
+if (!authSource.includes("authRequest('/api/auth/register'")) failures.push('Registration bypasses the MedStart server')
+if (!authSource.includes('signInWithCustomToken')) failures.push('Server login cannot establish a Firebase client session')
+if (authSource.includes('signInWithEmailAndPassword')) failures.push('Client still sends login passwords directly to Firebase')
+if (authSource.includes('createUserWithEmailAndPassword')) failures.push('Client still creates Firebase users directly')
+if (!authSource.includes('runAuthTransition')) failures.push('Authentication transitions are not serialized')
+if (!authSource.includes('getIdToken(true)')) failures.push('Login does not refresh the verified ID token')
+if (!firebaseSource.includes('initializeAuth')) failures.push('Firebase Auth persistence fallback is missing')
 for (const persistence of ['indexedDBLocalPersistence', 'browserLocalPersistence', 'browserSessionPersistence', 'inMemoryPersistence']) {
   if (!firebaseSource.includes(persistence)) failures.push(`Firebase Auth persistence fallback is missing: ${persistence}`)
 }
-if (!authProviderSource.includes('isAuthTransitionInProgress()')) failures.push('AuthProvider can interrupt login or registration transitions')
-if (!authProviderSource.includes('if (!currentUser.emailVerified)')) failures.push('AuthProvider does not isolate unverified sessions')
-if (!authProviderSource.includes('onIdTokenChanged')) failures.push('AuthProvider cannot reconcile email verification token refreshes')
-if (!forgotPasswordSource.includes("fetch('/api/auth/password-reset'")) failures.push('Password recovery bypasses the MedStart server proxy')
-if (!forgotPasswordSource.includes('Запрос отправлен')) failures.push('Password recovery does not expose a clear delivery status')
-if (!resetRouteSource.includes("requestType: 'PASSWORD_RESET'")) failures.push('Password reset proxy does not call Firebase OOB delivery')
-if (!resetRouteSource.includes('AbortSignal.timeout')) failures.push('Password reset proxy has no network timeout')
-if (!resetRouteSource.includes('Always return the same response')) failures.push('Password reset proxy can expose registered emails')
+if (!authProviderSource.includes('isAuthTransitionInProgress()')) failures.push('AuthProvider can interrupt authentication transitions')
+if (!authProviderSource.includes('onIdTokenChanged')) failures.push('AuthProvider cannot reconcile token refreshes')
+
+for (const marker of ['signInWithPassword', 'createCustomToken', 'EMAIL_NOT_VERIFIED', "profile.status === 'blocked'", 'takeRateLimit']) {
+  if (!loginRouteSource.includes(marker)) failures.push(`Login route is missing: ${marker}`)
+}
+for (const marker of ['createUser', 'runTransaction', 'deleteUser', "requestType: 'VERIFY_EMAIL'", 'takeRateLimit']) {
+  if (!registerRouteSource.includes(marker)) failures.push(`Registration route is missing: ${marker}`)
+}
+for (const marker of ["requestType: 'PASSWORD_RESET'", 'AbortSignal.timeout', 'EMAIL_NOT_FOUND', 'takeRateLimit']) {
+  if (!resetRouteSource.includes(marker)) failures.push(`Password reset route is missing: ${marker}`)
+}
+
+if (!loginPageSource.includes('AuthShell')) failures.push('Login does not use the MedStart auth design system')
+if (!forgotPasswordSource.includes('resetPassword')) failures.push('Password recovery bypasses the shared server client')
+if (!studentRegistrationSource.includes('isStrongPassword')) failures.push('Student registration does not enforce password policy')
+if (!tutorRegistrationSource.includes('isStrongPassword')) failures.push('Tutor registration does not enforce password policy')
 if (!studentRegistrationSource.includes('result.verificationSent')) failures.push('Student registration loses verification delivery status')
 if (!tutorRegistrationSource.includes('result.verificationSent')) failures.push('Tutor registration loses verification delivery status')
 

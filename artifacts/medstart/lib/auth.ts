@@ -1,15 +1,11 @@
-import { FirebaseError } from 'firebase/app'
 import {
-  createUserWithEmailAndPassword,
-  deleteUser,
   sendEmailVerification,
-  sendPasswordResetEmail,
-  signInWithEmailAndPassword,
+  signInWithCustomToken,
   signOut,
   type UserCredential,
 } from 'firebase/auth'
 import { auth } from './firebase'
-import { createUserProfile, getUserProfile } from './firestore'
+import { getUserProfile } from './firestore'
 import type { UserProfile } from './user-profile'
 
 export interface StudentRegistrationInput {
@@ -42,8 +38,25 @@ export interface AuthSession {
   profile: UserProfile
 }
 
-export interface RegistrationResult extends AuthSession {
+export interface RegistrationResult {
   verificationSent: boolean
+}
+
+interface AuthApiResponse {
+  ok?: boolean
+  code?: string
+  customToken?: string
+  verificationSent?: boolean
+}
+
+export class MedStartAuthError extends Error {
+  readonly code: string
+
+  constructor(code: string, message = 'Не удалось выполнить операцию.') {
+    super(message)
+    this.name = 'MedStartAuthError'
+    this.code = code
+  }
 }
 
 export class EmailVerificationRequiredError extends Error {
@@ -55,15 +68,6 @@ export class EmailVerificationRequiredError extends Error {
     this.verificationSent = verificationSent
   }
 }
-
-const VERIFY_EMAIL_SENT_MESSAGE =
-  'Почта не подтверждена. Новое письмо отправлено. Проверьте «Входящие» и «Спам», откройте ссылку из письма MedStart, затем войдите снова.'
-
-const VERIFY_EMAIL_RATE_LIMIT_MESSAGE =
-  'Почта не подтверждена. Письмо уже недавно отправлялось. Проверьте «Входящие» и «Спам», затем повторите вход.'
-
-const VERIFY_EMAIL_FAILED_MESSAGE =
-  'Почта не подтверждена, но новое письмо сейчас отправить не удалось. Повторите попытку позже.'
 
 let activeAuthTransitions = 0
 
@@ -86,20 +90,18 @@ function normalizeAuthEmail(email: string) {
 
 function clearSensitiveBrowserState() {
   if (typeof window === 'undefined') return
-
   try {
     for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
       const key = window.localStorage.key(index)
       if (key?.startsWith('medstart-')) window.localStorage.removeItem(key)
     }
   } catch {
-    // Some private browsing modes disable localStorage access.
+    // Private browsing may disable storage.
   }
-
   try {
     window.sessionStorage.clear()
   } catch {
-    // Session storage is best-effort cleanup only.
+    // Best-effort cleanup.
   }
 }
 
@@ -111,185 +113,101 @@ async function secureSignOut() {
   }
 }
 
-async function assertAccess(profile: UserProfile) {
-  if (profile.status === 'blocked' || profile.status === 'deleted') {
-    await secureSignOut()
-    throw new Error(
-      profile.status === 'blocked'
-        ? 'Аккаунт заблокирован.'
-        : 'Аккаунт удалён.',
+async function authRequest(path: string, body: unknown): Promise<AuthApiResponse> {
+  let response: Response
+  try {
+    response = await fetch(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(20_000),
+    })
+  } catch {
+    throw new MedStartAuthError(
+      'AUTH_SERVICE_UNAVAILABLE',
+      'Сервер MedStart временно недоступен. Проверьте интернет и повторите.',
     )
   }
-}
 
-async function assertVerifiedEmail(credential: UserCredential) {
-  await credential.user.reload()
-  if (credential.user.emailVerified) {
-    // Verification may have happened in another browser tab. A forced token
-    // refresh makes the email_verified claim immediately available to
-    // Firestore rules and to AuthProvider's token listener.
-    await credential.user.getIdToken(true)
-    return
-  }
-
-  auth.useDeviceLanguage()
-
-  try {
-    await sendEmailVerification(credential.user)
-    await secureSignOut()
-    throw new EmailVerificationRequiredError(VERIFY_EMAIL_SENT_MESSAGE, true)
-  } catch (error) {
-    if (error instanceof EmailVerificationRequiredError) throw error
-
-    await secureSignOut().catch(() => undefined)
-
-    if (
-      error instanceof FirebaseError &&
-      error.code === 'auth/too-many-requests'
-    ) {
+  const result = (await response.json().catch(() => ({}))) as AuthApiResponse
+  if (!response.ok || !result.ok) {
+    if (result.code === 'EMAIL_NOT_VERIFIED') {
       throw new EmailVerificationRequiredError(
-        VERIFY_EMAIL_RATE_LIMIT_MESSAGE,
-        false,
+        result.verificationSent
+          ? 'Почта не подтверждена. Новое письмо отправлено сервером MedStart. Проверьте «Входящие» и «Спам».'
+          : 'Почта не подтверждена. Письмо сейчас отправить не удалось; повторите вход позже.',
+        Boolean(result.verificationSent),
       )
     }
+    throw new MedStartAuthError(result.code || 'AUTH_FAILED')
+  }
+  return result
+}
 
-    throw new EmailVerificationRequiredError(
-      VERIFY_EMAIL_FAILED_MESSAGE,
-      false,
-    )
+async function assertProfileAccess(profile: UserProfile) {
+  if (profile.status === 'blocked' || profile.status === 'deleted') {
+    await secureSignOut()
+    throw new MedStartAuthError('ACCOUNT_UNAVAILABLE')
   }
 }
 
-export function login(
-  email: string,
-  password: string,
-): Promise<AuthSession> {
+export function login(email: string, password: string): Promise<AuthSession> {
   return runAuthTransition(async () => {
-    const credential = await signInWithEmailAndPassword(
-      auth,
-      normalizeAuthEmail(email),
+    await secureSignOut().catch(() => undefined)
+    const result = await authRequest('/api/auth/login', {
+      email: normalizeAuthEmail(email),
       password,
-    )
-
-    try {
-      await assertVerifiedEmail(credential)
-
-      const profile = await getUserProfile(credential.user.uid)
-      if (!profile) {
-        await secureSignOut()
-        throw new Error(
-          'Учётная запись существует, но профиль MedStart не найден. Обратитесь в поддержку и не создавайте второй аккаунт.',
-        )
-      }
-      await assertAccess(profile)
-      return { credential, profile }
-    } catch (error) {
-      if (auth.currentUser?.uid === credential.user.uid) {
-        await secureSignOut().catch(() => undefined)
-      }
-      throw error
+    })
+    if (!result.customToken) {
+      throw new MedStartAuthError('AUTH_SERVICE_UNAVAILABLE')
     }
+
+    const credential = await signInWithCustomToken(auth, result.customToken)
+    await credential.user.reload()
+    await credential.user.getIdToken(true)
+
+    const profile = await getUserProfile(credential.user.uid)
+    if (!profile) {
+      await secureSignOut()
+      throw new MedStartAuthError('PROFILE_MISSING')
+    }
+    await assertProfileAccess(profile)
+    return { credential, profile }
   })
 }
 
-async function registerWithProfile(
-  email: string,
-  password: string,
-  createProfile: (uid: string) => Promise<UserProfile>,
+async function register(
+  role: 'student' | 'tutor',
+  input: StudentRegistrationInput | TutorRegistrationInput,
 ): Promise<RegistrationResult> {
-  return runAuthTransition(async () => {
-    const credential = await createUserWithEmailAndPassword(
-      auth,
-      normalizeAuthEmail(email),
-      password,
-    )
-
-    let profile: UserProfile
-    try {
-      profile = await createProfile(credential.user.uid)
-    } catch (error) {
-      // A failed profile write must not leave a login-only orphan account.
-      await deleteUser(credential.user).catch(() => undefined)
-      await secureSignOut().catch(() => undefined)
-      throw error
-    }
-
-    auth.useDeviceLanguage()
-    let verificationSent = false
-    try {
-      await sendEmailVerification(credential.user)
-      verificationSent = true
-    } catch {
-      // The account and protected profile are already created. Treat delivery
-      // failure as a recoverable state: the next login attempt safely retries
-      // the verification email instead of trapping the user behind
-      // auth/email-already-in-use.
-      verificationSent = false
-    } finally {
-      await secureSignOut().catch(() => undefined)
-    }
-
-    return { credential, profile, verificationSent }
+  const result = await authRequest('/api/auth/register', {
+    role,
+    ...input,
+    email: normalizeAuthEmail(input.email),
   })
+  return { verificationSent: Boolean(result.verificationSent) }
 }
 
 export function registerStudent(input: StudentRegistrationInput) {
-  return registerWithProfile(input.email, input.password, (uid) =>
-    createUserProfile({
-      uid,
-      firstName: input.firstName,
-      lastName: input.lastName,
-      email: input.email,
-      role: 'student',
-      status: 'active',
-      fieldOfStudy: input.fieldOfStudy,
-      studyYear: input.studyYear,
-      onboardingCompleted: true,
-    }),
-  )
+  return register('student', input)
 }
 
 export function registerTutor(input: TutorRegistrationInput) {
-  return registerWithProfile(input.email, input.password, (uid) =>
-    createUserProfile({
-      uid,
-      firstName: input.firstName,
-      lastName: input.lastName,
-      email: input.email,
-      role: 'tutor',
-      status: 'pending',
-      specialization: input.specialization,
-      subjects: input.subjects,
-      institution: input.institution,
-      experience: input.experience,
-      bio: input.bio,
-      city: input.city,
-      lessonPrice: input.lessonPrice,
-      lessonDuration: input.lessonDuration,
-      lessonFormats: input.lessonFormats,
-      onboardingCompleted: true,
-      isPublic: false,
-    }),
-  )
+  return register('tutor', input)
 }
 
 export async function logout(): Promise<void> {
   await secureSignOut()
   if (typeof window !== 'undefined') {
-    // A full navigation destroys the in-memory Firestore cache so a subsequent
-    // account on the same device cannot receive stale private snapshots.
     window.location.replace('/login?loggedOut=1')
   }
 }
 
 export async function resetPassword(email: string): Promise<void> {
-  auth.useDeviceLanguage()
-
-  // Do not attach the current Replit preview origin as a continue URL. Replit
-  // development hostnames are dynamic and Firebase rejects unallowlisted
-  // domains before sending the email. The default Firebase action handler is
-  // stable, works from every preview, and returns the user to MedStart manually.
-  await sendPasswordResetEmail(auth, normalizeAuthEmail(email))
+  await authRequest('/api/auth/password-reset', {
+    email: normalizeAuthEmail(email),
+  })
 }
 
 export async function resendEmailVerification(): Promise<void> {
