@@ -7,11 +7,16 @@ on:
     paths:
       - 'artifacts/medstart/lib/auth.ts'
       - 'artifacts/medstart/lib/firebase.ts'
+      - 'artifacts/medstart/lib/password-policy.ts'
+      - 'artifacts/medstart/lib/server/**'
       - 'artifacts/medstart/hooks/useLogin.ts'
       - 'artifacts/medstart/hooks/useStudentRegistration.ts'
       - 'artifacts/medstart/hooks/useTutorRegistration.ts'
       - 'artifacts/medstart/app/login/page.tsx'
       - 'artifacts/medstart/app/forgot-password/page.tsx'
+      - 'artifacts/medstart/app/register/**'
+      - 'artifacts/medstart/app/api/auth/**'
+      - 'artifacts/medstart/components/auth/**'
       - 'artifacts/medstart/scripts/live-auth-audit.mjs'
       - 'firestore.secure.rules'
       - 'firebase.json'
@@ -28,7 +33,6 @@ concurrency:
 
 jobs:
   audit:
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'fix/full-auth-audit-v2'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -66,7 +70,7 @@ jobs:
         continue-on-error: true
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
-          SEND_OWNER_RESET: 'true'
+          SEND_OWNER_RESET: 'false'
         run: pnpm --dir artifacts/medstart exec node scripts/live-auth-audit.mjs
 
       - name: Publish sanitized audit result
