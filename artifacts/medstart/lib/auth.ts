@@ -8,7 +8,7 @@ import {
   signOut,
   type UserCredential,
 } from 'firebase/auth'
-import { auth } from './firebase'
+import { auth, authReady } from './firebase'
 import { createUserProfile, getUserProfile } from './firestore'
 import type { UserProfile } from './user-profile'
 
@@ -53,13 +53,11 @@ export class EmailVerificationRequiredError extends Error {
 }
 
 const VERIFY_EMAIL_SENT_MESSAGE =
-  'Почта не подтверждена. Новое письмо отправлено. Проверьте «Входящие» и «Спам», откройте ссылку из письма MedStart, затем войдите снова.'
-
+  'Почта не подтверждена. Новое письмо отправлено. Проверьте «Входящие», «Спам» и «Рассылки», подтвердите почту и войдите снова.'
 const VERIFY_EMAIL_RATE_LIMIT_MESSAGE =
-  'Почта не подтверждена. Письмо уже недавно отправлялось. Проверьте «Входящие» и «Спам», затем повторите вход.'
-
+  'Письмо уже отправлялось недавно. Проверьте почту и повторите вход позже.'
 const VERIFY_EMAIL_FAILED_MESSAGE =
-  'Почта не подтверждена, но новое письмо сейчас отправить не удалось. Повторите попытку позже.'
+  'Не удалось отправить письмо подтверждения. Повторите попытку позже.'
 
 let activeAuthTransitions = 0
 
@@ -70,6 +68,7 @@ export function isAuthTransitionInProgress() {
 async function runAuthTransition<T>(operation: () => Promise<T>): Promise<T> {
   activeAuthTransitions += 1
   try {
+    await authReady
     return await operation()
   } finally {
     activeAuthTransitions = Math.max(0, activeAuthTransitions - 1)
@@ -89,13 +88,7 @@ function clearSensitiveBrowserState() {
       if (key?.startsWith('medstart-')) window.localStorage.removeItem(key)
     }
   } catch {
-    // Some private browsing modes disable localStorage access.
-  }
-
-  try {
-    window.sessionStorage.clear()
-  } catch {
-    // Session storage is best-effort cleanup only.
+    // Browser storage cleanup is best effort only.
   }
 }
 
@@ -111,38 +104,32 @@ async function assertAccess(profile: UserProfile) {
   if (profile.status === 'blocked' || profile.status === 'deleted') {
     await secureSignOut()
     throw new Error(
-      profile.status === 'blocked'
-        ? 'Аккаунт заблокирован.'
-        : 'Аккаунт удалён.',
+      profile.status === 'blocked' ? 'Аккаунт заблокирован.' : 'Аккаунт удалён.',
     )
   }
+}
+
+async function sendVerification(credential: UserCredential) {
+  auth.useDeviceLanguage()
+  await sendEmailVerification(credential.user)
 }
 
 async function assertVerifiedEmail(credential: UserCredential) {
   await credential.user.reload()
   if (credential.user.emailVerified) {
-    // Refresh the ID token after the verification link was used in another tab.
-    // This also causes AuthProvider's onIdTokenChanged listener to reconcile the
-    // verified session instead of keeping the temporary pre-reload state.
     await credential.user.getIdToken(true)
     return
   }
 
-  auth.useDeviceLanguage()
-
   try {
-    await sendEmailVerification(credential.user)
+    await sendVerification(credential)
     await secureSignOut()
     throw new EmailVerificationRequiredError(VERIFY_EMAIL_SENT_MESSAGE, true)
   } catch (error) {
     if (error instanceof EmailVerificationRequiredError) throw error
-
     await secureSignOut()
 
-    if (
-      error instanceof FirebaseError &&
-      error.code === 'auth/too-many-requests'
-    ) {
+    if (error instanceof FirebaseError && error.code === 'auth/too-many-requests') {
       throw new EmailVerificationRequiredError(
         VERIFY_EMAIL_RATE_LIMIT_MESSAGE,
         false,
@@ -150,16 +137,15 @@ async function assertVerifiedEmail(credential: UserCredential) {
     }
 
     throw new EmailVerificationRequiredError(
-      VERIFY_EMAIL_FAILED_MESSAGE,
+      error instanceof FirebaseError
+        ? `${VERIFY_EMAIL_FAILED_MESSAGE} (${error.code})`
+        : VERIFY_EMAIL_FAILED_MESSAGE,
       false,
     )
   }
 }
 
-export function login(
-  email: string,
-  password: string,
-): Promise<AuthSession> {
+export function login(email: string, password: string): Promise<AuthSession> {
   return runAuthTransition(async () => {
     const credential = await signInWithEmailAndPassword(
       auth,
@@ -169,14 +155,15 @@ export function login(
 
     try {
       await assertVerifiedEmail(credential)
-
       const profile = await getUserProfile(credential.user.uid)
+
       if (!profile) {
         await secureSignOut()
         throw new Error(
-          'Профиль пользователя не найден. Повторите регистрацию с той же почтой или обратитесь в поддержку.',
+          'Аккаунт найден, но профиль MedStart отсутствует. Зарегистрируйтесь заново с этой почтой или обратитесь в поддержку.',
         )
       }
+
       await assertAccess(profile)
       return { credential, profile }
     } catch (error) {
@@ -199,6 +186,7 @@ async function registerWithProfile(
       normalizeAuthEmail(email),
       password,
     )
+
     let profile: UserProfile
     try {
       profile = await createProfile(credential.user.uid)
@@ -208,14 +196,16 @@ async function registerWithProfile(
       throw error
     }
 
-    auth.useDeviceLanguage()
     try {
-      await sendEmailVerification(credential.user)
+      await sendVerification(credential)
     } catch (error) {
-      await secureSignOut()
+      await secureSignOut().catch(() => undefined)
+      if (error instanceof FirebaseError && error.code === 'auth/too-many-requests') {
+        throw new Error(VERIFY_EMAIL_RATE_LIMIT_MESSAGE)
+      }
       throw new Error(
-        error instanceof FirebaseError && error.code === 'auth/too-many-requests'
-          ? VERIFY_EMAIL_RATE_LIMIT_MESSAGE
+        error instanceof FirebaseError
+          ? `${VERIFY_EMAIL_FAILED_MESSAGE} (${error.code})`
           : VERIFY_EMAIL_FAILED_MESSAGE,
       )
     }
@@ -231,7 +221,7 @@ export function registerStudent(input: StudentRegistrationInput) {
       uid,
       firstName: input.firstName,
       lastName: input.lastName,
-      email: input.email,
+      email: normalizeAuthEmail(input.email),
       role: 'student',
       status: 'active',
       fieldOfStudy: input.fieldOfStudy,
@@ -247,7 +237,7 @@ export function registerTutor(input: TutorRegistrationInput) {
       uid,
       firstName: input.firstName,
       lastName: input.lastName,
-      email: input.email,
+      email: normalizeAuthEmail(input.email),
       role: 'tutor',
       status: 'pending',
       specialization: input.specialization,
@@ -266,35 +256,25 @@ export function registerTutor(input: TutorRegistrationInput) {
 }
 
 export async function logout(): Promise<void> {
+  await authReady
   await secureSignOut()
   if (typeof window !== 'undefined') {
-    // A full navigation destroys the in-memory Firestore cache so a subsequent
-    // account on the same device cannot receive stale private snapshots.
     window.location.replace('/login?loggedOut=1')
   }
 }
 
 export async function resetPassword(email: string): Promise<void> {
+  await authReady
   auth.useDeviceLanguage()
-  const normalizedEmail = normalizeAuthEmail(email)
-  const continueUrl =
-    typeof window === 'undefined'
-      ? undefined
-      : `${window.location.origin}/login?passwordReset=1`
 
-  await sendPasswordResetEmail(
-    auth,
-    normalizedEmail,
-    continueUrl
-      ? {
-          url: continueUrl,
-          handleCodeInApp: false,
-        }
-      : undefined,
-  )
+  // Do not pass a Replit preview URL as actionCodeSettings. Firebase rejects
+  // dynamic *.replit.dev hosts unless each one is manually allowlisted, which
+  // prevented the reset request from being accepted and no email was sent.
+  await sendPasswordResetEmail(auth, normalizeAuthEmail(email))
 }
 
 export async function resendEmailVerification(): Promise<void> {
+  await authReady
   if (!auth.currentUser) throw new Error('Сначала войдите в аккаунт.')
   auth.useDeviceLanguage()
   await sendEmailVerification(auth.currentUser)
