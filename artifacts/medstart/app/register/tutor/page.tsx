@@ -9,11 +9,14 @@ import {
 } from '@/components/auth/AuthShell'
 import { PasswordField } from '@/components/auth/PasswordField'
 import { PasswordRequirements } from '@/components/auth/PasswordRequirements'
+import { useHydrated } from '@/hooks/useHydrated'
 import { useTutorRegistration } from '@/hooks/useTutorRegistration'
 import { ROUTES } from '@/lib/constants'
 
 export default function RegisterTutorPage() {
   const form = useTutorRegistration()
+  const hydrated = useHydrated()
+  const disabled = form.loading || !hydrated
 
   return (
     <AuthShell
@@ -46,7 +49,7 @@ export default function RegisterTutorPage() {
               <input
                 autoComplete="given-name"
                 required
-                disabled={form.loading}
+                disabled={disabled}
                 className={authInputClass}
                 value={form.firstName}
                 onChange={(event) => form.setFirstName(event.target.value)}
@@ -57,7 +60,7 @@ export default function RegisterTutorPage() {
               <input
                 autoComplete="family-name"
                 required
-                disabled={form.loading}
+                disabled={disabled}
                 className={authInputClass}
                 value={form.lastName}
                 onChange={(event) => form.setLastName(event.target.value)}
@@ -74,7 +77,7 @@ export default function RegisterTutorPage() {
               spellCheck={false}
               autoComplete="email"
               required
-              disabled={form.loading}
+              disabled={disabled}
               className={authInputClass}
               value={form.email}
               onChange={(event) => form.setEmail(event.target.value)}
@@ -89,7 +92,7 @@ export default function RegisterTutorPage() {
             Специализация *
             <input
               required
-              disabled={form.loading}
+              disabled={disabled}
               className={authInputClass}
               placeholder="Например: анатомия и физиология"
               value={form.specialization}
@@ -100,7 +103,7 @@ export default function RegisterTutorPage() {
           <label className="block space-y-2 text-sm font-semibold text-slate-700">
             Предметы
             <input
-              disabled={form.loading}
+              disabled={disabled}
               className={authInputClass}
               placeholder="Анатомия, физиология, биология"
               value={form.subjects}
@@ -113,7 +116,7 @@ export default function RegisterTutorPage() {
             <label className="space-y-2 text-sm font-semibold text-slate-700">
               Учреждение
               <input
-                disabled={form.loading}
+                disabled={disabled}
                 className={authInputClass}
                 value={form.institution}
                 onChange={(event) => form.setInstitution(event.target.value)}
@@ -122,7 +125,7 @@ export default function RegisterTutorPage() {
             <label className="space-y-2 text-sm font-semibold text-slate-700">
               Опыт
               <input
-                disabled={form.loading}
+                disabled={disabled}
                 className={authInputClass}
                 placeholder="Например: 5 лет"
                 value={form.experience}
@@ -132,7 +135,7 @@ export default function RegisterTutorPage() {
             <label className="space-y-2 text-sm font-semibold text-slate-700">
               Город
               <input
-                disabled={form.loading}
+                disabled={disabled}
                 className={authInputClass}
                 placeholder="Например: Казань"
                 value={form.city}
@@ -147,7 +150,7 @@ export default function RegisterTutorPage() {
                 min="0"
                 max="1000000"
                 step="100"
-                disabled={form.loading}
+                disabled={disabled}
                 className={authInputClass}
                 placeholder="1500"
                 value={form.lessonPrice}
@@ -159,7 +162,7 @@ export default function RegisterTutorPage() {
               <select
                 className={authInputClass}
                 value={form.lessonDuration}
-                disabled={form.loading}
+                disabled={disabled}
                 onChange={(event) => form.setLessonDuration(event.target.value)}
               >
                 <option value="30">30 минут</option>
@@ -176,7 +179,7 @@ export default function RegisterTutorPage() {
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
-                disabled={form.loading}
+                disabled={disabled}
                 onClick={() => form.setOnline(!form.online)}
                 aria-pressed={form.online}
                 className={`rounded-2xl border px-4 py-3 text-left font-semibold transition disabled:opacity-50 ${
@@ -189,7 +192,7 @@ export default function RegisterTutorPage() {
               </button>
               <button
                 type="button"
-                disabled={form.loading}
+                disabled={disabled}
                 onClick={() => form.setInPerson(!form.inPerson)}
                 aria-pressed={form.inPerson}
                 className={`rounded-2xl border px-4 py-3 text-left font-semibold transition disabled:opacity-50 ${
@@ -206,7 +209,7 @@ export default function RegisterTutorPage() {
           <label className="block space-y-2 text-sm font-semibold text-slate-700">
             О себе
             <textarea
-              disabled={form.loading}
+              disabled={disabled}
               className={`${authInputClass} min-h-32 resize-y`}
               value={form.bio}
               onChange={(event) => form.setBio(event.target.value)}
@@ -223,7 +226,7 @@ export default function RegisterTutorPage() {
               value={form.password}
               onChange={form.setPassword}
               autoComplete="new-password"
-              disabled={form.loading}
+              disabled={disabled}
               errorId={form.error ? 'tutor-registration-error' : undefined}
             />
             <PasswordField
@@ -231,12 +234,22 @@ export default function RegisterTutorPage() {
               value={form.confirmPassword}
               onChange={form.setConfirmPassword}
               autoComplete="new-password"
-              disabled={form.loading}
+              disabled={disabled}
               errorId={form.error ? 'tutor-registration-error' : undefined}
             />
           </div>
           <PasswordRequirements password={form.password} />
         </section>
+
+        {!hydrated && (
+          <p
+            role="status"
+            aria-live="polite"
+            className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900"
+          >
+            Подключаем защищённую регистрацию MedStart…
+          </p>
+        )}
 
         {form.error && (
           <p
@@ -250,7 +263,7 @@ export default function RegisterTutorPage() {
 
         <button
           type="submit"
-          disabled={form.loading}
+          disabled={disabled}
           aria-busy={form.loading}
           className={authPrimaryButtonClass}
         >
@@ -259,8 +272,10 @@ export default function RegisterTutorPage() {
               <LoaderCircle className="mr-2 h-5 w-5 animate-spin" />
               Создаём защищённый профиль…
             </>
-          ) : (
+          ) : hydrated ? (
             'Создать профиль и отправить на проверку'
+          ) : (
+            'Подключаем регистрацию…'
           )}
         </button>
       </form>
