@@ -7,6 +7,7 @@ on:
     paths:
       - 'artifacts/medstart/lib/auth.ts'
       - 'artifacts/medstart/lib/firebase.ts'
+      - 'artifacts/medstart/lib/firebase-public-config.ts'
       - 'artifacts/medstart/lib/password-policy.ts'
       - 'artifacts/medstart/lib/server/**'
       - 'artifacts/medstart/hooks/useLogin.ts'
@@ -16,6 +17,7 @@ on:
       - 'artifacts/medstart/app/forgot-password/page.tsx'
       - 'artifacts/medstart/app/register/**'
       - 'artifacts/medstart/app/api/auth/**'
+      - 'artifacts/medstart/app/api/health/auth/**'
       - 'artifacts/medstart/components/auth/**'
       - 'artifacts/medstart/scripts/live-auth-audit.mjs'
       - 'firestore.secure.rules'
@@ -70,7 +72,6 @@ jobs:
         continue-on-error: true
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
-          SEND_OWNER_RESET: 'false'
         run: pnpm --dir artifacts/medstart exec node scripts/live-auth-audit.mjs
 
       - name: Publish sanitized audit result
