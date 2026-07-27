@@ -1,4 +1,11 @@
 import { NextResponse } from 'next/server'
+import {
+  clientAddress,
+  isValidEmail,
+  noStoreHeaders,
+  normalizeEmail,
+  takeRateLimit,
+} from '@/lib/server/auth-security'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -7,21 +14,37 @@ const FIREBASE_API_KEY =
   process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
   'AIzaSyAt4F5JQAdQPw8kmY-0dorxcaT_JX2d3v0'
 
-function normalizeEmail(value: unknown) {
-  return typeof value === 'string' ? value.trim().toLowerCase() : ''
-}
-
 export async function POST(request: Request) {
-  let body: unknown
+  let body: { email?: unknown }
   try {
-    body = await request.json()
+    body = (await request.json()) as typeof body
   } catch {
-    return NextResponse.json({ ok: false, code: 'INVALID_REQUEST' }, { status: 400 })
+    return NextResponse.json(
+      { ok: false, code: 'INVALID_REQUEST' },
+      { status: 400, headers: noStoreHeaders() },
+    )
   }
 
-  const email = normalizeEmail((body as { email?: unknown })?.email)
-  if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
-    return NextResponse.json({ ok: false, code: 'INVALID_EMAIL' }, { status: 400 })
+  const email = normalizeEmail(body.email)
+  if (!isValidEmail(email)) {
+    return NextResponse.json(
+      { ok: false, code: 'INVALID_EMAIL' },
+      { status: 400, headers: noStoreHeaders() },
+    )
+  }
+
+  const limit = takeRateLimit(
+    `password-reset:${clientAddress(request)}:${email}`,
+    5,
+  )
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { ok: false, code: 'TOO_MANY_REQUESTS' },
+      {
+        status: 429,
+        headers: noStoreHeaders({ 'retry-after': String(limit.retryAfterSeconds) }),
+      },
+    )
   }
 
   try {
@@ -29,7 +52,10 @@ export async function POST(request: Request) {
       `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${encodeURIComponent(FIREBASE_API_KEY)}`,
       {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          'x-firebase-locale': 'ru',
+        },
         body: JSON.stringify({ requestType: 'PASSWORD_RESET', email }),
         cache: 'no-store',
         signal: AbortSignal.timeout(15_000),
@@ -45,34 +71,40 @@ export async function POST(request: Request) {
       if (firebaseCode.includes('TOO_MANY_ATTEMPTS_TRY_LATER')) {
         return NextResponse.json(
           { ok: false, code: 'TOO_MANY_REQUESTS' },
-          { status: 429 },
+          { status: 429, headers: noStoreHeaders() },
         )
       }
       if (firebaseCode.includes('INVALID_EMAIL')) {
-        return NextResponse.json({ ok: false, code: 'INVALID_EMAIL' }, { status: 400 })
+        return NextResponse.json(
+          { ok: false, code: 'INVALID_EMAIL' },
+          { status: 400, headers: noStoreHeaders() },
+        )
       }
       if (firebaseCode.includes('OPERATION_NOT_ALLOWED')) {
         return NextResponse.json(
           { ok: false, code: 'PASSWORD_AUTH_DISABLED' },
-          { status: 503 },
+          { status: 503, headers: noStoreHeaders() },
         )
+      }
+
+      // Do not disclose whether the email exists in Firebase Auth.
+      if (firebaseCode.includes('EMAIL_NOT_FOUND')) {
+        return NextResponse.json({ ok: true }, { headers: noStoreHeaders() })
       }
 
       console.error('Firebase password reset request failed', firebaseCode)
       return NextResponse.json(
         { ok: false, code: 'RESET_REQUEST_FAILED' },
-        { status: 502 },
+        { status: 502, headers: noStoreHeaders() },
       )
     }
 
-    // Always return the same response. Firebase may intentionally hide whether
-    // an address exists, and MedStart must not expose registered emails.
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true }, { headers: noStoreHeaders() })
   } catch (error) {
     console.error('Password reset proxy unavailable', error)
     return NextResponse.json(
       { ok: false, code: 'AUTH_SERVICE_UNAVAILABLE' },
-      { status: 503 },
+      { status: 503, headers: noStoreHeaders() },
     )
   }
 }
