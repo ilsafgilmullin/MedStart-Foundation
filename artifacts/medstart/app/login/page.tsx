@@ -43,6 +43,11 @@ export default function LoginPage() {
                 onChange={(event) => form.setPassword(event.target.value)}
               />
             </label>
+            <div className="text-right text-sm">
+              <Link href="/forgot-password" className="font-medium text-violet-700">
+                Не помню пароль
+              </Link>
+            </div>
             {form.verificationNotice && (
               <p
                 role="status"
