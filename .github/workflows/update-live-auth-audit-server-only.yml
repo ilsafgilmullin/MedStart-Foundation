@@ -1,0 +1,107 @@
+name: Update live auth audit for server-only profiles
+
+on:
+  push:
+    branches:
+      - 'agent/full-repository-audit-v8'
+    paths:
+      - '.github/workflows/update-live-auth-audit-server-only.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout audit branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/full-repository-audit-v8
+
+      - name: Apply exact live-audit replacements
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('artifacts/medstart/scripts/live-auth-audit.mjs')
+          source = path.read_text(encoding='utf-8')
+
+          old_function = '''async function writeProfileWithToken(uid, email, idToken) {
+            const response = await fetch(profileUrl(uid), {
+              method: 'PATCH',
+              headers: {
+                authorization: `Bearer ${idToken}`,
+                'content-type': 'application/json',
+              },
+              body: JSON.stringify(profileDocument(uid, email)),
+            })
+            const payload = await response.json().catch(() => ({}))
+            if (!response.ok) {
+              throw new Error(
+                `Firestore registration profile write failed: ${String(payload?.error?.message || response.status)}`,
+              )
+            }
+          }'''
+          new_function = '''async function writeProfileWithToken(uid, email, idToken, expectedStatus) {
+            const response = await fetch(profileUrl(uid), {
+              method: 'PATCH',
+              headers: {
+                authorization: `Bearer ${idToken}`,
+                'content-type': 'application/json',
+              },
+              body: JSON.stringify(profileDocument(uid, email)),
+            })
+            const payload = await response.json().catch(() => ({}))
+            if (response.status !== expectedStatus) {
+              throw new Error(
+                `Firestore profile write returned ${response.status}, expected ${expectedStatus}: ${String(payload?.error?.message || '')}`,
+              )
+            }
+          }'''
+
+          old_create = '''  await writeProfileWithToken(auditUid, auditEmail, signUp.idToken)
+            check('unverified-registration-profile-write')
+
+            await readProfileWithToken(auditUid, signUp.idToken, 403)
+            check('unverified-private-profile-read-blocked')'''
+          new_create = '''  await writeProfileWithToken(auditUid, auditEmail, signUp.idToken, 403)
+            check('direct-client-profile-create-blocked')'''
+
+          old_verified_read = '''
+            await readProfileWithToken(auditUid, verifiedSignIn.idToken, 200)
+            check('verified-profile-read')
+          '''
+
+          old_owner_reset = '''
+            if (process.env.SEND_OWNER_RESET === 'true') {
+              await identityRequest('sendOobCode', {
+                requestType: 'PASSWORD_RESET',
+                email: OWNER_EMAIL,
+              })
+              check('owner-password-reset-requested')
+            }
+          '''
+
+          replacements = [
+              (old_function, new_function, 'writeProfileWithToken'),
+              (old_create, new_create, 'client profile-create test'),
+              (old_verified_read, '\n', 'verified profile read'),
+              (old_owner_reset, '\n', 'owner password reset'),
+          ]
+          for old, new, label in replacements:
+              if source.count(old) != 1:
+                  raise SystemExit(f'Expected exactly one {label} block, found {source.count(old)}')
+              source = source.replace(old, new, 1)
+
+          path.write_text(source, encoding='utf-8')
+          Path('.github/workflows/update-live-auth-audit-server-only.yml').unlink()
+          PY
+
+      - name: Commit live-audit update
+        run: |
+          git config user.name 'MedStart Security Audit'
+          git config user.email 'actions@users.noreply.github.com'
+          git add artifacts/medstart/scripts/live-auth-audit.mjs .github/workflows/update-live-auth-audit-server-only.yml
+          git commit -m 'Verify server-only profile creation in live audit'
+          git push origin HEAD:agent/full-repository-audit-v8
