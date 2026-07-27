@@ -1,0 +1,647 @@
+name: Apply critical content and schema safety patches
+
+on:
+  push:
+    branches:
+      - fix/critical-audit-v1
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/critical-audit-v1
+          fetch-depth: 0
+
+      - name: Harden schemas and disable unscanned PDFs
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(source: str, old: str, new: str, label: str) -> str:
+              if old not in source:
+                  raise SystemExit(f'Missing expected block: {label}')
+              return source.replace(old, new, 1)
+
+          rules_path = Path('firestore.secure.rules')
+          rules = rules_path.read_text(encoding='utf-8')
+
+          availability_old = """    function validAvailability(data, tutorId) {
+                return data.keys().hasAll(['tutorUid', 'timezone', 'days', 'updatedAt'])
+                  && data.tutorUid == tutorId
+                  && data.timezone is string
+                  && data.timezone.size() > 0
+                  && data.timezone.size() <= 80
+                  && data.days is map
+                  && data.updatedAt is timestamp;
+              }
+          """.replace('              ', '    ')
+          availability_new = """    function validClock(value) {
+                return value is string
+                  && value.matches('([01][0-9]|2[0-3]):[0-5][0-9]');
+              }
+
+              function validAvailabilityDay(data) {
+                return data is map
+                  && data.keys().hasOnly(['enabled', 'start', 'end'])
+                  && data.enabled is bool
+                  && validClock(data.start)
+                  && validClock(data.end);
+              }
+
+              function validAvailability(data, tutorId) {
+                return data.keys().hasOnly(['tutorUid', 'timezone', 'days', 'updatedAt'])
+                  && data.tutorUid == tutorId
+                  && data.timezone is string
+                  && data.timezone.size() > 0
+                  && data.timezone.size() <= 80
+                  && data.days is map
+                  && data.days.keys().hasOnly([
+                    'monday', 'tuesday', 'wednesday', 'thursday',
+                    'friday', 'saturday', 'sunday'
+                  ])
+                  && validAvailabilityDay(data.days.monday)
+                  && validAvailabilityDay(data.days.tuesday)
+                  && validAvailabilityDay(data.days.wednesday)
+                  && validAvailabilityDay(data.days.thursday)
+                  && validAvailabilityDay(data.days.friday)
+                  && validAvailabilityDay(data.days.saturday)
+                  && validAvailabilityDay(data.days.sunday)
+                  && data.updatedAt is timestamp;
+              }
+          """.replace('              ', '    ')
+          rules = replace_once(rules, availability_old, availability_new, 'availability rules')
+
+          material_pattern = re.compile(
+              r"    function validMaterialCreate\(\) \{.*?\n    \}\n\n    match /materials/\{materialId\} \{.*?\n    \}",
+              re.S,
+          )
+          material_new = """    function validMaterialData(data) {
+              return data.keys().hasOnly([
+                  'bookingId', 'tutorUid', 'tutorName', 'studentUid', 'studentName',
+                  'title', 'description', 'url', 'kind', 'createdAt', 'updatedAt'
+                ])
+                && data.bookingId is string
+                && data.bookingId.size() > 0
+                && data.bookingId.size() <= 160
+                && data.tutorUid is string
+                && data.studentUid is string
+                && data.tutorName is string
+                && data.tutorName.size() > 0
+                && data.tutorName.size() <= 160
+                && data.studentName is string
+                && data.studentName.size() > 0
+                && data.studentName.size() <= 160
+                && data.title is string
+                && data.title.size() > 0
+                && data.title.size() <= 180
+                && data.description is string
+                && data.description.size() <= 4000
+                && data.url is string
+                && data.url.size() <= 2000
+                && data.kind in ['link', 'document', 'video', 'note']
+                && (
+                  (data.kind == 'note' && data.url == '')
+                  || (
+                    data.kind in ['link', 'document', 'video']
+                    && data.url.matches('https://.+')
+                  )
+                )
+                && data.createdAt is timestamp
+                && data.updatedAt is timestamp;
+            }
+
+            function validMaterialCreate() {
+              return validMaterialData(request.resource.data)
+                && request.resource.data.tutorUid == request.auth.uid
+                && isActiveRole(request.auth.uid, 'tutor')
+                && exists(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId))
+                && materialBooking(request.resource.data).tutorUid == request.auth.uid
+                && materialBooking(request.resource.data).studentUid
+                  == request.resource.data.studentUid
+                && materialBooking(request.resource.data).status in ['accepted', 'completed']
+                && request.resource.data.tutorName
+                  == userProfile(request.auth.uid).displayName
+                && request.resource.data.studentName
+                  == userProfile(request.resource.data.studentUid).displayName;
+            }
+
+            match /materials/{materialId} {
+              allow create: if signedIn() && validMaterialCreate();
+              allow read: if isModerator()
+                || (
+                  signedIn()
+                  && userExists(request.auth.uid)
+                  && userProfile(request.auth.uid).status == 'active'
+                  && (
+                    resource.data.tutorUid == request.auth.uid
+                    || resource.data.studentUid == request.auth.uid
+                  )
+                );
+              allow update: if isActiveRole(request.auth.uid, 'tutor')
+                && resource.data.tutorUid == request.auth.uid
+                && validMaterialData(request.resource.data)
+                && request.resource.data.bookingId == resource.data.bookingId
+                && request.resource.data.tutorUid == resource.data.tutorUid
+                && request.resource.data.tutorName == resource.data.tutorName
+                && request.resource.data.studentUid == resource.data.studentUid
+                && request.resource.data.studentName == resource.data.studentName
+                && request.resource.data.createdAt == resource.data.createdAt
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                  'title', 'description', 'url', 'kind', 'updatedAt'
+                ]);
+              allow delete: if isOwner()
+                || (isActiveRole(request.auth.uid, 'tutor')
+                  && resource.data.tutorUid == request.auth.uid);
+            }"""
+          rules, material_count = material_pattern.subn(material_new, rules, count=1)
+          if material_count != 1:
+              raise SystemExit('Material rules block was not replaced')
+
+          rules = replace_once(
+              rules,
+              "&& request.resource.data.sourceMode in ['link', 'file']",
+              "&& request.resource.data.sourceMode == 'link'",
+              'knowledge source mode',
+          )
+          rules = replace_once(
+              rules,
+              "&& request.resource.data.status in ['published', 'rejected']\n        && request.resource.data.moderationNote is string",
+              "&& request.resource.data.status in ['published', 'rejected']\n        && (\n          request.resource.data.status != 'published'\n          || request.resource.data.sourceMode == 'link'\n        )\n        && request.resource.data.moderationNote is string",
+              'knowledge moderation source gate',
+          )
+
+          medical_old = """    function validMedicalWorkspace(data, bookingId) {
+                return data.keys().hasOnly([
+                    'bookingId', 'clinicalCase', 'labs', 'ecg', 'privacy',
+                    'boardBackground', 'updatedByUid', 'createdAt', 'updatedAt'
+                  ])
+                  && data.bookingId == bookingId
+                  && data.clinicalCase is map
+                  && data.labs is list
+                  && data.labs.size() <= 100
+                  && data.ecg is map
+                  && data.privacy is map
+                  && data.boardBackground is map
+                  && data.updatedByUid == request.auth.uid
+                  && data.createdAt is timestamp
+                  && data.updatedAt is timestamp;
+              }
+          """.replace('              ', '    ')
+          medical_new = """    function validClinicalCase(data) {
+                return data is map
+                  && data.keys().hasOnly([
+                    'complaint', 'anamnesis', 'examination', 'diagnosis',
+                    'differential', 'plan', 'teachingGoal'
+                  ])
+                  && data.complaint is string && data.complaint.size() <= 12000
+                  && data.anamnesis is string && data.anamnesis.size() <= 12000
+                  && data.examination is string && data.examination.size() <= 12000
+                  && data.diagnosis is string && data.diagnosis.size() <= 12000
+                  && data.differential is string && data.differential.size() <= 12000
+                  && data.plan is string && data.plan.size() <= 12000
+                  && data.teachingGoal is string && data.teachingGoal.size() <= 12000;
+              }
+
+              function validEcg(data) {
+                return data is map
+                  && data.keys().hasOnly([
+                    'rhythm', 'heartRate', 'axis', 'prMs', 'qrsMs',
+                    'qtMs', 'qtcMs', 'conclusion'
+                  ])
+                  && data.rhythm is string && data.rhythm.size() <= 200
+                  && data.heartRate is string && data.heartRate.size() <= 40
+                  && data.axis is string && data.axis.size() <= 200
+                  && data.prMs is string && data.prMs.size() <= 40
+                  && data.qrsMs is string && data.qrsMs.size() <= 40
+                  && data.qtMs is string && data.qtMs.size() <= 40
+                  && data.qtcMs is string && data.qtcMs.size() <= 40
+                  && data.conclusion is string && data.conclusion.size() <= 12000;
+              }
+
+              function validPrivacy(data) {
+                return data is map
+                  && data.keys().hasOnly([
+                    'deidentified', 'identifiersRemoved', 'consentConfirmed',
+                    'educationalUseOnly', 'patientLabel'
+                  ])
+                  && data.deidentified is bool
+                  && data.identifiersRemoved is bool
+                  && data.consentConfirmed is bool
+                  && data.educationalUseOnly is bool
+                  && data.patientLabel is string
+                  && data.patientLabel.size() <= 160;
+              }
+
+              function validBoardBackground(data) {
+                return data is map
+                  && data.keys().hasOnly([
+                    'kind', 'assetId', 'label', 'anatomyLayer',
+                    'anatomyView', 'anatomyRegion'
+                  ])
+                  && data.kind in ['none', 'image', 'anatomy']
+                  && data.assetId is string && data.assetId.size() <= 160
+                  && data.label is string && data.label.size() <= 240
+                  && data.anatomyLayer in ['organs', 'skeleton', 'vessels']
+                  && data.anatomyView in ['front', 'left', 'back', 'right']
+                  && data.anatomyRegion in [
+                    'brain', 'thorax', 'heart', 'lungs', 'abdomen', 'pelvis'
+                  ];
+              }
+
+              function validMedicalWorkspace(data, bookingId) {
+                return data.keys().hasOnly([
+                    'bookingId', 'clinicalCase', 'labs', 'ecg', 'privacy',
+                    'boardBackground', 'updatedByUid', 'createdAt', 'updatedAt'
+                  ])
+                  && data.bookingId == bookingId
+                  && validClinicalCase(data.clinicalCase)
+                  && data.labs is list
+                  && data.labs.size() <= 100
+                  && validEcg(data.ecg)
+                  && validPrivacy(data.privacy)
+                  && validBoardBackground(data.boardBackground)
+                  && data.updatedByUid == request.auth.uid
+                  && data.createdAt is timestamp
+                  && data.updatedAt is timestamp;
+              }
+          """.replace('              ', '    ')
+          rules = replace_once(rules, medical_old, medical_new, 'medical workspace rules')
+          rules_path.write_text(rules, encoding='utf-8')
+
+          storage_path = Path('storage.rules')
+          storage = storage_path.read_text(encoding='utf-8')
+          published_pattern = re.compile(
+              r"\n    function isPublishedSubmission\(submissionId\) \{.*?\n    \}\n",
+              re.S,
+          )
+          storage, published_count = published_pattern.subn('\n', storage, count=1)
+          if published_count != 1:
+              raise SystemExit('Published submission helper was not removed')
+          storage = replace_once(
+              storage,
+              """      allow read: if signedIn()
+                && userExists(request.auth.uid)
+                && userProfile(request.auth.uid).status == 'active'
+                && (
+                  request.auth.uid == userId
+                  || isModerator()
+                  || isPublishedSubmission(submissionId)
+                );
+
+              allow create: if isActiveTutor(userId)
+                && fileName.matches('.+[.]pdf')
+                && request.resource.size > 0
+                && request.resource.size <= 25 * 1024 * 1024
+                && request.resource.contentType == 'application/pdf';
+          """.replace('              ', '    '),
+              """      allow read: if signedIn()
+                && userExists(request.auth.uid)
+                && userProfile(request.auth.uid).status == 'active'
+                && (request.auth.uid == userId || isModerator());
+
+              // Tutor PDFs remain disabled until a trusted server scans malware,
+              // active content, metadata and patient identifiers.
+              allow create: if false;
+          """.replace('              ', '    '),
+              'knowledge storage gate',
+          )
+          storage_path.write_text(storage, encoding='utf-8')
+
+          knowledge_path = Path('artifacts/medstart/lib/knowledge-base.ts')
+          knowledge = knowledge_path.read_text(encoding='utf-8')
+          knowledge = replace_once(
+              knowledge,
+              """  if (input.sourceMode === 'file' && !input.filePath.trim()) {
+                throw new Error('PDF-файл не был загружен.')
+              }
+          """.replace('              ', '  '),
+              """  if (input.sourceMode !== 'link') {
+                throw new Error(
+                  'Загрузка PDF временно отключена до подключения серверной антивирусной проверки.',
+                )
+              }
+          """.replace('              ', '  '),
+              'knowledge client file gate',
+          )
+          knowledge = replace_once(
+              knowledge,
+              """    sourceMode: input.sourceMode,
+                sourceUrl:
+                  input.sourceMode === 'link' ? input.sourceUrl.trim().slice(0, 2_000) : '',
+                filePath:
+                  input.sourceMode === 'file' ? input.filePath.trim().slice(0, 1_000) : '',
+                fileName: input.sourceMode === 'file' ? cleanText(input.fileName, 240) : '',
+                fileSize: input.sourceMode === 'file' ? input.fileSize : 0,
+                mimeType: input.sourceMode === 'file' ? input.mimeType : '',
+          """.replace('              ', '    '),
+              """    sourceMode: 'link',
+                sourceUrl: input.sourceUrl.trim().slice(0, 2_000),
+                filePath: '',
+                fileName: '',
+                fileSize: 0,
+                mimeType: '',
+          """.replace('              ', '    '),
+              'knowledge link-only payload',
+          )
+          knowledge_path.write_text(knowledge, encoding='utf-8')
+
+          upload_path = Path('artifacts/medstart/lib/knowledge-upload.ts')
+          upload = upload_path.read_text(encoding='utf-8')
+          upload_pattern = re.compile(
+              r"export async function uploadKnowledgePdf\(.*?\n\}\n\nexport async function removeKnowledgePdf",
+              re.S,
+          )
+          upload_replacement = """export async function uploadKnowledgePdf(
+            _tutorUid: string,
+            _submissionId: string,
+            _file: File,
+          ): Promise<{ filePath: string; fileName: string }> {
+            throw new Error(
+              'Загрузка PDF временно отключена до подключения серверной антивирусной проверки.',
+            )
+          }
+
+          export async function removeKnowledgePdf"""
+          upload, upload_count = upload_pattern.subn(upload_replacement, upload, count=1)
+          if upload_count != 1:
+              raise SystemExit('Knowledge upload function was not disabled')
+          upload_path.write_text(upload, encoding='utf-8')
+
+          page_path = Path('artifacts/medstart/app/dashboard/knowledge/page.tsx')
+          page = page_path.read_text(encoding='utf-8')
+          page = replace_once(
+              page,
+              "const [sourceMode, setSourceMode] = useState<KnowledgeSourceMode>('file')",
+              "const [sourceMode, setSourceMode] = useState<KnowledgeSourceMode>('link')",
+              'knowledge form default mode',
+          )
+          page = replace_once(
+              page,
+              """            Принимаются только медицинские и фармацевтические материалы без
+                данных пациентов. PDF или ссылка появятся в общей базе после ручной
+                проверки.
+          """.replace('              ', '            '),
+              """            Принимаются только медицинские и фармацевтические материалы без
+                данных пациентов. Сейчас доступна безопасная HTTPS-ссылка; загрузка PDF
+                будет включена после подключения серверной антивирусной проверки.
+          """.replace('              ', '            '),
+              'knowledge form safety description',
+          )
+          page = replace_once(
+              page,
+              """            <button
+                  type="button"
+                  onClick={() => setSourceMode('file')}
+                  className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+                    sourceMode === 'file'
+                      ? 'bg-white text-violet-700 shadow-sm'
+                      : 'text-slate-500'
+                  }`}
+                >
+                  <Upload className="h-4 w-4" />
+                  PDF-файл
+                </button>
+          """.replace('              ', '            '),
+              """            <button
+                  type="button"
+                  disabled
+                  title="Будет доступно после подключения серверной проверки файлов"
+                  className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-400 opacity-70"
+                >
+                  <Upload className="h-4 w-4" />
+                  PDF — позже
+                </button>
+          """.replace('              ', '            '),
+              'knowledge disabled PDF control',
+          )
+          page_path.write_text(page, encoding='utf-8')
+
+          medical_path = Path('artifacts/medstart/lib/medical-workspace.ts')
+          medical = medical_path.read_text(encoding='utf-8')
+          normalize_pattern = re.compile(
+              r"function normalizeWorkspace\(.*?\n\}\n\nexport function subscribeToMedicalWorkspace",
+              re.S,
+          )
+          normalize_replacement = """function record(value: unknown): Record<string, unknown> {
+            return value && typeof value === 'object' && !Array.isArray(value)
+              ? (value as Record<string, unknown>)
+              : {}
+          }
+
+          function safeString(value: unknown, maxLength: number, fallback = '') {
+            return typeof value === 'string' ? value.slice(0, maxLength) : fallback
+          }
+
+          function safeBoolean(value: unknown, fallback: boolean) {
+            return typeof value === 'boolean' ? value : fallback
+          }
+
+          function normalizeLabRow(value: unknown): LabRow | null {
+            const data = record(value)
+            const id = safeString(data.id, 160)
+            if (!id) return null
+            return {
+              id,
+              name: safeString(data.name, 240),
+              value: safeString(data.value, 120),
+              unit: safeString(data.unit, 80),
+              referenceLow: safeString(data.referenceLow, 120),
+              referenceHigh: safeString(data.referenceHigh, 120),
+              note: safeString(data.note, 1000),
+            }
+          }
+
+          function normalizeWorkspace(
+            bookingId: string,
+            data: Partial<MedicalWorkspaceData> | undefined,
+          ): MedicalWorkspaceData {
+            const fallback = emptyMedicalWorkspace(bookingId)
+            const clinical = record(data?.clinicalCase)
+            const ecg = record(data?.ecg)
+            const privacy = record(data?.privacy)
+            const background = record(data?.boardBackground)
+            const backgroundKind =
+              background.kind === 'image' || background.kind === 'anatomy'
+                ? background.kind
+                : 'none'
+            const anatomyLayer =
+              background.anatomyLayer === 'skeleton' ||
+              background.anatomyLayer === 'vessels'
+                ? background.anatomyLayer
+                : 'organs'
+            const anatomyView =
+              background.anatomyView === 'left' ||
+              background.anatomyView === 'back' ||
+              background.anatomyView === 'right'
+                ? background.anatomyView
+                : 'front'
+            const anatomyRegion = [
+              'brain',
+              'thorax',
+              'heart',
+              'lungs',
+              'abdomen',
+              'pelvis',
+            ].includes(String(background.anatomyRegion))
+              ? String(background.anatomyRegion)
+              : 'thorax'
+
+            return {
+              bookingId,
+              clinicalCase: {
+                complaint: safeString(clinical.complaint, 12000),
+                anamnesis: safeString(clinical.anamnesis, 12000),
+                examination: safeString(clinical.examination, 12000),
+                diagnosis: safeString(clinical.diagnosis, 12000),
+                differential: safeString(clinical.differential, 12000),
+                plan: safeString(clinical.plan, 12000),
+                teachingGoal: safeString(clinical.teachingGoal, 12000),
+              },
+              labs: Array.isArray(data?.labs)
+                ? data.labs
+                    .slice(0, 100)
+                    .map(normalizeLabRow)
+                    .filter((row): row is LabRow => row !== null)
+                : [],
+              ecg: {
+                rhythm: safeString(ecg.rhythm, 200, fallback.ecg.rhythm),
+                heartRate: safeString(ecg.heartRate, 40, fallback.ecg.heartRate),
+                axis: safeString(ecg.axis, 200, fallback.ecg.axis),
+                prMs: safeString(ecg.prMs, 40, fallback.ecg.prMs),
+                qrsMs: safeString(ecg.qrsMs, 40, fallback.ecg.qrsMs),
+                qtMs: safeString(ecg.qtMs, 40, fallback.ecg.qtMs),
+                qtcMs: safeString(ecg.qtcMs, 40, fallback.ecg.qtcMs),
+                conclusion: safeString(ecg.conclusion, 12000),
+              },
+              privacy: {
+                deidentified: safeBoolean(
+                  privacy.deidentified,
+                  fallback.privacy.deidentified,
+                ),
+                identifiersRemoved: safeBoolean(
+                  privacy.identifiersRemoved,
+                  fallback.privacy.identifiersRemoved,
+                ),
+                consentConfirmed: safeBoolean(
+                  privacy.consentConfirmed,
+                  fallback.privacy.consentConfirmed,
+                ),
+                educationalUseOnly: safeBoolean(
+                  privacy.educationalUseOnly,
+                  fallback.privacy.educationalUseOnly,
+                ),
+                patientLabel: safeString(
+                  privacy.patientLabel,
+                  160,
+                  fallback.privacy.patientLabel,
+                ),
+              },
+              boardBackground: {
+                kind: backgroundKind,
+                assetId: safeString(background.assetId, 160),
+                label: safeString(background.label, 240),
+                anatomyLayer,
+                anatomyView,
+                anatomyRegion,
+              },
+              updatedByUid: safeString(data?.updatedByUid, 160),
+              createdAt: data?.createdAt,
+              updatedAt: data?.updatedAt,
+            }
+          }
+
+          export function subscribeToMedicalWorkspace"""
+          medical, normalize_count = normalize_pattern.subn(
+              normalize_replacement,
+              medical,
+              count=1,
+          )
+          if normalize_count != 1:
+              raise SystemExit('Medical workspace normalizer was not replaced')
+          medical_path.write_text(medical, encoding='utf-8')
+
+          tests_path = Path('scripts/test-critical-rules.mjs')
+          tests = tests_path.read_text(encoding='utf-8')
+          tests = replace_once(
+              tests,
+              "import { getBytes, ref, uploadBytes } from 'firebase/storage'",
+              "import { getBytes, ref, uploadBytes } from 'firebase/storage'",
+              'storage test import',
+          )
+          insertion = """
+            await assertFails(
+              setDoc(doc(tutor.firestore(), 'availability', tutorUid), {
+                tutorUid,
+                timezone: 'Europe/Moscow',
+                days: { monday: { enabled: true, start: '10:00', end: '19:00' } },
+                updatedAt: serverTimestamp(),
+              }),
+            )
+
+            await assertFails(
+              setDoc(doc(tutor.firestore(), 'materials', 'unsafe-link'), {
+                bookingId,
+                tutorUid,
+                tutorName: 'Тест Репетитор',
+                studentUid,
+                studentName: 'Учебный Студент',
+                title: 'Опасная ссылка',
+                description: '',
+                url: 'javascript:alert(1)',
+                kind: 'link',
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              }),
+            )
+
+            await assertFails(
+              updateDoc(doc(tutor.firestore(), 'medicalWorkspaces', bookingId), {
+                clinicalCase: { complaint: ['invalid'] },
+                updatedByUid: tutorUid,
+                updatedAt: serverTimestamp(),
+              }),
+            )
+
+            await assertFails(
+              uploadBytes(
+                ref(
+                  tutor.storage(),
+                  `knowledge-submissions/${tutorUid}/unsafe/material.pdf`,
+                ),
+                new TextEncoder().encode('%PDF-unsafe'),
+                { contentType: 'application/pdf' },
+              ),
+            )
+          """
+          marker = """  await assertSucceeds(
+              updateDoc(doc(tutor.firestore(), 'bookings', bookingId), {
+                status: 'completed',
+                completedAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              }),
+            )
+          """
+          tests = replace_once(tests, marker, insertion + '\n' + marker, 'critical regression tests')
+          tests_path.write_text(tests, encoding='utf-8')
+          PY
+
+      - name: Commit safety patches
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add firestore.secure.rules storage.rules scripts/test-critical-rules.mjs \
+            artifacts/medstart/lib/knowledge-base.ts \
+            artifacts/medstart/lib/knowledge-upload.ts \
+            artifacts/medstart/lib/medical-workspace.ts \
+            artifacts/medstart/app/dashboard/knowledge/page.tsx
+          git commit -m "security: harden content inputs and disable unscanned PDFs"
+          git push origin HEAD:fix/critical-audit-v1
