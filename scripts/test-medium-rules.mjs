@@ -258,7 +258,7 @@ async function run() {
     email_verified: true,
   })
 
-  await assertSucceeds(
+  await assertFails(
     setDoc(
       doc(newStudent.firestore(), 'users', newStudentUid),
       profile(newStudentUid, 'student'),
