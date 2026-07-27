@@ -58,10 +58,10 @@ export default function RegisterTutorPage() {
             </label>
             <label className="block space-y-2 text-sm font-medium">
               Специализация *
-                              <input
-                  required
-                  className={inputClass}
-                  placeholder="Например: анатомия и физиология"
+              <input
+                required
+                className={inputClass}
+                placeholder="Например: анатомия и физиология"
                 value={form.specialization}
                 onChange={(event) => form.setSpecialization(event.target.value)}
               />
@@ -200,13 +200,17 @@ export default function RegisterTutorPage() {
               </label>
             </div>
             {form.error && (
-              <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
+              <p
+                role="alert"
+                className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700"
+              >
                 {form.error}
               </p>
             )}
             <button
               type="submit"
               disabled={form.loading}
+              aria-busy={form.loading}
               className="w-full rounded-2xl bg-violet-600 px-5 py-3.5 font-semibold text-white disabled:opacity-60"
             >
               {form.loading
