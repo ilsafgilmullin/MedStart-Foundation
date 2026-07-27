@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: firebase-live-auth-${{ github.ref }}
@@ -59,10 +60,39 @@ jobs:
           chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
 
       - name: Audit live Firebase authentication and request owner reset
+        id: live_audit
+        continue-on-error: true
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
           SEND_OWNER_RESET: 'true'
         run: node scripts/live-auth-audit.mjs
+
+      - name: Publish sanitized audit result
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          node - <<'NODE' > auth-live-audit-comment.md
+          const fs = require('node:fs')
+          if (!fs.existsSync('auth-live-audit-report.json')) {
+            console.log('### Firebase live authentication audit\n\nThe audit stopped before producing its sanitized report.')
+            process.exit(0)
+          }
+          const report = JSON.parse(fs.readFileSync('auth-live-audit-report.json', 'utf8'))
+          const checks = report.checks
+            .map((item) => `- ${item.status === 'passed' ? '✅' : '❌'} ${item.name}`)
+            .join('\n')
+          console.log('### Firebase live authentication audit')
+          console.log('')
+          console.log(`Status: **${report.status}**`)
+          if (report.error) console.log(`\nFailure: \`${report.error}\``)
+          if (report.owner) {
+            console.log(`\nOwner: verified=${report.owner.emailVerified}, disabled=${report.owner.disabled}, profile=${report.owner.profileExists}, role=${report.owner.role}, status=${report.owner.status}`)
+          }
+          if (checks) console.log(`\n${checks}`)
+          NODE
+          gh pr comment "$PR_NUMBER" --body-file auth-live-audit-comment.md
 
       - name: Upload sanitized audit report
         if: always()
@@ -72,3 +102,7 @@ jobs:
           path: auth-live-audit-report.json
           if-no-files-found: warn
           retention-days: 3
+
+      - name: Fail workflow when live audit failed
+        if: steps.live_audit.outcome != 'success'
+        run: exit 1
