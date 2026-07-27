@@ -1,3 +1,4 @@
+import { FirebaseError } from 'firebase/app'
 import {
   createUserWithEmailAndPassword,
   deleteUser,
@@ -41,8 +42,24 @@ export interface AuthSession {
   profile: UserProfile
 }
 
-const VERIFY_EMAIL_MESSAGE =
-  'Подтвердите электронную почту по ссылке из письма MedStart. Новое письмо отправлено повторно.'
+export class EmailVerificationRequiredError extends Error {
+  readonly verificationSent: boolean
+
+  constructor(message: string, verificationSent: boolean) {
+    super(message)
+    this.name = 'EmailVerificationRequiredError'
+    this.verificationSent = verificationSent
+  }
+}
+
+const VERIFY_EMAIL_SENT_MESSAGE =
+  'Почта не подтверждена. Новое письмо отправлено. Проверьте «Входящие» и «Спам», откройте ссылку из письма MedStart, затем войдите снова.'
+
+const VERIFY_EMAIL_RATE_LIMIT_MESSAGE =
+  'Почта не подтверждена. Письмо уже недавно отправлялось. Проверьте «Входящие» и «Спам», затем повторите вход.'
+
+const VERIFY_EMAIL_FAILED_MESSAGE =
+  'Почта не подтверждена, но новое письмо сейчас отправить не удалось. Повторите попытку позже.'
 
 function clearSensitiveBrowserState() {
   if (typeof window === 'undefined') return
@@ -86,9 +103,32 @@ async function assertVerifiedEmail(credential: UserCredential) {
   await credential.user.reload()
   if (credential.user.emailVerified) return
 
-  await sendEmailVerification(credential.user).catch(() => undefined)
-  await secureSignOut()
-  throw new Error(VERIFY_EMAIL_MESSAGE)
+  auth.useDeviceLanguage()
+
+  try {
+    await sendEmailVerification(credential.user)
+    await secureSignOut()
+    throw new EmailVerificationRequiredError(VERIFY_EMAIL_SENT_MESSAGE, true)
+  } catch (error) {
+    if (error instanceof EmailVerificationRequiredError) throw error
+
+    await secureSignOut()
+
+    if (
+      error instanceof FirebaseError &&
+      error.code === 'auth/too-many-requests'
+    ) {
+      throw new EmailVerificationRequiredError(
+        VERIFY_EMAIL_RATE_LIMIT_MESSAGE,
+        false,
+      )
+    }
+
+    throw new EmailVerificationRequiredError(
+      VERIFY_EMAIL_FAILED_MESSAGE,
+      false,
+    )
+  }
 }
 
 export async function login(
@@ -130,7 +170,18 @@ async function registerWithProfile(
     throw error
   }
 
-  await sendEmailVerification(credential.user).catch(() => undefined)
+  auth.useDeviceLanguage()
+  try {
+    await sendEmailVerification(credential.user)
+  } catch (error) {
+    await secureSignOut()
+    throw new Error(
+      error instanceof FirebaseError && error.code === 'auth/too-many-requests'
+        ? VERIFY_EMAIL_RATE_LIMIT_MESSAGE
+        : VERIFY_EMAIL_FAILED_MESSAGE,
+    )
+  }
+
   await secureSignOut()
   return { credential, profile }
 }
@@ -186,8 +237,11 @@ export async function logout(): Promise<void> {
 
 export const resetPassword = (email: string) =>
   sendPasswordResetEmail(auth, email.trim().toLowerCase())
+
 export async function resendEmailVerification(): Promise<void> {
   if (!auth.currentUser) throw new Error('Сначала войдите в аккаунт.')
+  auth.useDeviceLanguage()
   await sendEmailVerification(auth.currentUser)
 }
+
 export { isOwnerUid } from './access-control'

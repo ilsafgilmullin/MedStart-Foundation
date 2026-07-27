@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useLogin } from '@/hooks/useLogin'
 
 const inputClass =
-  'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100'
+  'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100 sm:text-sm'
 
 export default function LoginPage() {
   const form = useLogin()
@@ -26,9 +26,10 @@ export default function LoginPage() {
               <input
                 type="email"
                 autoComplete="email"
+                required
                 className={inputClass}
                 value={form.email}
-                onChange={(e) => form.setEmail(e.target.value)}
+                onChange={(event) => form.setEmail(event.target.value)}
               />
             </label>
             <label className="block space-y-2 text-sm font-medium">
@@ -36,23 +37,41 @@ export default function LoginPage() {
               <input
                 type="password"
                 autoComplete="current-password"
+                required
                 className={inputClass}
                 value={form.password}
-                onChange={(e) => form.setPassword(e.target.value)}
+                onChange={(event) => form.setPassword(event.target.value)}
               />
             </label>
+            {form.verificationNotice && (
+              <p
+                role="status"
+                className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-800"
+              >
+                {form.verificationNotice}
+              </p>
+            )}
             {form.error && (
-              <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
+              <p
+                role="alert"
+                className="rounded-2xl bg-red-50 px-4 py-3 text-sm leading-6 text-red-700"
+              >
                 {form.error}
               </p>
             )}
             <button
+              type="submit"
               disabled={form.loading}
+              aria-busy={form.loading}
               className="w-full rounded-2xl bg-violet-600 px-5 py-3.5 font-semibold text-white disabled:opacity-60"
             >
-              {form.loading ? 'Входим…' : 'Войти'}
+              {form.loading ? 'Проверяем аккаунт…' : 'Войти'}
             </button>
           </form>
+          <p className="mt-4 text-xs leading-5 text-slate-500">
+            Если почта ещё не подтверждена, попытка входа отправит новое письмо.
+            Проверьте также папку «Спам».
+          </p>
           <div className="mt-6 flex flex-wrap justify-between gap-3 text-sm">
             <Link href="/register/student" className="text-violet-700">
               Создать аккаунт

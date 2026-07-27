@@ -4,7 +4,10 @@ import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { FirebaseError } from 'firebase/app'
 
-import { login } from '@/lib/auth'
+import {
+  EmailVerificationRequiredError,
+  login,
+} from '@/lib/auth'
 import { ROUTES } from '@/lib/constants'
 
 export function useLogin() {
@@ -15,11 +18,13 @@ export function useLogin() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [verificationNotice, setVerificationNotice] = useState('')
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
 
     setError('')
+    setVerificationNotice('')
 
     if (!email || !password) {
       setError('Заполните все поля.')
@@ -33,7 +38,10 @@ export function useLogin() {
 
       router.push(ROUTES.DASHBOARD)
     } catch (err) {
-      if (err instanceof FirebaseError) {
+      if (err instanceof EmailVerificationRequiredError) {
+        if (err.verificationSent) setVerificationNotice(err.message)
+        else setError(err.message)
+      } else if (err instanceof FirebaseError) {
         switch (err.code) {
           case 'auth/user-not-found':
           case 'auth/wrong-password':
@@ -71,6 +79,7 @@ export function useLogin() {
 
     loading,
     error,
+    verificationNotice,
 
     handleSubmit,
   }
