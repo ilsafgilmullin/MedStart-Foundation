@@ -289,7 +289,7 @@ service cloud.firestore {
     }
 
     match /bookings/{bookingId} {
-      allow create: if signedIn() && validBookingCreate();
+      allow create: if false;
       allow read: if isModerator() || isActiveBookingParticipant();
       allow update: if isOwner()
         || (signedIn() && (
@@ -386,7 +386,7 @@ service cloud.firestore {
     }
 
     match /conversations/{conversationId} {
-      allow create: if signedIn() && validConversationCreate(conversationId);
+      allow create: if false;
       allow read: if isModerator()
         || (signedIn()
           && userExists(request.auth.uid)
