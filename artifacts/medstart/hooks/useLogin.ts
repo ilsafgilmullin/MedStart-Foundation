@@ -80,9 +80,8 @@ export function useLogin() {
       setLoading(true)
       await login(normalizedEmail, password)
 
-      // A single hard navigation is intentional. Calling router.replace() and
-      // router.refresh() back-to-back races on mobile Safari and can refresh the
-      // current form instead of opening the authenticated dashboard.
+      // A single hard navigation avoids a mobile Safari race between a route
+      // transition and a simultaneous refresh of the current form.
       navigationStarted = true
       window.location.replace(ROUTES.DASHBOARD)
     } catch (caught) {
