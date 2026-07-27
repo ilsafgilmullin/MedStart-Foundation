@@ -1,0 +1,74 @@
+name: Firebase live authentication audit
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'artifacts/medstart/lib/auth.ts'
+      - 'artifacts/medstart/lib/firebase.ts'
+      - 'artifacts/medstart/hooks/useLogin.ts'
+      - 'artifacts/medstart/hooks/useStudentRegistration.ts'
+      - 'artifacts/medstart/hooks/useTutorRegistration.ts'
+      - 'artifacts/medstart/app/login/page.tsx'
+      - 'artifacts/medstart/app/forgot-password/page.tsx'
+      - 'scripts/live-auth-audit.mjs'
+      - '.github/workflows/auth-live-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-live-auth-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'fix/full-auth-audit-v2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --reporter=silent
+
+      - name: Prepare Firebase service account
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ]; then
+            echo "GitHub secret FIREBASE_SERVICE_ACCOUNT_JSON is not configured."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/firebase-service-account.json"
+          chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
+
+      - name: Audit live Firebase authentication and request owner reset
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+          SEND_OWNER_RESET: 'true'
+        run: node scripts/live-auth-audit.mjs
+
+      - name: Upload sanitized audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: medstart-live-auth-audit
+          path: auth-live-audit-report.json
+          if-no-files-found: warn
+          retention-days: 3
