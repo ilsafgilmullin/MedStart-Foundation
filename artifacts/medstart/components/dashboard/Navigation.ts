@@ -54,6 +54,7 @@ const moderator = [
     href: '/dashboard/admin',
     icon: ShieldCheck,
   },
+  { name: 'Сообщения', href: '/dashboard/messages', icon: MessageCircle },
   { name: 'Каталог', href: '/dashboard/tutors', icon: Search },
   {
     name: 'Учебная база',
