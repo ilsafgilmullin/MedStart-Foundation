@@ -8,11 +8,15 @@ import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
+  ClipboardCheck,
   Clock3,
   GraduationCap,
+  Heart,
   LoaderCircle,
   MapPin,
   MessageCircle,
+  ShieldCheck,
+  Sparkles,
   Star,
   Video,
 } from 'lucide-react'
@@ -53,6 +57,7 @@ export default function TutorProfilePage() {
   const [requestedTime, setRequestedTime] = useState('')
   const [format, setFormat] = useState<LessonFormat>('online')
   const [message, setMessage] = useState('')
+  const [favorite, setFavorite] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -61,7 +66,16 @@ export default function TutorProfilePage() {
         if (!active) return
         setTutor(item)
         setFormat(item?.lessonFormats?.[0] ?? 'online')
-        setSubject(item?.subjects?.[0] ?? item?.specialization ?? '')
+        const preferredSubject = profile?.subjects?.find((studentSubject) =>
+          item?.subjects?.some(
+            (tutorSubject) =>
+              tutorSubject.toLocaleLowerCase('ru-RU') ===
+              studentSubject.toLocaleLowerCase('ru-RU'),
+          ),
+        )
+        setSubject(
+          preferredSubject ?? item?.subjects?.[0] ?? item?.specialization ?? '',
+        )
         setLoading(false)
       })
       .catch(() => {
@@ -72,12 +86,42 @@ export default function TutorProfilePage() {
     return () => {
       active = false
     }
-  }, [tutorUid])
+  }, [profile?.subjects, tutorUid])
 
   useEffect(() => {
     if (!tutor) return
     return subscribeToAvailability(tutor.uid, setAvailability, () => undefined)
   }, [tutor])
+
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(
+        window.localStorage.getItem('medstart-favorite-tutors') || '[]',
+      ) as string[]
+      setFavorite(Array.isArray(saved) && saved.includes(tutorUid))
+    } catch {
+      setFavorite(false)
+    }
+  }, [tutorUid])
+
+  function toggleFavorite() {
+    try {
+      const saved = JSON.parse(
+        window.localStorage.getItem('medstart-favorite-tutors') || '[]',
+      ) as string[]
+      const next = new Set(Array.isArray(saved) ? saved : [])
+      if (next.has(tutorUid)) next.delete(tutorUid)
+      else next.add(tutorUid)
+      window.localStorage.setItem(
+        'medstart-favorite-tutors',
+        JSON.stringify([...next]),
+      )
+      setFavorite(next.has(tutorUid))
+    } catch {
+      setFavorite((current) => !current)
+    }
+  }
 
   const activeDays = useMemo(
     () =>
@@ -86,6 +130,18 @@ export default function TutorProfilePage() {
         : [],
     [availability],
   )
+
+  const matchingSubjects = useMemo(() => {
+    const studentSubjects = profile?.subjects ?? []
+    const tutorSubjects = tutor?.subjects ?? []
+    return studentSubjects.filter((studentSubject) =>
+      tutorSubjects.some(
+        (tutorSubject) =>
+          tutorSubject.toLocaleLowerCase('ru-RU') ===
+          studentSubject.toLocaleLowerCase('ru-RU'),
+      ),
+    )
+  }, [profile?.subjects, tutor?.subjects])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -119,7 +175,7 @@ export default function TutorProfilePage() {
   if (loading) {
     return (
       <div className="flex min-h-72 items-center justify-center">
-        <LoaderCircle className="h-8 w-8 animate-spin text-violet-600" />
+        <LoaderCircle className="h-8 w-8 animate-spin text-teal-700" />
       </div>
     )
   }
@@ -165,22 +221,35 @@ export default function TutorProfilePage() {
                   className="h-28 w-28 rounded-3xl object-cover"
                 />
               ) : (
-                <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-3xl bg-violet-100 text-3xl font-bold text-violet-700">
+                <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-3xl bg-violet-100 text-3xl font-bold text-teal-700">
                   {tutor.firstName.slice(0, 1)}
                   {tutor.lastName.slice(0, 1)}
                 </div>
               )}
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-3xl font-bold text-slate-900">
-                    {tutor.displayName}
-                  </h1>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Проверен
-                  </span>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="text-3xl font-black text-slate-950">
+                      {tutor.displayName}
+                    </h1>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Проверен
+                    </span>
+                  </div>
+                  {role === 'student' && (
+                    <button
+                      type="button"
+                      onClick={toggleFavorite}
+                      aria-pressed={favorite}
+                      className={`ms-icon-btn ${favorite ? 'ms-icon-btn-danger' : 'ms-icon-btn-neutral'}`}
+                      aria-label={favorite ? 'Убрать из избранного' : 'Добавить в избранное'}
+                    >
+                      <Heart className={`h-5 w-5 ${favorite ? 'fill-current' : ''}`} />
+                    </button>
+                  )}
                 </div>
-                <p className="mt-2 text-lg font-medium text-violet-700">
+                <p className="mt-2 text-lg font-bold text-teal-700">
                   {tutor.specialization || 'Медицинский репетитор'}
                 </p>
                 {tutor.title && (
@@ -265,9 +334,57 @@ export default function TutorProfilePage() {
             </div>
           </section>
 
+          {role === 'student' && (
+            <section className="rounded-[28px] border border-teal-200 bg-gradient-to-br from-teal-50 to-white p-6 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="rounded-2xl bg-white p-3 text-teal-700 shadow-sm ring-1 ring-teal-100">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-slate-950">
+                    Насколько профиль подходит вам
+                  </h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    Сравнение строится по дисциплинам, которые вы указали в профиле обучения.
+                  </p>
+                </div>
+              </div>
+              {matchingSubjects.length ? (
+                <div className="mt-5">
+                  <p className="text-sm font-bold text-emerald-800">Совпадающие дисциплины</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {matchingSubjects.map((item) => (
+                      <span key={item} className="rounded-full bg-white px-3 py-1.5 text-sm font-bold text-teal-800 ring-1 ring-teal-200">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-5 rounded-2xl bg-white p-4 text-sm leading-6 text-slate-600 ring-1 ring-slate-200">
+                  Прямых совпадений пока нет. Оцените опыт и описание преподавателя либо добавьте нужные дисциплины в свой профиль.
+                </p>
+              )}
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+                  <ShieldCheck className="h-5 w-5 text-teal-700" />
+                  <p className="mt-2 text-sm font-bold text-slate-900">Профиль проверен</p>
+                </div>
+                <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+                  <Video className="h-5 w-5 text-teal-700" />
+                  <p className="mt-2 text-sm font-bold text-slate-900">Занятие в MedStart</p>
+                </div>
+                <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+                  <ClipboardCheck className="h-5 w-5 text-teal-700" />
+                  <p className="mt-2 text-sm font-bold text-slate-900">Материалы после занятия</p>
+                </div>
+              </div>
+            </section>
+          )}
+
           <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-center gap-3">
-              <CalendarDays className="h-6 w-6 text-violet-600" />
+              <CalendarDays className="h-6 w-6 text-teal-700" />
               <div>
                 <h2 className="text-xl font-bold text-slate-900">
                   Обычное расписание
@@ -333,7 +450,7 @@ export default function TutorProfilePage() {
               </div>
             ) : role !== 'student' ? (
               <div className="py-6 text-center">
-                <CalendarDays className="mx-auto h-10 w-10 text-violet-600" />
+                <CalendarDays className="mx-auto h-10 w-10 text-teal-700" />
                 <h2 className="mt-4 text-xl font-bold text-slate-900">
                   Профиль репетитора
                 </h2>
@@ -347,8 +464,16 @@ export default function TutorProfilePage() {
                   Записаться на занятие
                 </h2>
                 <p className="mt-2 text-sm text-slate-500">
-                  Это заявка без оплаты. Репетитор подтвердит время в кабинете.
+                  Это заявка без оплаты. Преподаватель сначала подтвердит время.
                 </p>
+                <div className="mt-4 rounded-2xl bg-teal-50 p-4 text-sm text-teal-900">
+                  <p className="font-bold">Что произойдёт дальше</p>
+                  <ol className="mt-2 space-y-1.5 text-teal-800">
+                    <li>1. Преподаватель рассмотрит заявку.</li>
+                    <li>2. После подтверждения занятие появится в расписании.</li>
+                    <li>3. В назначенное время откроется MedStart Live.</li>
+                  </ol>
+                </div>
                 {error && (
                   <div className="mt-4 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
                     {error}
@@ -435,7 +560,7 @@ export default function TutorProfilePage() {
                     />
                   </label>
                   <div className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-                    <Clock3 className="h-5 w-5 shrink-0 text-violet-600" />
+                    <Clock3 className="h-5 w-5 shrink-0 text-teal-700" />
                     {tutor.lessonDuration ?? 60} минут ·{' '}
                     {tutor.lessonPrice
                       ? `${tutor.lessonPrice.toLocaleString('ru-RU')} ₽`

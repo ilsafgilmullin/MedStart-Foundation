@@ -3,11 +3,18 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import {
   AlertCircle,
+  BookOpenCheck,
   Camera,
   CheckCircle2,
+  Clock3,
+  GraduationCap,
   LoaderCircle,
+  MapPin,
   Save,
   Send,
+  Sparkles,
+  Target,
+  UserRoundCheck,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import ProfilePhoto from '@/components/dashboard/ProfilePhoto'
@@ -254,25 +261,64 @@ export default function ProfilePage() {
     .trim()
   const isTutor = profile.role === 'tutor'
   const isStudent = profile.role === 'student' && role === 'student'
+  const studentCompletionFields = isStudent
+    ? [
+        form.firstName,
+        form.lastName,
+        form.avatar,
+        form.fieldOfStudy,
+        form.studyYear,
+        form.institution,
+        form.city,
+        form.subjects,
+        form.bio,
+        form.timezone,
+      ]
+    : []
+  const studentCompletion = isStudent
+    ? Math.round(
+        (studentCompletionFields.filter((value) => Boolean(String(value).trim()))
+          .length /
+          studentCompletionFields.length) *
+          100,
+      )
+    : 0
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Профиль</h1>
-          <p className="mt-2 text-slate-500">
-            Управляйте данными, которые используются в вашем кабинете.
-          </p>
+      <header className="overflow-hidden rounded-[32px] bg-gradient-to-br from-slate-950 via-teal-950 to-teal-800 p-6 text-white shadow-xl sm:p-8">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-bold ring-1 ring-white/15">
+              <UserRoundCheck className="h-4 w-4 text-cyan-200" />
+              {role ? roleNames[role] : 'Пользователь'} · {statusNames[profile.status]}
+            </span>
+            <h1 className="mt-4 text-3xl font-black sm:text-4xl">Профиль</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-teal-50/85 sm:text-base">
+              {isStudent
+                ? 'Ваш учебный паспорт помогает MedStart точнее подбирать преподавателей, дисциплины и материалы.'
+                : 'Управляйте данными, которые используются в вашем кабинете.'}
+            </p>
+          </div>
+          {isStudent && (
+            <div className="min-w-[240px] rounded-2xl border border-white/15 bg-white/10 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-2 text-sm font-bold">
+                  <Sparkles className="h-4 w-4 text-cyan-200" />
+                  Заполнение профиля
+                </span>
+                <span className="font-black text-cyan-100">{studentCompletion}%</span>
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/15">
+                <div className="h-full rounded-full bg-cyan-300 transition-all" style={{ width: `${studentCompletion}%` }} />
+              </div>
+              <p className="mt-3 text-xs leading-5 text-teal-50/75">
+                Заполните вуз, курс, сложные предметы и предпочтения по занятиям.
+              </p>
+            </div>
+          )}
         </div>
-        <div className="flex flex-wrap gap-2 text-sm font-semibold">
-          <span className="rounded-full bg-violet-100 px-3 py-1.5 text-violet-700">
-            {role ? roleNames[role] : 'Пользователь'}
-          </span>
-          <span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-600">
-            {statusNames[profile.status]}
-          </span>
-        </div>
-      </div>
+      </header>
 
       {profile.status === 'pending' && isTutor && (
         <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800">
@@ -322,7 +368,7 @@ export default function ProfilePage() {
                 className="h-24 w-24 rounded-3xl object-cover"
               />
             ) : (
-              <div className="flex h-24 w-24 items-center justify-center rounded-3xl bg-violet-100 text-2xl font-bold text-violet-700">
+              <div className="flex h-24 w-24 items-center justify-center rounded-3xl bg-teal-50 text-2xl font-bold text-teal-700">
                 {initials || 'MS'}
               </div>
             )}
@@ -352,8 +398,7 @@ export default function ProfilePage() {
               Фотография профиля
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              JPG, PNG или WebP до 5 МБ. Репетиторы видны с этой фотографией в
-              каталоге.
+              JPG, PNG или WebP до 5 МБ. Фотография помогает преподавателю узнать вас перед первым занятием.
             </p>
           </div>
         </div>
@@ -386,51 +431,201 @@ export default function ProfilePage() {
               disabled
             />
           </label>
-          <label className="space-y-2 text-sm font-medium text-slate-700">
-            Город
-            <input
-              className={inputClass}
-              value={form.city}
-              onChange={(event) => field('city', event.target.value)}
-              placeholder="Например: Казань"
-            />
-          </label>
+          {!isStudent && (
+            <label className="space-y-2 text-sm font-medium text-slate-700">
+              Город
+              <input
+                className={inputClass}
+                value={form.city}
+                onChange={(event) => field('city', event.target.value)}
+                placeholder="Например: Казань"
+              />
+            </label>
+          )}
         </div>
       </section>
 
       {isStudent && (
-        <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-          <h2 className="text-xl font-bold text-slate-900">Обучение</h2>
-          <div className="mt-6 grid gap-5 sm:grid-cols-2">
-            <label className="space-y-2 text-sm font-medium text-slate-700">
-              Направление
+        <>
+          <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+            <div className="flex items-start gap-3">
+              <div className="rounded-2xl bg-teal-50 p-3 text-teal-700 ring-1 ring-teal-100">
+                <GraduationCap className="h-6 w-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-slate-950">Образование</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Эти данные используются для рекомендаций по уровню подготовки.
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 grid gap-5 sm:grid-cols-2">
+              <label className="space-y-2 text-sm font-medium text-slate-700">
+                Учебное заведение
+                <input
+                  className={inputClass}
+                  value={form.institution}
+                  onChange={(event) => field('institution', event.target.value)}
+                  placeholder="Например: Казанский ГМУ"
+                />
+              </label>
+              <label className="space-y-2 text-sm font-medium text-slate-700">
+                Направление
+                <input
+                  className={inputClass}
+                  value={form.fieldOfStudy}
+                  onChange={(event) => field('fieldOfStudy', event.target.value)}
+                  placeholder="Например: лечебное дело"
+                />
+              </label>
+              <label className="space-y-2 text-sm font-medium text-slate-700">
+                Курс обучения
+                <input
+                  className={inputClass}
+                  value={form.studyYear}
+                  onChange={(event) => field('studyYear', event.target.value)}
+                  placeholder="Например: 4-й курс"
+                />
+              </label>
+              <label className="space-y-2 text-sm font-medium text-slate-700">
+                Город
+                <div className="relative">
+                  <MapPin className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    className={`${inputClass} pl-11`}
+                    value={form.city}
+                    onChange={(event) => field('city', event.target.value)}
+                    placeholder="Например: Казань"
+                  />
+                </div>
+              </label>
+            </div>
+          </section>
+
+          <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+            <div className="flex items-start gap-3">
+              <div className="rounded-2xl bg-sky-50 p-3 text-sky-700 ring-1 ring-sky-100">
+                <Target className="h-6 w-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-slate-950">Учебные цели</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Укажите дисциплины и задачи, с которыми нужна помощь.
+                </p>
+              </div>
+            </div>
+            <label className="mt-6 block space-y-2 text-sm font-medium text-slate-700">
+              Сложные дисциплины или темы
               <input
                 className={inputClass}
-                value={form.fieldOfStudy}
-                onChange={(event) => field('fieldOfStudy', event.target.value)}
-                placeholder="Например: лечебное дело"
+                value={form.subjects}
+                onChange={(event) => field('subjects', event.target.value)}
+                placeholder="Анатомия, фармакология, ЭКГ"
+              />
+              <span className="block text-xs font-normal text-slate-400">
+                Перечислите через запятую — по ним формируются персональные совпадения.
+              </span>
+            </label>
+            <label className="mt-5 block space-y-2 text-sm font-medium text-slate-700">
+              О себе и цели обучения
+              <textarea
+                className={`${inputClass} min-h-36 resize-y`}
+                value={form.bio}
+                onChange={(event) => field('bio', event.target.value)}
+                placeholder="К чему готовитесь, какие темы вызывают сложности и какой результат хотите получить?"
               />
             </label>
-            <label className="space-y-2 text-sm font-medium text-slate-700">
-              Курс обучения
-              <input
-                className={inputClass}
-                value={form.studyYear}
-                onChange={(event) => field('studyYear', event.target.value)}
-                placeholder="Например: 4"
-              />
-            </label>
-          </div>
-          <label className="mt-5 block space-y-2 text-sm font-medium text-slate-700">
-            О себе и цели обучения
-            <textarea
-              className={`${inputClass} min-h-32 resize-y`}
-              value={form.bio}
-              onChange={(event) => field('bio', event.target.value)}
-              placeholder="Какие темы хотите разобрать и к чему готовитесь?"
-            />
-          </label>
-        </section>
+          </section>
+
+          <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+            <div className="flex items-start gap-3">
+              <div className="rounded-2xl bg-amber-50 p-3 text-amber-700 ring-1 ring-amber-100">
+                <Clock3 className="h-6 w-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-slate-950">Предпочтения занятий</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  MedStart будет учитывать их при выборе преподавателя.
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 grid gap-5 sm:grid-cols-2">
+              <label className="space-y-2 text-sm font-medium text-slate-700">
+                Предпочтительная длительность
+                <select
+                  className={inputClass}
+                  value={form.lessonDuration}
+                  onChange={(event) => field('lessonDuration', event.target.value)}
+                >
+                  <option value="30">30 минут</option>
+                  <option value="45">45 минут</option>
+                  <option value="60">60 минут</option>
+                  <option value="90">90 минут</option>
+                  <option value="120">120 минут</option>
+                </select>
+              </label>
+              <label className="space-y-2 text-sm font-medium text-slate-700">
+                Часовой пояс
+                <select
+                  className={inputClass}
+                  value={form.timezone}
+                  onChange={(event) => field('timezone', event.target.value)}
+                >
+                  <option value="Europe/Moscow">Москва (UTC+3)</option>
+                  <option value="Europe/Samara">Самара (UTC+4)</option>
+                  <option value="Asia/Yekaterinburg">Екатеринбург (UTC+5)</option>
+                  <option value="Asia/Omsk">Омск (UTC+6)</option>
+                  <option value="Asia/Krasnoyarsk">Красноярск (UTC+7)</option>
+                  <option value="Asia/Irkutsk">Иркутск (UTC+8)</option>
+                  <option value="Asia/Yakutsk">Якутск (UTC+9)</option>
+                  <option value="Asia/Vladivostok">Владивосток (UTC+10)</option>
+                </select>
+              </label>
+            </div>
+            <div className="mt-5">
+              <p className="text-sm font-medium text-slate-700">Формат занятий</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {[
+                  { value: 'online' as const, label: 'Онлайн в MedStart Live' },
+                  { value: 'in_person' as const, label: 'Очно' },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => toggleFormat(item.value)}
+                    aria-pressed={form.lessonFormats.includes(item.value)}
+                    className="ms-choice ms-choice-block justify-start text-left"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-[28px] border border-teal-200 bg-gradient-to-br from-teal-50 to-white p-5 shadow-sm sm:p-8">
+            <div className="flex items-start gap-3">
+              <BookOpenCheck className="mt-0.5 h-6 w-6 text-teal-700" />
+              <div>
+                <h2 className="text-xl font-black text-slate-950">Как профиль используется</h2>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl bg-white p-4 ring-1 ring-teal-100">
+                    <p className="font-bold text-slate-900">Каталог</p>
+                    <p className="mt-1 text-sm leading-5 text-slate-500">Подходящие преподаватели выше в выдаче.</p>
+                  </div>
+                  <div className="rounded-2xl bg-white p-4 ring-1 ring-teal-100">
+                    <p className="font-bold text-slate-900">Учебная база</p>
+                    <p className="mt-1 text-sm leading-5 text-slate-500">Рекомендуются материалы нужного уровня.</p>
+                  </div>
+                  <div className="rounded-2xl bg-white p-4 ring-1 ring-teal-100">
+                    <p className="font-bold text-slate-900">Заявка</p>
+                    <p className="mt-1 text-sm leading-5 text-slate-500">Быстрее выбирается предмет и формат.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </>
       )}
 
       {isTutor && (
