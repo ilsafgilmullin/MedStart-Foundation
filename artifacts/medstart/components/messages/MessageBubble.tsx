@@ -11,22 +11,22 @@ import {
   Video,
   Volume2,
 } from 'lucide-react'
+import { downloadChatMedia, loadChatMediaBlob } from '@/lib/chat-media'
+import { MEDICAL_REACTIONS, medicalTagMeta } from '@/lib/medical-chat'
 import {
-  downloadChatMedia,
-  loadChatMediaBlob,
-} from '@/lib/chat-media'
-import {
-  MEDICAL_REACTIONS,
-  medicalTagMeta,
-  reactionMeta,
-} from '@/lib/medical-chat'
-import { formatMessageTime, type ChatMessage, type ChatReaction, type MedicalReactionCode } from '@/lib/domain'
+  formatMessageTime,
+  type ChatMessage,
+  type MedicalReactionCode,
+} from '@/lib/domain'
+
+type MessageWithReactions = ChatMessage & {
+  reactions?: Record<string, MedicalReactionCode>
+}
 
 interface MessageBubbleProps {
-  message: ChatMessage
+  message: MessageWithReactions
   own: boolean
   currentUid: string
-  reactions: ChatReaction[]
   onReact: (code: MedicalReactionCode) => Promise<void>
   moderatorView?: boolean
 }
@@ -44,7 +44,7 @@ function humanSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`
 }
 
-function SecureMedia({ message }: { message: ChatMessage }) {
+function SecureMedia({ message }: { message: MessageWithReactions }) {
   const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -148,7 +148,7 @@ function SecureMedia({ message }: { message: ChatMessage }) {
       className="ms-row-action mt-2 block overflow-hidden rounded-2xl border border-current/10 bg-black/5 p-0"
       aria-label="Открыть изображение"
     >
-      {/* Blob URL создаётся только после проверки Firebase Storage Rules. */}
+      {/* Blob URL создаётся только после серверной проверки доступа. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={url} alt={message.fileName || 'Медицинское изображение'} className="max-h-80 w-full object-contain" />
       <span className="flex items-center justify-between gap-3 px-3 py-2 text-xs font-bold">
@@ -163,7 +163,6 @@ export default function MessageBubble({
   message,
   own,
   currentUid,
-  reactions,
   onReact,
   moderatorView = false,
 }: MessageBubbleProps) {
@@ -171,11 +170,14 @@ export default function MessageBubble({
   const [reacting, setReacting] = useState(false)
   const tag = medicalTagMeta(message.medicalTag)
   const grouped = useMemo(() => {
+    const values = message.reactions || {}
     return MEDICAL_REACTIONS.map((item) => ({
       ...item,
-      users: reactions.filter((reaction) => reaction.code === item.code),
+      users: Object.entries(values)
+        .filter(([, code]) => code === item.code)
+        .map(([uid]) => uid),
     })).filter((item) => item.users.length > 0)
-  }, [reactions])
+  }, [message.reactions])
   const administrative = message.senderRole === 'admin' || message.senderRole === 'owner'
 
   async function react(code: MedicalReactionCode) {
@@ -190,7 +192,7 @@ export default function MessageBubble({
 
   return (
     <article className={`group flex ${own ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-[92%] sm:max-w-[78%] xl:max-w-[70%] ${own ? 'items-end' : 'items-start'} flex flex-col`}>
+      <div className={`flex max-w-[92%] flex-col sm:max-w-[78%] xl:max-w-[70%] ${own ? 'items-end' : 'items-start'}`}>
         {(moderatorView || administrative) && (
           <div className={`mb-1 flex items-center gap-1.5 px-1 text-[11px] font-bold ${administrative ? 'text-teal-700' : 'text-slate-500'}`}>
             {administrative && <ShieldCheck className="h-3.5 w-3.5" />}
@@ -213,7 +215,6 @@ export default function MessageBubble({
               {tag.label}
             </div>
           )}
-
           {message.kind === 'voice' && !message.text && (
             <div className="flex items-center gap-2 text-sm font-bold opacity-80">
               <PlayCircle className="h-4 w-4" /> Голосовое сообщение
@@ -225,12 +226,9 @@ export default function MessageBubble({
             </div>
           )}
           {message.text && (
-            <p className="whitespace-pre-wrap break-words text-sm leading-6 sm:text-[15px]">
-              {message.text}
-            </p>
+            <p className="whitespace-pre-wrap break-words text-sm leading-6 sm:text-[15px]">{message.text}</p>
           )}
           {message.mediaPath && <SecureMedia message={message} />}
-
           <div className={`mt-1.5 flex items-center justify-end gap-2 text-[10px] ${own && !administrative ? 'text-cyan-100' : 'text-slate-400'}`}>
             {message.durationMs > 0 && <span>{Math.round(message.durationMs / 1_000)} сек.</span>}
             <span>{formatMessageTime(message.createdAt)}</span>
@@ -238,23 +236,20 @@ export default function MessageBubble({
         </div>
 
         <div className={`mt-1 flex flex-wrap items-center gap-1.5 ${own ? 'justify-end' : 'justify-start'}`}>
-          {grouped.map((item) => {
-            const active = item.users.some((reaction) => reaction.uid === currentUid)
-            return (
-              <button
-                key={item.code}
-                type="button"
-                onClick={() => void react(item.code)}
-                disabled={reacting}
-                data-active={active}
-                className="ms-choice ms-choice-pill min-h-8 px-2.5 py-1 text-xs"
-                title={item.users.map((reaction) => reaction.uid).join(', ')}
-              >
-                <span>{item.emoji}</span>
-                <span>{item.users.length}</span>
-              </button>
-            )
-          })}
+          {grouped.map((item) => (
+            <button
+              key={item.code}
+              type="button"
+              onClick={() => void react(item.code)}
+              disabled={reacting}
+              data-active={item.users.includes(currentUid)}
+              className="ms-choice ms-choice-pill min-h-8 px-2.5 py-1 text-xs"
+              title={`${item.label}: ${item.users.length}`}
+            >
+              <span>{item.emoji}</span>
+              <span>{item.users.length}</span>
+            </button>
+          ))}
           <div className="relative">
             <button
               type="button"
