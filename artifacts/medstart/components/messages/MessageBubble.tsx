@@ -48,8 +48,10 @@ function SecureMedia({ message }: { message: MessageWithReactions }) {
   const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const isImage = message.kind === 'file' && message.mimeType.startsWith('image/')
-  const shouldLoad = message.kind === 'voice' || message.kind === 'video_note' || isImage
+  const mimeType = message.mimeType || ''
+  const isImage = message.kind === 'file' && mimeType.startsWith('image/')
+  const shouldLoad =
+    message.kind === 'voice' || message.kind === 'video_note' || isImage
 
   useEffect(() => {
     if (!message.mediaPath || !shouldLoad) {
@@ -82,15 +84,21 @@ function SecureMedia({ message }: { message: MessageWithReactions }) {
     return (
       <button
         type="button"
-        onClick={() => void downloadChatMedia(message.mediaPath, message.fileName)}
+        onClick={() =>
+          void downloadChatMedia(message.mediaPath, message.fileName)
+        }
         className="ms-row-action mt-2 w-full rounded-2xl border border-current/15 bg-white/10 p-3 text-left"
       >
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15">
           <FileText className="h-5 w-5" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-black">{message.fileName || 'Документ'}</span>
-          <span className="mt-0.5 block text-xs opacity-70">{humanSize(message.fileSize)} · защищённое вложение</span>
+          <span className="block truncate text-sm font-black">
+            {message.fileName || 'Документ'}
+          </span>
+          <span className="mt-0.5 block text-xs opacity-70">
+            {humanSize(message.fileSize)} · защищённое вложение
+          </span>
         </span>
         <Download className="h-5 w-5 shrink-0" />
       </button>
@@ -119,7 +127,12 @@ function SecureMedia({ message }: { message: MessageWithReactions }) {
           <Volume2 className="h-4 w-4" />
           Голосовое сообщение
         </div>
-        <audio controls preload="metadata" src={url} className="h-10 w-full max-w-sm" />
+        <audio
+          controls
+          preload="metadata"
+          src={url}
+          className="h-10 w-full max-w-sm"
+        />
       </div>
     )
   }
@@ -145,12 +158,16 @@ function SecureMedia({ message }: { message: MessageWithReactions }) {
     <button
       type="button"
       onClick={() => void downloadChatMedia(message.mediaPath, message.fileName)}
-      className="ms-row-action mt-2 block overflow-hidden rounded-2xl border border-current/10 bg-black/5 p-0"
+      className="ms-row-action mt-2 block overflow-hidden rounded-2xl border border-current/10 bg-slate-100/70 p-0"
       aria-label="Открыть изображение"
     >
       {/* Blob URL создаётся только после серверной проверки доступа. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={url} alt={message.fileName || 'Медицинское изображение'} className="max-h-80 w-full object-contain" />
+      <img
+        src={url}
+        alt={message.fileName || 'Медицинское изображение'}
+        className="max-h-80 w-full object-contain"
+      />
       <span className="flex items-center justify-between gap-3 px-3 py-2 text-xs font-bold">
         <span className="truncate">{message.fileName || 'Изображение'}</span>
         <Download className="h-4 w-4 shrink-0" />
@@ -178,7 +195,8 @@ export default function MessageBubble({
         .map(([uid]) => uid),
     })).filter((item) => item.users.length > 0)
   }, [message.reactions])
-  const administrative = message.senderRole === 'admin' || message.senderRole === 'owner'
+  const administrative =
+    message.senderRole === 'admin' || message.senderRole === 'owner'
 
   async function react(code: MedicalReactionCode) {
     setReacting(true)
@@ -192,11 +210,20 @@ export default function MessageBubble({
 
   return (
     <article className={`group flex ${own ? 'justify-end' : 'justify-start'}`}>
-      <div className={`flex max-w-[92%] flex-col sm:max-w-[78%] xl:max-w-[70%] ${own ? 'items-end' : 'items-start'}`}>
+      <div
+        className={`flex max-w-[92%] flex-col sm:max-w-[78%] xl:max-w-[70%] ${
+          own ? 'items-end' : 'items-start'
+        }`}
+      >
         {(moderatorView || administrative) && (
-          <div className={`mb-1 flex items-center gap-1.5 px-1 text-[11px] font-bold ${administrative ? 'text-teal-700' : 'text-slate-500'}`}>
+          <div
+            className={`mb-1 flex items-center gap-1.5 px-1 text-[11px] font-bold ${
+              administrative ? 'text-teal-700' : 'text-slate-500'
+            }`}
+          >
             {administrative && <ShieldCheck className="h-3.5 w-3.5" />}
-            {message.senderName || 'Пользователь MedStart'} · {roleLabel(message.senderRole)}
+            {message.senderName || 'Пользователь MedStart'} ·{' '}
+            {roleLabel(message.senderRole)}
           </div>
         )}
 
@@ -210,7 +237,9 @@ export default function MessageBubble({
           }`}
         >
           {tag && (
-            <div className={`mb-2 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-black ${tag.className}`}>
+            <div
+              className={`mb-2 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-black ${tag.className}`}
+            >
               <span>{tag.emoji}</span>
               {tag.label}
             </div>
@@ -226,16 +255,28 @@ export default function MessageBubble({
             </div>
           )}
           {message.text && (
-            <p className="whitespace-pre-wrap break-words text-sm leading-6 sm:text-[15px]">{message.text}</p>
+            <p className="whitespace-pre-wrap break-words text-sm leading-6 sm:text-[15px]">
+              {message.text}
+            </p>
           )}
           {message.mediaPath && <SecureMedia message={message} />}
-          <div className={`mt-1.5 flex items-center justify-end gap-2 text-[10px] ${own && !administrative ? 'text-cyan-100' : 'text-slate-400'}`}>
-            {message.durationMs > 0 && <span>{Math.round(message.durationMs / 1_000)} сек.</span>}
+          <div
+            className={`mt-1.5 flex items-center justify-end gap-2 text-[10px] ${
+              own && !administrative ? 'text-cyan-100' : 'text-slate-400'
+            }`}
+          >
+            {message.durationMs > 0 && (
+              <span>{Math.round(message.durationMs / 1_000)} сек.</span>
+            )}
             <span>{formatMessageTime(message.createdAt)}</span>
           </div>
         </div>
 
-        <div className={`mt-1 flex flex-wrap items-center gap-1.5 ${own ? 'justify-end' : 'justify-start'}`}>
+        <div
+          className={`mt-1 flex flex-wrap items-center gap-1.5 ${
+            own ? 'justify-end' : 'justify-start'
+          }`}
+        >
           {grouped.map((item) => (
             <button
               key={item.code}
@@ -260,7 +301,11 @@ export default function MessageBubble({
               <SmilePlus className="h-4 w-4" />
             </button>
             {pickerOpen && (
-              <div className={`absolute bottom-10 z-20 flex gap-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl ${own ? 'right-0' : 'left-0'}`}>
+              <div
+                className={`absolute bottom-10 z-20 flex gap-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl ${
+                  own ? 'right-0' : 'left-0'
+                }`}
+              >
                 {MEDICAL_REACTIONS.map((item) => (
                   <button
                     key={item.code}
