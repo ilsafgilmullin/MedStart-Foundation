@@ -5,6 +5,7 @@ import {
   orderBy,
   query,
   where,
+  type DocumentData,
   type Unsubscribe,
 } from 'firebase/firestore'
 import { auth, db } from './firebase'
@@ -53,6 +54,49 @@ function sortConversations(items: Conversation[]) {
         timestampToMillis(right.updatedAt) - timestampToMillis(left.updatedAt),
     )
     .slice(0, MAX_VISIBLE_CONVERSATIONS)
+}
+
+function normalizedMessage(id: string, data: DocumentData): ChatMessage {
+  const kind: ChatMessageKind = [
+    'text',
+    'voice',
+    'video_note',
+    'file',
+    'medical_note',
+  ].includes(String(data.kind))
+    ? (data.kind as ChatMessageKind)
+    : 'text'
+  const senderRole = ['student', 'tutor', 'admin', 'owner'].includes(
+    String(data.senderRole),
+  )
+    ? (data.senderRole as ChatMessage['senderRole'])
+    : 'student'
+
+  return {
+    id,
+    senderUid: String(data.senderUid || ''),
+    senderName: String(data.senderName || 'Участник диалога').slice(0, 160),
+    senderRole,
+    kind,
+    text: String(data.text || '').slice(0, 2_000),
+    medicalTag: String(data.medicalTag || '') as MedicalMessageTag,
+    mediaPath: String(data.mediaPath || '').slice(0, 1_000),
+    mimeType: String(data.mimeType || '').slice(0, 160),
+    fileName: String(data.fileName || '').slice(0, 240),
+    fileSize:
+      typeof data.fileSize === 'number' && Number.isFinite(data.fileSize)
+        ? Math.max(0, data.fileSize)
+        : 0,
+    durationMs:
+      typeof data.durationMs === 'number' && Number.isFinite(data.durationMs)
+        ? Math.max(0, data.durationMs)
+        : 0,
+    reactions:
+      data.reactions && typeof data.reactions === 'object'
+        ? data.reactions
+        : {},
+    createdAt: data.createdAt,
+  } as ChatMessage
 }
 
 async function postMessageAction(body: Record<string, unknown>) {
@@ -122,7 +166,7 @@ export function subscribeToMessages(
     (snapshot) =>
       onChange(
         snapshot.docs
-          .map((item) => ({ id: item.id, ...item.data() }) as ChatMessage)
+          .map((item) => normalizedMessage(item.id, item.data()))
           .reverse(),
       ),
     onError,
