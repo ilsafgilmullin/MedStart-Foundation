@@ -35,6 +35,7 @@ jobs:
         with:
           ref: agent/live-workspace-anatomy-v19
           fetch-depth: 0
+          show-progress: false
 
       - name: Verify complete package
         shell: bash
@@ -49,13 +50,31 @@ jobs:
           gzip -dc /tmp/live-workspace-v19.patch.gz > /tmp/live-workspace-v19.patch
           echo "215a117689623192d4599d6e945b9184849ddec46cf9d4f9bf5b683210071ecf  /tmp/live-workspace-v19.patch" | sha256sum -c -
 
-      - name: Check and apply product patch
+      - name: Check product patch
+        id: patchcheck
+        continue-on-error: true
+        shell: bash
+        run: |
+          git fetch --quiet origin main
+          git checkout origin/main -- .github/workflows/medstart-ci.yml
+          git apply --check --verbose /tmp/live-workspace-v19.patch > /tmp/live-workspace-apply.log 2>&1
+
+      - name: Upload patch diagnostic
+        if: steps.patchcheck.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-workspace-v19-apply-log
+          path: /tmp/live-workspace-apply.log
+          retention-days: 2
+
+      - name: Stop on patch mismatch
+        if: steps.patchcheck.outcome == 'failure'
+        run: exit 1
+
+      - name: Apply product patch
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin main
-          git checkout origin/main -- .github/workflows/medstart-ci.yml
-          git apply --check /tmp/live-workspace-v19.patch
           git apply /tmp/live-workspace-v19.patch
           rm -f .github/live-workspace-v19.part* .github/live-workspace-v19.ready
           git add -A
