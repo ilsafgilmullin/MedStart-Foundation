@@ -53,14 +53,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: agent/mobile-messenger-stability-v18
           fetch-depth: 0
 
       - name: Apply mobile messenger stability patch
-        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/mobile-messenger-stability-v18'
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/agent/mobile-messenger-stability-v18') || (github.event_name == 'pull_request' && github.head_ref == 'agent/mobile-messenger-stability-v18')
         run: node scripts/apply-mobile-messenger-stability-v18.mjs
 
       - name: Commit product patch and restore CI
-        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/mobile-messenger-stability-v18'
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/agent/mobile-messenger-stability-v18') || (github.event_name == 'pull_request' && github.head_ref == 'agent/mobile-messenger-stability-v18')
         run: |
           git fetch origin main
           git checkout origin/main -- .github/workflows/medstart-ci.yml
