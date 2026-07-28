@@ -1,0 +1,37 @@
+name: MedStart tutor workspace snapshot
+
+on:
+  push:
+    branches:
+      - agent/tutor-workspace-upgrade-v13
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Package current tutor workspace
+        run: |
+          tar -czf medstart-tutor-workspace.tar.gz \
+            artifacts/medstart/app/dashboard \
+            artifacts/medstart/components/dashboard \
+            artifacts/medstart/components/forms \
+            artifacts/medstart/components/ui \
+            artifacts/medstart/hooks \
+            artifacts/medstart/lib \
+            artifacts/medstart/types \
+            artifacts/medstart/providers \
+            artifacts/medstart/app/globals.css \
+            artifacts/medstart/package.json \
+            firestore.secure.rules
+      - name: Upload protected workspace snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: medstart-tutor-workspace
+          path: medstart-tutor-workspace.tar.gz
+          retention-days: 1
