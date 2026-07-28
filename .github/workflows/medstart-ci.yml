@@ -51,6 +51,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Upload live workspace source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: medstart-live-workspace-source-v19
+          path: |
+            artifacts/medstart/components/live
+            artifacts/medstart/lib/medical-workspace.ts
+          if-no-files-found: error
+          retention-days: 2
+
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
