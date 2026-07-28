@@ -1030,6 +1030,10 @@ export default function KnowledgePage() {
       .map(({ item }) => item)
   }, [catalog, profile?.fieldOfStudy, profile?.studyYear, profile?.subjects, role])
 
+  const ownPublishedCount = own.filter((item) => item.status === 'published').length
+  const ownPendingCount = own.filter((item) => item.status === 'pending').length
+  const ownRejectedCount = own.filter((item) => item.status === 'rejected').length
+
   const filteredCatalog = useMemo(() => {
     const search = normalized(queryText)
     return catalog.filter((item) => {
@@ -1296,6 +1300,53 @@ export default function KnowledgePage() {
                 onDownload={(selected) => void openSubmission(selected)}
                 downloading={busyId === item.id}
               />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {isTutor && (
+        <section className="rounded-[30px] border border-teal-200 bg-gradient-to-br from-teal-50 via-white to-cyan-50 p-5 shadow-sm sm:p-7">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-black uppercase tracking-[0.12em] text-teal-700 ring-1 ring-teal-100">
+                <LibraryBig className="h-4 w-4" />
+                Вклад преподавателя
+              </span>
+              <h2 className="mt-4 text-2xl font-black text-slate-950">Ваши материалы в учебной базе</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                Публикуйте только медицинские источники, на которые у вас есть право. Каждый материал проходит проверку тематики, актуальности и безопасности.
+              </p>
+            </div>
+            <button type="button" onClick={() => { setFormOpen(true); setMessage('') }} className="ms-btn ms-btn-primary shrink-0">
+              <Plus className="h-5 w-5" />
+              Предложить материал
+            </button>
+          </div>
+          <div className="mt-6 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-2xl bg-white p-4 ring-1 ring-teal-100">
+              <div className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="h-5 w-5" /><span className="font-bold">Опубликовано</span></div>
+              <p className="mt-2 text-3xl font-black text-slate-950">{ownPublishedCount}</p>
+            </div>
+            <div className="rounded-2xl bg-white p-4 ring-1 ring-teal-100">
+              <div className="flex items-center gap-2 text-amber-700"><Clock3 className="h-5 w-5" /><span className="font-bold">На проверке</span></div>
+              <p className="mt-2 text-3xl font-black text-slate-950">{ownPendingCount}</p>
+            </div>
+            <div className="rounded-2xl bg-white p-4 ring-1 ring-teal-100">
+              <div className="flex items-center gap-2 text-red-700"><XCircle className="h-5 w-5" /><span className="font-bold">Нужна доработка</span></div>
+              <p className="mt-2 text-3xl font-black text-slate-950">{ownRejectedCount}</p>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-3">
+            {[
+              ['Укажите первоисточник', 'Ссылка должна вести на автора, издателя или официальную организацию.'],
+              ['Не загружайте данные пациентов', 'Удалите ФИО, номера историй болезни, снимки с идентификаторами.'],
+              ['Проверьте право публикации', 'Авторский материал или документ с разрешённым распространением.'],
+            ].map(([title, description]) => (
+              <div key={title} className="rounded-2xl border border-teal-100 bg-white/80 p-4">
+                <p className="font-black text-slate-900">{title}</p>
+                <p className="mt-1 text-sm leading-5 text-slate-500">{description}</p>
+              </div>
             ))}
           </div>
         </section>

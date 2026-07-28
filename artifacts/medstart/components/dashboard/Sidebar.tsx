@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { HeartPulse, LogOut, Sparkles } from 'lucide-react'
 import { getNavigation } from './Navigation'
 import { useAuth } from '@/hooks/useAuth'
+import { getProfileCompletion } from '@/lib/profile-completion'
 
 const roleNames = {
   student: 'Студент',
@@ -13,34 +14,13 @@ const roleNames = {
   owner: 'Владелец',
 } as const
 
-function studentProfileCompletion(profile: ReturnType<typeof useAuth>['profile']) {
-  if (!profile || profile.role !== 'student') return 100
-  const fields = [
-    profile.firstName,
-    profile.lastName,
-    profile.avatar,
-    profile.institution,
-    profile.fieldOfStudy,
-    profile.studyYear,
-    profile.city,
-    profile.subjects?.length ? 'subjects' : '',
-    profile.bio,
-    profile.timezone,
-  ]
-  return Math.round(
-    (fields.filter((value) => Boolean(String(value || '').trim())).length /
-      fields.length) *
-      100,
-  )
-}
-
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { profile, role, logout } = useAuth()
   const name = profile?.displayName || profile?.email || 'Пользователь'
   const initial = name.slice(0, 1).toUpperCase()
-  const completion = studentProfileCompletion(profile)
+  const completion = getProfileCompletion(profile)
 
   async function exit() {
     await logout()
@@ -59,7 +39,7 @@ export default function Sidebar() {
               MedStart
             </span>
             <span className="block text-xs font-bold uppercase tracking-[0.14em] text-teal-700">
-              Учебный кабинет
+              {role === 'tutor' ? 'Кабинет преподавателя' : 'Учебный кабинет'}
             </span>
           </span>
         </Link>
@@ -91,7 +71,7 @@ export default function Sidebar() {
       </nav>
 
       <div className="border-t border-slate-200 p-4">
-        {role === 'student' && completion < 100 && (
+        {(role === 'student' || role === 'tutor') && completion.percent < 100 && (
           <Link
             href="/dashboard/profile"
             className="mb-3 block rounded-2xl border border-teal-100 bg-teal-50 p-3"
@@ -99,14 +79,14 @@ export default function Sidebar() {
             <div className="flex items-center justify-between gap-3 text-xs font-black text-teal-800">
               <span className="inline-flex items-center gap-1.5">
                 <Sparkles className="h-3.5 w-3.5" />
-                Учебный профиль
+                {role === 'tutor' ? 'Анкета преподавателя' : 'Учебный профиль'}
               </span>
-              <span>{completion}%</span>
+              <span>{completion.percent}%</span>
             </div>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-teal-100">
               <div
                 className="h-full rounded-full bg-teal-600"
-                style={{ width: `${completion}%` }}
+                style={{ width: `${completion.percent}%` }}
               />
             </div>
           </Link>

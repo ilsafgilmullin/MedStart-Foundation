@@ -4,20 +4,25 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowRight,
+  Banknote,
   BookOpenCheck,
   CalendarCheck2,
   CalendarDays,
+  CalendarClock,
   Check,
   CircleCheckBig,
   ClipboardCheck,
   FileCheck2,
   FolderOpen,
+  GraduationCap,
   Inbox,
   Search,
   ShieldCheck,
   Sparkles,
   Target,
+  TrendingUp,
   UserCheck,
+  UserRoundCheck,
   UsersRound,
 } from 'lucide-react'
 import BookingCard from '@/components/dashboard/BookingCard'
@@ -27,6 +32,7 @@ import { subscribeToBookingsForUser } from '@/lib/bookings'
 import { bookingDateTime, type Booking, type LearningMaterial } from '@/lib/domain'
 import { subscribeToPublicTutors } from '@/lib/firestore'
 import { subscribeToMaterialsForUser } from '@/lib/materials'
+import { getProfileCompletion } from '@/lib/profile-completion'
 import type { UserProfile } from '@/lib/user-profile'
 
 interface ActionLink {
@@ -238,31 +244,194 @@ export default function DashboardOverview() {
   }
 
   if (role === 'tutor') {
+    const now = Date.now()
     const pending = bookings.filter((item) => item.status === 'pending')
-    const accepted = bookings.filter((item) => item.status === 'accepted')
+    const accepted = bookings
+      .filter(
+        (item) => item.status === 'accepted' && bookingDateTime(item) >= now,
+      )
+      .sort((left, right) => bookingDateTime(left) - bookingDateTime(right))
     const completed = bookings.filter((item) => item.status === 'completed')
-    const students = new Set(
+    const studentIds = new Set(
       bookings
-        .filter((item) => item.status === 'accepted' || item.status === 'completed')
+        .filter(
+          (item) => item.status === 'accepted' || item.status === 'completed',
+        )
         .map((item) => item.studentUid),
+    )
+    const weekEnd = now + 7 * 24 * 60 * 60 * 1000
+    const weekLessons = accepted.filter(
+      (item) => bookingDateTime(item) <= weekEnd,
+    )
+    const todayKey = new Date(now).toDateString()
+    const todayLessons = accepted.filter(
+      (item) => new Date(bookingDateTime(item)).toDateString() === todayKey,
+    )
+    const completedValue = completed.reduce(
+      (sum, item) => sum + Math.max(0, Number(item.price) || 0),
+      0,
+    )
+    const scheduledValue = accepted.reduce(
+      (sum, item) => sum + Math.max(0, Number(item.price) || 0),
+      0,
+    )
+    const profileCompletion = getProfileCompletion(profile)
+    const readinessItems = [
+      {
+        label: 'Профессиональная анкета',
+        ready: profileCompletion.percent >= 85,
+        href: '/dashboard/profile',
+        note: `${profileCompletion.percent}% заполнено`,
+      },
+      {
+        label: 'Стоимость и длительность',
+        ready: Boolean(profile?.lessonPrice && profile?.lessonDuration),
+        href: '/dashboard/profile',
+        note: profile?.lessonPrice
+          ? `${profile.lessonPrice.toLocaleString('ru-RU')} ₽ · ${profile.lessonDuration ?? 60} мин`
+          : 'Укажите условия занятия',
+      },
+      {
+        label: 'Рабочие часы',
+        ready: accepted.length > 0 || completed.length > 0,
+        href: '/dashboard/schedule',
+        note: 'Проверьте доступность для записи',
+      },
+      {
+        label: 'Материалы студентам',
+        ready: materials.length > 0,
+        href: '/dashboard/materials',
+        note: materials.length ? `${materials.length} опубликовано` : 'Добавьте первый материал',
+      },
+    ]
+    const readiness = Math.round(
+      (readinessItems.filter((item) => item.ready).length /
+        readinessItems.length) *
+        100,
     )
 
     return (
       <div className="space-y-8">
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Stat title="Новые заявки" value={pending.length} icon={Inbox} tone="amber" />
-          <Stat title="Подтверждено" value={accepted.length} icon={CalendarDays} />
-          <Stat title="Студенты" value={students.size} icon={UsersRound} tone="blue" />
-          <Stat title="Материалы" value={materials.length} icon={FileCheck2} tone="violet" />
+          <Stat
+            title="Новые заявки"
+            value={pending.length}
+            note={pending.length ? 'Нужен ответ' : 'Всё обработано'}
+            icon={Inbox}
+            tone="amber"
+          />
+          <Stat
+            title="Ближайшие занятия"
+            value={accepted.length}
+            note={`На 7 дней: ${weekLessons.length}`}
+            icon={CalendarClock}
+          />
+          <Stat
+            title="Активные студенты"
+            value={studentIds.size}
+            note={`Проведено занятий: ${completed.length}`}
+            icon={UsersRound}
+            tone="blue"
+          />
+          <Stat
+            title="Сумма проведённых"
+            value={`${completedValue.toLocaleString('ru-RU')} ₽`}
+            note={`Запланировано: ${scheduledValue.toLocaleString('ru-RU')} ₽`}
+            icon={Banknote}
+            tone="violet"
+          />
         </section>
 
-        {profile?.status === 'active' && pending.length > 0 && (
+        <section className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,.75fr)]">
+          <div className="space-y-4">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-sm font-black uppercase tracking-[0.13em] text-teal-700">
+                  Рабочий день
+                </p>
+                <h2 className="mt-1 text-2xl font-black text-slate-950">
+                  {nextLesson ? 'Следующее занятие' : 'Расписание свободно'}
+                </h2>
+                <p className="mt-1 text-slate-500">
+                  {todayLessons.length
+                    ? `Сегодня ещё ${todayLessons.length} ${todayLessons.length === 1 ? 'занятие' : 'занятия'}.`
+                    : 'На сегодня подтверждённых занятий больше нет.'}
+                </p>
+              </div>
+              <Link href="/dashboard/schedule" className="hidden ms-link-action sm:flex">
+                Расписание
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+            {nextLesson ? (
+              <BookingCard booking={nextLesson} role="tutor" compact />
+            ) : (
+              <div className="rounded-[28px] border border-dashed border-teal-300 bg-teal-50/70 p-7">
+                <CalendarDays className="h-9 w-9 text-teal-700" />
+                <h3 className="mt-4 text-xl font-black text-slate-950">
+                  Подтверждённых занятий пока нет
+                </h3>
+                <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
+                  Проверьте новые заявки и рабочие часы. После подтверждения
+                  ближайшая встреча появится здесь автоматически.
+                </p>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <Link href="/dashboard/requests" className="ms-btn ms-btn-primary ms-btn-sm">
+                    Открыть заявки
+                  </Link>
+                  <Link href="/dashboard/schedule" className="ms-btn ms-btn-secondary ms-btn-sm">
+                    Настроить часы
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <aside className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-bold text-teal-700">Готовность кабинета</p>
+                <p className="mt-1 text-3xl font-black text-slate-950">{readiness}%</p>
+              </div>
+              <div className="rounded-2xl bg-teal-50 p-3 text-teal-700 ring-1 ring-teal-100">
+                <UserRoundCheck className="h-6 w-6" />
+              </div>
+            </div>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-teal-600 transition-all"
+                style={{ width: `${readiness}%` }}
+              />
+            </div>
+            <div className="mt-5 space-y-2">
+              {readinessItems.map((item) => (
+                <Link key={item.label} href={item.href} className="ms-row-action group">
+                  <span
+                    className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${
+                      item.ready
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-amber-100 text-amber-700'
+                    }`}
+                  >
+                    {item.ready ? <Check className="h-4 w-4" /> : <ArrowRight className="h-4 w-4" />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-bold text-slate-800">{item.label}</span>
+                    <span className="block truncate text-xs text-slate-500">{item.note}</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </aside>
+        </section>
+
+        {pending.length > 0 && (
           <section className="space-y-4">
             <div className="flex items-end justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-black text-slate-950">Новые заявки</h2>
+                <h2 className="text-2xl font-black text-slate-950">Заявки требуют решения</h2>
                 <p className="mt-1 text-slate-500">
-                  Ответьте студентам, чтобы заполнить расписание.
+                  Быстрый ответ повышает вероятность, что студент подтвердит обучение.
                 </p>
               </div>
               <Link href="/dashboard/requests" className="hidden ms-link-action sm:flex">
@@ -278,24 +447,65 @@ export default function DashboardOverview() {
           </section>
         )}
 
-        {nextLesson && (
-          <section className="space-y-4">
-            <div>
-              <h2 className="text-2xl font-black text-slate-950">Ближайшее занятие</h2>
-              <p className="mt-1 text-slate-500">Подтверждённая запись из вашего расписания.</p>
+        <section className="grid gap-5 lg:grid-cols-3">
+          <article className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div className="rounded-2xl bg-sky-50 p-3 text-sky-700 ring-1 ring-sky-100">
+                <GraduationCap className="h-6 w-6" />
+              </div>
+              <span className="text-sm font-black text-sky-700">{studentIds.size}</span>
             </div>
-            <div className="max-w-2xl">
-              <BookingCard booking={nextLesson} role="tutor" compact />
+            <h3 className="mt-5 text-xl font-black text-slate-950">Работа со студентами</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              Откройте историю занятий конкретного студента и отправьте ему материал.
+            </p>
+            <Link href="/dashboard/students" className="mt-5 ms-link-action">
+              Открыть список
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </article>
+
+          <article className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div className="rounded-2xl bg-violet-50 p-3 text-violet-700 ring-1 ring-violet-100">
+                <FileCheck2 className="h-6 w-6" />
+              </div>
+              <span className="text-sm font-black text-violet-700">{materials.length}</span>
             </div>
-          </section>
-        )}
+            <h3 className="mt-5 text-xl font-black text-slate-950">Методические материалы</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              Отправляйте студентам документы, видео, ссылки и задания после занятия.
+            </p>
+            <Link href="/dashboard/materials" className="mt-5 ms-link-action">
+              Управлять материалами
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </article>
+
+          <article className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div className="rounded-2xl bg-amber-50 p-3 text-amber-700 ring-1 ring-amber-100">
+                <TrendingUp className="h-6 w-6" />
+              </div>
+              <span className="text-sm font-black text-amber-700">{completed.length}</span>
+            </div>
+            <h3 className="mt-5 text-xl font-black text-slate-950">Практика преподавания</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              История проведённых занятий помогает оценивать загрузку и востребованные темы.
+            </p>
+            <Link href="/dashboard/schedule" className="mt-5 ms-link-action">
+              Посмотреть историю
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </article>
+        </section>
 
         <QuickActions
           items={[
-            { title: 'Заявки', description: 'Принять или отклонить', href: '/dashboard/requests', icon: Inbox, tone: 'amber' },
-            { title: 'Расписание', description: 'Занятия и рабочие часы', href: '/dashboard/schedule', icon: CalendarDays },
-            { title: 'Студенты', description: 'Открыть список студентов', href: '/dashboard/students', icon: UsersRound, tone: 'blue' },
-            { title: 'Материалы', description: 'Поделиться материалом', href: '/dashboard/materials', icon: FolderOpen, tone: 'violet' },
+            { title: 'Заявки', description: 'Принять, отклонить или предложить решение', href: '/dashboard/requests', icon: Inbox, tone: 'amber' },
+            { title: 'Расписание', description: 'Занятия, история и рабочие часы', href: '/dashboard/schedule', icon: CalendarDays },
+            { title: 'Мои студенты', description: 'История обучения и материалы', href: '/dashboard/students', icon: UsersRound, tone: 'blue' },
+            { title: 'Учебная база', description: 'Предложить профессиональный источник', href: '/dashboard/knowledge', icon: BookOpenCheck, tone: 'violet' },
           ]}
         />
       </div>
