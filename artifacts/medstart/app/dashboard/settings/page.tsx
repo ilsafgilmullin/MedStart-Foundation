@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { resendEmailVerification, resetPassword } from '@/lib/auth'
+import { setPresenceVisibility } from '@/lib/presence'
 import { updateUserProfile } from '@/lib/firestore'
 import type { NotificationPreferences } from '@/lib/user-profile'
 import {
@@ -102,6 +103,7 @@ export default function SettingsPage() {
   const [preferences, setPreferences] =
     useState<NotificationPreferences>(defaults)
   const [timezone, setTimezone] = useState('Europe/Moscow')
+  const [presenceVisible, setPresenceVisible] = useState(true)
   const [uiPreferences, setUiPreferences] = useState<UiPreferences>(
     DEFAULT_UI_PREFERENCES,
   )
@@ -112,6 +114,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setUiPreferences(readUiPreferences())
+    setPresenceVisible(window.localStorage.getItem('medstart-presence-visible') !== 'false')
   }, [])
 
   useEffect(() => {
@@ -137,6 +140,20 @@ export default function SettingsPage() {
     ],
     [user],
   )
+
+  async function changePresenceVisibility(next: boolean) {
+    setPresenceVisible(next)
+    setError('')
+    setMessage('')
+    try {
+      await setPresenceVisibility(next ? 'everyone' : 'hidden')
+      window.localStorage.setItem('medstart-presence-visible', String(next))
+      setMessage(next ? 'Статус активности виден пользователям MedStart.' : 'Точное время активности скрыто.')
+    } catch (caught) {
+      setPresenceVisible(!next)
+      setError(caught instanceof Error ? caught.message : 'Не удалось изменить видимость статуса.')
+    }
+  }
 
   async function saveCloudSettings() {
     if (!user) return
@@ -362,6 +379,32 @@ export default function SettingsPage() {
           </div>
         </section>
       )}
+
+      <section className="rounded-[28px] border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5 shadow-sm sm:p-7">
+        <div className="flex items-start justify-between gap-5">
+          <div>
+            <h2 className="text-xl font-black text-slate-950">Статус присутствия</h2>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+              Показывает «в сети», «недавно» или время последней активности в сообщениях, каталоге и профилях.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={presenceVisible}
+            data-active={presenceVisible}
+            onClick={() => void changePresenceVisibility(!presenceVisible)}
+            className="ms-switch shrink-0"
+          >
+            <span className="ms-switch-thumb" />
+          </button>
+        </div>
+        <div className="mt-5 rounded-2xl border border-emerald-100 bg-white p-4 text-sm text-slate-600">
+          {presenceVisible
+            ? 'Ваш статус виден активным пользователям MedStart. При закрытии приложения онлайн погаснет автоматически.'
+            : 'Другие пользователи увидят только «Статус скрыт». Владелец не получает скрытого точного времени через интерфейс.'}
+        </div>
+      </section>
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
         <div className="flex items-start gap-3">

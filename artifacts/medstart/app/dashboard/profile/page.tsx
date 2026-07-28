@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import ProfilePhoto from '@/components/dashboard/ProfilePhoto'
+import PresenceBadge from '@/components/presence/PresenceBadge'
 import {
   getTutorPrivateProfile,
   resubmitTutorProfile,
@@ -337,7 +338,8 @@ export default function ProfilePage() {
               <UserRoundCheck className="h-4 w-4 text-cyan-200" />
               {role ? roleNames[role] : 'Пользователь'} · {statusNames[profile.status]}
             </span>
-            <h1 className="mt-4 text-3xl font-black sm:text-4xl">Профиль</h1>
+            {user && <PresenceBadge uid={user.uid} className="mt-4" />}
+          <h1 className="mt-4 text-3xl font-black sm:text-4xl">Профиль</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-teal-50/85 sm:text-base">
               {isStudent
                 ? 'Ваш учебный паспорт помогает MedStart точнее подбирать преподавателей, дисциплины и материалы.'

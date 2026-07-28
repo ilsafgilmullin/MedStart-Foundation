@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import ProfilePhoto from '@/components/dashboard/ProfilePhoto'
+import PresenceBadge from '@/components/presence/PresenceBadge'
 import MediaCaptureDialog from '@/components/messages/MediaCaptureDialog'
 import MessageBubble from '@/components/messages/MessageBubble'
 import {
@@ -94,6 +95,7 @@ function presentation(
         .map((item) => initials(item.name).slice(0, 1))
         .join(''),
       participants,
+      presenceUid: '',
     }
   }
   const other = participants.find((item) => item.uid !== ownUid) || participants[0]
@@ -102,6 +104,7 @@ function presentation(
     subtitle: 'Личный учебный диалог',
     avatar: other?.avatar || '',
     initials: initials(other?.name || 'MedStart'),
+    presenceUid: other?.uid || '',
     participants,
   }
 }
@@ -670,6 +673,9 @@ function ConversationList({
                     {conversation.lastSenderUid === ownUid && 'Вы: '}
                     {conversation.lastMessage || 'Диалог создан'}
                   </p>
+                  {!moderatorMode && item.presenceUid && (
+                    <PresenceBadge uid={item.presenceUid} compact className="mt-1" />
+                  )}
                   {moderatorMode && (
                     <p className="mt-1 truncate text-[11px] font-bold text-teal-700">
                       {item.subtitle}
@@ -729,7 +735,11 @@ function ConversationHeader({
       )}
       <div className="min-w-0 flex-1">
         <h2 className="truncate font-black text-slate-950">{item.title}</h2>
-        <p className="truncate text-xs text-slate-500">{item.subtitle}</p>
+        {!moderatorMode && item.presenceUid ? (
+          <PresenceBadge uid={item.presenceUid} compact />
+        ) : (
+          <p className="truncate text-xs text-slate-500">{item.subtitle}</p>
+        )}
       </div>
       {moderatorMode && (
         <span className="hidden items-center gap-1 rounded-full bg-teal-50 px-3 py-1.5 text-xs font-black text-teal-700 sm:flex">
