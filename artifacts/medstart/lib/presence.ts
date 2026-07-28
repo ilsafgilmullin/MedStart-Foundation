@@ -11,6 +11,15 @@ export interface PresenceSnapshot {
 
 const HEARTBEAT_MS = 55_000
 const REFRESH_MS = 60_000
+const MAX_BATCH = 60
+
+type PresenceListener = (snapshot: PresenceSnapshot | null) => void
+
+const listeners = new Map<string, Set<PresenceListener>>()
+const cache = new Map<string, PresenceSnapshot>()
+let refreshTimer: number | null = null
+let refreshScheduled = false
+let refreshInFlight: Promise<void> | null = null
 
 async function requestPresence(body: Record<string, unknown>) {
   const currentUser = auth.currentUser
@@ -66,35 +75,100 @@ export function startPresenceSession() {
 
 export async function setPresenceVisibility(visibility: 'everyone' | 'hidden') {
   await requestPresence({ action: 'privacy', visibility })
+  schedulePresenceRefresh()
 }
 
 export async function fetchPresences(uids: string[]) {
-  const unique = [...new Set(uids.filter(Boolean))].slice(0, 60)
-  if (!unique.length) return {}
-  const payload = await requestPresence({ action: 'read', uids: unique })
-  return payload.items || {}
+  const unique = [...new Set(uids.filter(Boolean))]
+  const result: Record<string, PresenceSnapshot> = {}
+  for (let index = 0; index < unique.length; index += MAX_BATCH) {
+    const chunk = unique.slice(index, index + MAX_BATCH)
+    const payload = await requestPresence({ action: 'read', uids: chunk })
+    Object.assign(result, payload.items || {})
+  }
+  return result
+}
+
+function notify(uid: string) {
+  const snapshot = cache.get(uid) ?? null
+  for (const listener of listeners.get(uid) ?? []) listener(snapshot)
+}
+
+async function refreshAllPresence() {
+  if (refreshInFlight) return refreshInFlight
+  const uids = [...listeners.keys()]
+  if (!uids.length) return
+  refreshInFlight = (async () => {
+    try {
+      const items = await fetchPresences(uids)
+      for (const uid of uids) {
+        const next = items[uid] ?? { status: 'offline' as const, lastActiveAt: 0 }
+        cache.set(uid, next)
+        notify(uid)
+      }
+    } finally {
+      refreshInFlight = null
+    }
+  })()
+  return refreshInFlight
+}
+
+function ensureRefreshTimer() {
+  if (refreshTimer !== null || !listeners.size) return
+  refreshTimer = window.setInterval(() => {
+    void refreshAllPresence().catch(() => undefined)
+  }, REFRESH_MS)
+}
+
+function stopRefreshTimerIfIdle() {
+  if (listeners.size || refreshTimer === null) return
+  window.clearInterval(refreshTimer)
+  refreshTimer = null
+}
+
+export function schedulePresenceRefresh() {
+  if (refreshScheduled) return
+  refreshScheduled = true
+  window.setTimeout(() => {
+    refreshScheduled = false
+    void refreshAllPresence().catch(() => undefined)
+  }, 40)
+}
+
+export function subscribeToPresence(uid: string, listener: PresenceListener) {
+  if (!uid) {
+    listener(null)
+    return () => undefined
+  }
+  const current = listeners.get(uid) ?? new Set<PresenceListener>()
+  current.add(listener)
+  listeners.set(uid, current)
+  listener(cache.get(uid) ?? null)
+  ensureRefreshTimer()
+  schedulePresenceRefresh()
+  return () => {
+    const active = listeners.get(uid)
+    active?.delete(listener)
+    if (active && active.size === 0) listeners.delete(uid)
+    stopRefreshTimerIfIdle()
+  }
 }
 
 export function subscribeToPresences(
   uids: string[],
   onChange: (items: Record<string, PresenceSnapshot>) => void,
-  onError?: (error: Error) => void,
 ) {
-  let active = true
-  const load = async () => {
-    try {
-      const items = await fetchPresences(uids)
-      if (active) onChange(items)
-    } catch (error) {
-      if (active) onError?.(error instanceof Error ? error : new Error('Ошибка статуса присутствия.'))
-    }
-  }
-  void load()
-  const timer = window.setInterval(load, REFRESH_MS)
-  return () => {
-    active = false
-    window.clearInterval(timer)
-  }
+  const unique = [...new Set(uids.filter(Boolean))]
+  const values: Record<string, PresenceSnapshot> = {}
+  const emit = () => onChange({ ...values })
+  const unsubscribers = unique.map((uid) =>
+    subscribeToPresence(uid, (snapshot) => {
+      if (snapshot) values[uid] = snapshot
+      else delete values[uid]
+      emit()
+    }),
+  )
+  return () => unsubscribers.forEach((unsubscribe) => unsubscribe())
 }
 
 export function formatPresence(snapshot?: PresenceSnapshot | null, now = Date.now()) {
