@@ -1,9 +1,9 @@
 name: MedStart presence snapshot
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/platform-presence-v16
+      - main
   workflow_dispatch:
 
 permissions:
