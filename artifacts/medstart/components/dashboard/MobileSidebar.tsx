@@ -64,7 +64,7 @@ export default function MobileSidebar({
                 MedStart
               </span>
               <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-teal-700">
-                {role === 'tutor' ? 'Кабинет преподавателя' : 'Учебный кабинет'}
+                {role === 'owner' ? 'Центр владельца' : role === 'admin' ? 'Панель администратора' : role === 'tutor' ? 'Кабинет преподавателя' : 'Учебный кабинет'}
               </span>
             </span>
           </Link>

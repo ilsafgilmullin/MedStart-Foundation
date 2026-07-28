@@ -945,6 +945,13 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    match /adminAuditLogs/{logId} {
+      // Administrative audit entries are written only by Firebase Admin SDK.
+      // Only the immutable primary owner may read the complete security trail.
+      allow read: if isOwner();
+      allow create, update, delete: if false;
+    }
+
     match /medicalWorkspaces/{bookingId} {
       allow read: if canReadLessonData(bookingId);
       allow create: if canWriteLessonData(bookingId)
