@@ -1,13 +1,6 @@
 name: Apply MedStart Live v19
 
 on:
-  push:
-    branches:
-      - agent/live-workspace-anatomy-v19
-    paths:
-      - '.github/live-workspace-v19.part*'
-      - '.github/live-workspace-v19.ready'
-      - '.github/workflows/medstart-ci.yml'
   pull_request:
     branches:
       - main
@@ -20,13 +13,8 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: apply-live-workspace-v19-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   apply:
-    if: github.event_name != 'pull_request' || github.head_ref == 'agent/live-workspace-anatomy-v19'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -37,48 +25,34 @@ jobs:
           fetch-depth: 0
           show-progress: false
 
-      - name: Verify complete package
+      - name: Verify package
         shell: bash
         run: |
           set -euo pipefail
-          test -f .github/live-workspace-v19.ready
-          cat .github/live-workspace-v19.part* > /tmp/live-workspace-v19.b64
-          test "$(wc -c < /tmp/live-workspace-v19.b64)" = "26440"
-          echo "8911a17369f4d21608d80bfc86b34d801879578672d421e534f19e00f39b6158  /tmp/live-workspace-v19.b64" | sha256sum -c -
-          base64 -d /tmp/live-workspace-v19.b64 > /tmp/live-workspace-v19.patch.gz
-          echo "ac64d645013c8a8ab1e134943cf31a82e2e89ac8ec90cf70c99a328168029eac  /tmp/live-workspace-v19.patch.gz" | sha256sum -c -
-          gzip -dc /tmp/live-workspace-v19.patch.gz > /tmp/live-workspace-v19.patch
-          echo "215a117689623192d4599d6e945b9184849ddec46cf9d4f9bf5b683210071ecf  /tmp/live-workspace-v19.patch" | sha256sum -c -
-          awk 'BEGIN { keep=0 } /^diff --git a\/artifacts\// { keep=1 } keep { print }' /tmp/live-workspace-v19.patch > /tmp/live-workspace-v19-product.patch
-          test -s /tmp/live-workspace-v19-product.patch
+          cat .github/live-workspace-v19.part* > /tmp/package.b64
+          test "$(wc -c < /tmp/package.b64)" = "26440"
+          echo "8911a17369f4d21608d80bfc86b34d801879578672d421e534f19e00f39b6158  /tmp/package.b64" | sha256sum -c -
+          base64 -d /tmp/package.b64 | gzip -dc > /tmp/full.patch
+          echo "215a117689623192d4599d6e945b9184849ddec46cf9d4f9bf5b683210071ecf  /tmp/full.patch" | sha256sum -c -
+          awk 'BEGIN { keep=0 } /^diff --git a\/artifacts\// { keep=1 } keep { print }' /tmp/full.patch > /tmp/product.patch
 
-      - name: Check product patch
+      - name: Apply product files
         shell: bash
         run: |
           set -euo pipefail
           git fetch --quiet origin main
           git checkout origin/main -- .github/workflows/medstart-ci.yml
-          git apply --check --verbose /tmp/live-workspace-v19-product.patch
-
-      - name: Apply product patch and restore CI
-        shell: bash
-        run: |
-          set -euo pipefail
-          git apply /tmp/live-workspace-v19-product.patch
-          sed -i '/test -f scripts\/mobile-messenger-invariants.mjs/a\          test -f scripts/live-workspace-invariants.mjs' .github/workflows/medstart-ci.yml
-          python -c "from pathlib import Path; p=Path('.github/workflows/medstart-ci.yml'); t=p.read_text(); old='      - name: Audit mobile messenger invariants\n        run: node scripts/mobile-messenger-invariants.mjs\n'; new=old+'\n      - name: Audit responsive live workspace\n        run: node scripts/live-workspace-invariants.mjs\n'; assert old in t; p.write_text(t.replace(old,new,1))"
+          git apply --check /tmp/product.patch
+          git apply /tmp/product.patch
           rm -f .github/live-workspace-v19.part* .github/live-workspace-v19.ready
           git add -A
           git diff --cached --check
 
-      - name: Commit product files
+      - name: Commit and push
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Профессионально переработать MedStart Live и анатомию"
-
-      - name: Push product commit
-        shell: bash
-        run: git push origin HEAD:agent/live-workspace-anatomy-v19
+          git push origin HEAD:agent/live-workspace-anatomy-v19
