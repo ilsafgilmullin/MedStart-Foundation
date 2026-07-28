@@ -19,6 +19,7 @@ import {
   isOwnerUid,
   logout as performLogout,
 } from '@/lib/auth'
+import { startPresenceSession } from '@/lib/presence'
 import type { EffectiveUserRole, UserProfile } from '@/lib/user-profile'
 
 interface AuthContextValue {
@@ -45,9 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let unsubscribeProfile: (() => void) | undefined
+    let stopPresence: (() => void) | undefined
     let revokingAccess = false
 
     const revokeSession = () => {
+      stopPresence?.()
+      stopPresence = undefined
       setProfile(null)
       setUser(null)
       setLoading(false)
@@ -60,6 +64,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const unsubscribeAuth = onIdTokenChanged(auth, (currentUser) => {
+      stopPresence?.()
+      stopPresence = undefined
       unsubscribeProfile?.()
       unsubscribeProfile = undefined
       setLoading(true)
@@ -100,6 +106,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           setProfile(nextProfile)
           setLoading(false)
+          if (nextProfile?.status === 'active' && !stopPresence) {
+            stopPresence = startPresenceSession()
+          }
         },
         () => {
           setProfile(null)
@@ -109,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     return () => {
+      stopPresence?.()
       unsubscribeProfile?.()
       unsubscribeAuth()
     }
