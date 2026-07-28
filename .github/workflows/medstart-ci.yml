@@ -49,33 +49,40 @@ jobs:
           echo "ac64d645013c8a8ab1e134943cf31a82e2e89ac8ec90cf70c99a328168029eac  /tmp/live-workspace-v19.patch.gz" | sha256sum -c -
           gzip -dc /tmp/live-workspace-v19.patch.gz > /tmp/live-workspace-v19.patch
           echo "215a117689623192d4599d6e945b9184849ddec46cf9d4f9bf5b683210071ecf  /tmp/live-workspace-v19.patch" | sha256sum -c -
+          awk 'BEGIN { keep=0 } /^diff --git a\/artifacts\// { keep=1 } keep { print }' /tmp/live-workspace-v19.patch > /tmp/live-workspace-v19-product.patch
+          test -s /tmp/live-workspace-v19-product.patch
 
       - name: Check product patch
-        id: patchcheck
-        continue-on-error: true
-        shell: bash
-        run: |
-          git fetch --quiet origin main
-          git checkout origin/main -- .github/workflows/medstart-ci.yml
-          git apply --check --verbose /tmp/live-workspace-v19.patch > /tmp/live-workspace-apply.log 2>&1
-
-      - name: Upload patch diagnostic
-        if: steps.patchcheck.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: live-workspace-v19-apply-log
-          path: /tmp/live-workspace-apply.log
-          retention-days: 2
-
-      - name: Stop on patch mismatch
-        if: steps.patchcheck.outcome == 'failure'
-        run: exit 1
-
-      - name: Apply product patch
         shell: bash
         run: |
           set -euo pipefail
-          git apply /tmp/live-workspace-v19.patch
+          git fetch --quiet origin main
+          git checkout origin/main -- .github/workflows/medstart-ci.yml
+          git apply --check --verbose /tmp/live-workspace-v19-product.patch
+
+      - name: Apply product patch and restore CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply /tmp/live-workspace-v19-product.patch
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/medstart-ci.yml')
+          text = path.read_text()
+          required = "          test -f scripts/mobile-messenger-invariants.mjs\n"
+          addition = required + "          test -f scripts/live-workspace-invariants.mjs\n"
+          if 'test -f scripts/live-workspace-invariants.mjs' not in text:
+              if required not in text:
+                  raise SystemExit('CI required-file insertion point not found')
+              text = text.replace(required, addition, 1)
+          audit = "      - name: Audit mobile messenger invariants\n        run: node scripts/mobile-messenger-invariants.mjs\n"
+          audit_addition = audit + "\n      - name: Audit responsive live workspace\n        run: node scripts/live-workspace-invariants.mjs\n"
+          if 'Audit responsive live workspace' not in text:
+              if audit not in text:
+                  raise SystemExit('CI audit insertion point not found')
+              text = text.replace(audit, audit_addition, 1)
+          path.write_text(text)
+          PY
           rm -f .github/live-workspace-v19.part* .github/live-workspace-v19.ready
           git add -A
           git diff --cached --check
