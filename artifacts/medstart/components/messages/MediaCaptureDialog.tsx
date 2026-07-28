@@ -108,8 +108,9 @@ export default function MediaCaptureDialog({
               audio: true,
               video: {
                 facingMode: 'user',
-                width: { ideal: 720 },
-                height: { ideal: 720 },
+                width: { ideal: 360, max: 480 },
+                height: { ideal: 360, max: 480 },
+                frameRate: { ideal: 12, max: 18 },
                 aspectRatio: { ideal: 1 },
               },
             },
@@ -121,9 +122,21 @@ export default function MediaCaptureDialog({
       }
 
       const mimeType = supportedMime(kind)
-      const recorder = mimeType
-        ? new MediaRecorder(stream, { mimeType })
-        : new MediaRecorder(stream)
+      const recorderOptions: MediaRecorderOptions = mimeType ? { mimeType } : {}
+      if (kind === 'video_note') {
+        recorderOptions.videoBitsPerSecond = 450_000
+        recorderOptions.audioBitsPerSecond = 32_000
+      } else {
+        recorderOptions.audioBitsPerSecond = 32_000
+      }
+      let recorder: MediaRecorder
+      try {
+        recorder = new MediaRecorder(stream, recorderOptions)
+      } catch {
+        recorder = mimeType
+          ? new MediaRecorder(stream, { mimeType })
+          : new MediaRecorder(stream)
+      }
       recorderRef.current = recorder
       chunksRef.current = []
       startedAtRef.current = Date.now()
@@ -163,7 +176,7 @@ export default function MediaCaptureDialog({
         }
       }
 
-      recorder.start(500)
+      recorder.start(1_000)
       setElapsedMs(0)
       setPhase('recording')
       intervalRef.current = window.setInterval(() => {
@@ -209,7 +222,7 @@ export default function MediaCaptureDialog({
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:items-center sm:p-6">
-      <section className="w-full max-w-lg overflow-hidden rounded-[32px] bg-white shadow-2xl">
+      <section className="w-full max-w-md overflow-hidden rounded-[28px] bg-white shadow-2xl sm:max-w-lg sm:rounded-[32px]">
         <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
             <p className="text-sm font-black text-slate-950">
@@ -230,8 +243,8 @@ export default function MediaCaptureDialog({
           </button>
         </header>
 
-        <div className="p-5 sm:p-7">
-          <div className="flex min-h-64 flex-col items-center justify-center rounded-[28px] bg-gradient-to-br from-slate-950 via-teal-950 to-teal-800 p-6 text-white">
+        <div className="p-4 sm:p-7">
+          <div className="flex min-h-56 flex-col items-center justify-center rounded-[24px] bg-gradient-to-br from-slate-950 via-teal-950 to-teal-800 p-4 text-white sm:min-h-64 sm:rounded-[28px] sm:p-6">
             {isVideo ? (
               <div className="relative">
                 <video
@@ -241,8 +254,20 @@ export default function MediaCaptureDialog({
                   controls={phase === 'preview' || phase === 'sending'}
                   playsInline
                   autoPlay={phase === 'recording'}
-                  className="h-48 w-48 rounded-full border-4 border-white/20 bg-slate-900 object-cover shadow-2xl sm:h-56 sm:w-56"
+                  preload="metadata"
+                  onError={() => {
+                    if (phase === 'preview') {
+                      setError('Safari не смог воспроизвести предварительный файл. Перезапишите видеокружок.')
+                    }
+                  }}
+                  className="h-44 w-44 rounded-full border-4 border-white/20 bg-slate-900 object-cover shadow-2xl sm:h-56 sm:w-56"
                 />
+                {phase === 'ready' && (
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center rounded-full bg-slate-900/95 text-cyan-100">
+                    <Camera className="h-10 w-10" />
+                    <span className="mt-2 text-xs font-bold">Камера ещё не включена</span>
+                  </div>
+                )}
                 {phase === 'recording' && (
                   <span className="absolute right-3 top-3 h-4 w-4 animate-pulse rounded-full bg-red-500 ring-4 ring-red-500/20" />
                 )}

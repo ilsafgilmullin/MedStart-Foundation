@@ -93,6 +93,7 @@ jobs:
           test -f scripts/final-audit-invariants.mjs
           test -f scripts/full-repository-audit.mjs
           test -f scripts/button-system-audit.mjs
+          test -f scripts/mobile-messenger-invariants.mjs
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -108,6 +109,9 @@ jobs:
 
       - name: Run final static audit invariants
         run: node scripts/final-audit-invariants.mjs
+
+      - name: Audit mobile messenger invariants
+        run: node scripts/mobile-messenger-invariants.mjs
 
       - name: Compile and test Firebase security rules
         env:

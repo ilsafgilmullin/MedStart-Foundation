@@ -122,7 +122,7 @@ function SecureMedia({ message }: { message: MessageWithReactions }) {
   }
   if (message.kind === 'voice') {
     return (
-      <div className="mt-2 min-w-[240px] rounded-2xl bg-white/10 p-3">
+      <div className="mt-2 w-[min(260px,calc(100vw-96px))] min-w-0 max-w-full rounded-2xl bg-white/10 p-3">
         <div className="mb-2 flex items-center gap-2 text-xs font-bold opacity-75">
           <Volume2 className="h-4 w-4" />
           Голосовое сообщение
@@ -131,7 +131,7 @@ function SecureMedia({ message }: { message: MessageWithReactions }) {
           controls
           preload="metadata"
           src={url}
-          className="h-10 w-full max-w-sm"
+          className="block h-10 w-full min-w-0 max-w-full"
         />
       </div>
     )
@@ -145,7 +145,7 @@ function SecureMedia({ message }: { message: MessageWithReactions }) {
             playsInline
             preload="metadata"
             src={url}
-            className="h-48 w-48 rounded-full border-4 border-white/20 bg-slate-950 object-cover shadow-xl sm:h-56 sm:w-56"
+            className="h-40 w-40 max-w-full rounded-full border-4 border-white/20 bg-slate-950 object-cover shadow-xl sm:h-52 sm:w-52"
           />
           <span className="pointer-events-none absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-slate-950/70 text-white">
             <Video className="h-4 w-4" />
@@ -209,9 +209,9 @@ export default function MessageBubble({
   }
 
   return (
-    <article className={`group flex ${own ? 'justify-end' : 'justify-start'}`}>
+    <article className={`group flex min-w-0 max-w-full ${own ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`flex max-w-[92%] flex-col sm:max-w-[78%] xl:max-w-[70%] ${
+        className={`flex min-w-0 max-w-[92%] flex-col sm:max-w-[78%] xl:max-w-[70%] ${
           own ? 'items-end' : 'items-start'
         }`}
       >
@@ -228,7 +228,7 @@ export default function MessageBubble({
         )}
 
         <div
-          className={`relative rounded-[22px] px-4 py-3 shadow-sm ${
+          className={`relative max-w-full overflow-hidden rounded-[22px] px-4 py-3 shadow-sm [overflow-wrap:anywhere] ${
             administrative
               ? 'rounded-bl-md border border-teal-200 bg-gradient-to-br from-teal-50 to-cyan-50 text-slate-900'
               : own
@@ -302,7 +302,7 @@ export default function MessageBubble({
             </button>
             {pickerOpen && (
               <div
-                className={`absolute bottom-10 z-20 flex gap-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl ${
+                className={`absolute bottom-10 z-20 flex max-w-[calc(100vw-2rem)] gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl ${
                   own ? 'right-0' : 'left-0'
                 }`}
               >
