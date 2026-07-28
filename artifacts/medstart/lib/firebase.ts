@@ -12,7 +12,6 @@ import {
   initializeFirestore,
   memoryLocalCache,
 } from 'firebase/firestore'
-import { getStorage } from 'firebase/storage'
 import { firebasePublicConfig } from '@/lib/firebase-public-config'
 
 const app = getApps().length ? getApp() : initializeApp(firebasePublicConfig)
@@ -54,6 +53,5 @@ function createFirestore() {
 }
 
 export const db = createFirestore()
-export const storage = getStorage(app)
 
 export default app
