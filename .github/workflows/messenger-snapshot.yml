@@ -1,0 +1,32 @@
+name: MedStart messenger snapshot
+
+on:
+  push:
+    branches:
+      - agent/medical-messenger-v15
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Package messenger workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/medstart-messenger
+          cp -R artifacts/medstart /tmp/medstart-messenger/
+          cp firestore.secure.rules /tmp/medstart-messenger/
+          find . -maxdepth 2 -type f \( -name '*storage*rules*' -o -name 'firebase.json' -o -name 'package.json' -o -name 'pnpm-lock.yaml' \) -print0 | xargs -0 -I{} cp --parents '{}' /tmp/medstart-messenger/ || true
+          tar -czf /tmp/medstart-messenger-workspace.tar.gz -C /tmp medstart-messenger
+      - name: Upload protected workspace snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: medstart-messenger-workspace
+          path: /tmp/medstart-messenger-workspace.tar.gz
+          retention-days: 1
