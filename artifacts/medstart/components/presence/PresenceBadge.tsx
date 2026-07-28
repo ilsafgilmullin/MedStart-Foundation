@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Activity, Clock3, EyeOff } from 'lucide-react'
 import {
   formatPresence,
-  subscribeToPresences,
+  subscribeToPresence,
   type PresenceSnapshot,
 } from '@/lib/presence'
 
@@ -20,7 +20,7 @@ export default function PresenceBadge({
   const [snapshot, setSnapshot] = useState<PresenceSnapshot | null>(null)
   const [now, setNow] = useState(Date.now())
 
-  useEffect(() => subscribeToPresences([uid], (items) => setSnapshot(items[uid] ?? null)), [uid])
+  useEffect(() => subscribeToPresence(uid, setSnapshot), [uid])
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000)
     return () => window.clearInterval(timer)
