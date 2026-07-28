@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LogOut } from 'lucide-react'
+import { HeartPulse, LogOut, Sparkles } from 'lucide-react'
 import { getNavigation } from './Navigation'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -13,12 +13,34 @@ const roleNames = {
   owner: 'Владелец',
 } as const
 
+function studentProfileCompletion(profile: ReturnType<typeof useAuth>['profile']) {
+  if (!profile || profile.role !== 'student') return 100
+  const fields = [
+    profile.firstName,
+    profile.lastName,
+    profile.avatar,
+    profile.institution,
+    profile.fieldOfStudy,
+    profile.studyYear,
+    profile.city,
+    profile.subjects?.length ? 'subjects' : '',
+    profile.bio,
+    profile.timezone,
+  ]
+  return Math.round(
+    (fields.filter((value) => Boolean(String(value || '').trim())).length /
+      fields.length) *
+      100,
+  )
+}
+
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { profile, role, logout } = useAuth()
   const name = profile?.displayName || profile?.email || 'Пользователь'
   const initial = name.slice(0, 1).toUpperCase()
+  const completion = studentProfileCompletion(profile)
 
   async function exit() {
     await logout()
@@ -26,19 +48,24 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 hidden h-screen w-72 border-r border-slate-200 bg-white lg:flex lg:flex-col">
-      <div className="border-b border-slate-200 p-6">
-        <Link href="/dashboard" className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 text-xl font-bold text-white">
-            +
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">MedStart</h1>
-            <p className="text-sm text-slate-500">Личный кабинет</p>
-          </div>
+    <aside className="fixed left-0 top-0 hidden h-dvh w-72 border-r border-slate-200 bg-white lg:flex lg:flex-col">
+      <div className="border-b border-slate-200 px-5 py-5">
+        <Link href="/dashboard" className="flex items-center gap-3">
+          <span className="grid h-11 w-11 place-items-center rounded-2xl border border-teal-100 bg-teal-50 text-teal-700 shadow-sm">
+            <HeartPulse className="h-6 w-6" strokeWidth={2.35} />
+          </span>
+          <span>
+            <span className="block text-xl font-black tracking-tight text-slate-950">
+              MedStart
+            </span>
+            <span className="block text-xs font-bold uppercase tracking-[0.14em] text-teal-700">
+              Учебный кабинет
+            </span>
+          </span>
         </Link>
       </div>
-      <nav className="flex-1 space-y-1 overflow-y-auto p-5">
+
+      <nav className="flex-1 space-y-1 overflow-y-auto p-4">
         {getNavigation(role).map((item) => {
           const Icon = item.icon
           const active =
@@ -49,28 +76,61 @@ export default function Sidebar() {
               key={item.href}
               href={item.href}
               prefetch={false}
-              className={`flex items-center gap-3 rounded-2xl px-4 py-3 font-medium transition ${active ? 'bg-teal-700 text-white shadow-sm' : 'text-slate-700 hover:bg-teal-50 hover:text-teal-800'}`}
+              aria-current={active ? 'page' : undefined}
+              className={`flex min-h-12 items-center gap-3 rounded-2xl px-4 py-3 font-bold transition ${
+                active
+                  ? 'bg-teal-700 !text-white shadow-md shadow-teal-900/10'
+                  : 'text-slate-700 hover:bg-teal-50 hover:text-teal-900'
+              }`}
             >
-              <Icon className="h-5 w-5" />
-              {item.name}
+              <Icon className="h-5 w-5 shrink-0" strokeWidth={2.15} />
+              <span>{item.name}</span>
             </Link>
           )
         })}
       </nav>
-      <div className="border-t border-slate-200 p-5">
-        <div className="mb-4 flex items-center gap-3 rounded-2xl bg-slate-50 p-4">
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-violet-600 font-semibold text-white">
+
+      <div className="border-t border-slate-200 p-4">
+        {role === 'student' && completion < 100 && (
+          <Link
+            href="/dashboard/profile"
+            className="mb-3 block rounded-2xl border border-teal-100 bg-teal-50 p-3"
+          >
+            <div className="flex items-center justify-between gap-3 text-xs font-black text-teal-800">
+              <span className="inline-flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5" />
+                Учебный профиль
+              </span>
+              <span>{completion}%</span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-teal-100">
+              <div
+                className="h-full rounded-full bg-teal-600"
+                style={{ width: `${completion}%` }}
+              />
+            </div>
+          </Link>
+        )}
+
+        <Link
+          href="/dashboard/profile"
+          className="mb-3 flex items-center gap-3 rounded-2xl bg-slate-50 p-3 transition hover:bg-slate-100"
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-950 font-black text-white">
             {initial}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate font-semibold text-slate-900">{name}</p>
-            <p className="text-sm text-slate-500">
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate font-black text-slate-950">
+              {name}
+            </span>
+            <span className="block text-sm text-slate-500">
               {role ? roleNames[role] : 'Пользователь'}
-            </p>
-          </div>
-        </div>
+            </span>
+          </span>
+        </Link>
         <button
-          onClick={exit}
+          type="button"
+          onClick={() => void exit()}
           className="ms-btn ms-btn-danger-outline ms-btn-block"
         >
           <LogOut className="h-5 w-5" />

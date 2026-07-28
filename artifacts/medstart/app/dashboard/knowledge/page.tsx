@@ -29,6 +29,8 @@ import {
   Plus,
   Search,
   ShieldCheck,
+  Sparkles,
+  Target,
   Stethoscope,
   Trash2,
   Upload,
@@ -919,7 +921,7 @@ function ModerationCard({
 }
 
 export default function KnowledgePage() {
-  const { user, role } = useAuth()
+  const { user, profile, role } = useAuth()
   const isTutor = role === 'tutor'
   const isModerator = role === 'admin' || role === 'owner'
   const [activeTab, setActiveTab] = useState<PageTab>('catalog')
@@ -1001,6 +1003,32 @@ export default function KnowledgePage() {
     () => [...OFFICIAL_KNOWLEDGE_RESOURCES, ...published],
     [published],
   )
+
+  const recommendedCatalog = useMemo(() => {
+    if (role !== 'student') return []
+    const interests = [
+      ...(profile?.subjects || []),
+      profile?.fieldOfStudy || '',
+      profile?.studyYear || '',
+    ]
+      .map(normalized)
+      .filter((value) => value.length >= 3)
+
+    return catalog
+      .map((item, index) => {
+        const haystack = itemSearchText(item)
+        const matches = interests.filter((interest) => haystack.includes(interest))
+        const featuredBonus = item.origin === 'official' && item.featured ? 2 : 0
+        const officialBonus = item.origin === 'official' ? 1 : 0
+        return {
+          item,
+          score: matches.length * 5 + featuredBonus + officialBonus - index / 1000,
+        }
+      })
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 3)
+      .map(({ item }) => item)
+  }, [catalog, profile?.fieldOfStudy, profile?.studyYear, profile?.subjects, role])
 
   const filteredCatalog = useMemo(() => {
     const search = normalized(queryText)
@@ -1162,7 +1190,7 @@ export default function KnowledgePage() {
 
   return (
     <div className="space-y-7">
-      <header className="overflow-hidden rounded-[32px] bg-gradient-to-br from-violet-700 via-indigo-700 to-slate-900 p-6 text-white shadow-xl sm:p-8">
+      <header className="overflow-hidden rounded-[32px] bg-gradient-to-br from-slate-950 via-teal-950 to-teal-800 p-6 text-white shadow-xl sm:p-8">
         <div className="grid gap-7 lg:grid-cols-[1fr_auto] lg:items-end">
           <div>
             <span className="inline-flex items-center gap-2 rounded-full bg-white/12 px-3 py-1.5 text-sm font-semibold ring-1 ring-white/20">
@@ -1172,7 +1200,7 @@ export default function KnowledgePage() {
             <h1 className="mt-5 max-w-3xl text-3xl font-bold sm:text-4xl">
               Учебная материальная база
             </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-violet-100 sm:text-base">
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-teal-50/80 sm:text-base">
               Книги, инструкции, клинические рекомендации и материалы для
               аккредитации — в одном месте, с понятным источником и уровнем
               доверия.
@@ -1236,6 +1264,42 @@ export default function KnowledgePage() {
           </div>
         </div>
       </section>
+
+      {role === 'student' && recommendedCatalog.length > 0 && (
+        <section className="rounded-[30px] border border-teal-200 bg-gradient-to-br from-teal-50 via-white to-cyan-50 p-5 shadow-sm sm:p-7">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-black uppercase tracking-[0.12em] text-teal-700 ring-1 ring-teal-100">
+                <Sparkles className="h-4 w-4" />
+                Подобрано по вашему профилю
+              </span>
+              <h2 className="mt-4 text-2xl font-black text-slate-950">
+                С чего продолжить подготовку
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                Рекомендации учитывают предметы, направление и курс, указанные
+                в профиле. Сохраняйте полезное в избранное, чтобы быстро вернуться.
+              </p>
+            </div>
+            <a href="/dashboard/profile" className="ms-btn ms-btn-secondary ms-btn-sm">
+              <Target className="h-4 w-4" />
+              Уточнить цели
+            </a>
+          </div>
+          <div className="mt-6 grid gap-5 lg:grid-cols-3">
+            {recommendedCatalog.map((item) => (
+              <ResourceCard
+                key={`recommended-${item.id}`}
+                item={item}
+                favorite={favoriteIds.has(item.id)}
+                onFavorite={(selected) => void toggleFavorite(selected)}
+                onDownload={(selected) => void openSubmission(selected)}
+                downloading={busyId === item.id}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {formOpen && isTutor && (
         <SubmissionForm
