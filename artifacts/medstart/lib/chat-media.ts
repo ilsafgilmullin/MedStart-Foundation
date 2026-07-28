@@ -1,10 +1,4 @@
-import {
-  deleteObject,
-  getBlob,
-  ref,
-  uploadBytesResumable,
-} from 'firebase/storage'
-import { storage } from './firebase'
+import { auth } from './firebase'
 
 export const CHAT_MEDIA_MAX_BYTES = 25 * 1024 * 1024
 export const CHAT_FILE_MAX_BYTES = 15 * 1024 * 1024
@@ -17,20 +11,15 @@ const SAFE_FILE_TYPES = new Set([
   'image/heic',
 ])
 
-function safeName(value: string) {
-  const normalized = value
-    .normalize('NFKD')
-    .replace(/[^a-zA-Z0-9._-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^[-.]+|[-.]+$/g, '')
-  return (normalized || 'media').slice(-120)
+interface MediaApiResponse {
+  path?: string
+  error?: string
 }
 
-function randomId() {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID()
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`
+async function authorizationToken() {
+  const user = auth.currentUser
+  if (!user) throw new Error('Сессия авторизации устарела. Войдите повторно.')
+  return user.getIdToken()
 }
 
 export function validateChatAttachment(file: File) {
@@ -59,42 +48,69 @@ export async function uploadChatMedia(input: {
   file: File
   onProgress?: (percent: number) => void
 }): Promise<string> {
-  const fileName = `${Date.now()}-${randomId()}-${safeName(input.file.name)}`
-  const path = `chat-media/${input.conversationId}/${input.uploaderUid}/${fileName}`
-  const target = ref(storage, path)
+  const token = await authorizationToken()
+  const form = new FormData()
+  form.append('conversationId', input.conversationId)
+  form.append('file', input.file, input.file.name)
 
-  await new Promise<void>((resolve, reject) => {
-    const task = uploadBytesResumable(target, input.file, {
-      contentType: input.file.type,
-      customMetadata: {
-        conversationId: input.conversationId,
-        uploaderUid: input.uploaderUid,
-      },
-    })
-    task.on(
-      'state_changed',
-      (snapshot) => {
-        const total = snapshot.totalBytes || 1
-        input.onProgress?.(Math.round((snapshot.bytesTransferred / total) * 100))
-      },
-      reject,
-      resolve,
-    )
+  return new Promise<string>((resolve, reject) => {
+    const request = new XMLHttpRequest()
+    request.open('POST', '/api/messages/media')
+    request.setRequestHeader('Authorization', `Bearer ${token}`)
+    request.responseType = 'json'
+    request.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return
+      input.onProgress?.(Math.max(1, Math.round((event.loaded / event.total) * 100)))
+    }
+    request.onerror = () => reject(new Error('Сеть прервала защищённую загрузку.'))
+    request.onload = () => {
+      const payload = (request.response || {}) as MediaApiResponse
+      if (request.status < 200 || request.status >= 300 || !payload.path) {
+        reject(new Error(payload.error || 'Сервер не принял медиафайл.'))
+        return
+      }
+      input.onProgress?.(100)
+      resolve(payload.path)
+    }
+    request.send(form)
   })
-
-  return path
 }
 
 export async function deleteChatMedia(path: string) {
   if (!path.startsWith('chat-media/')) return
-  await deleteObject(ref(storage, path))
+  const token = await authorizationToken()
+  const response = await fetch('/api/messages/media', {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ path }),
+  })
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as MediaApiResponse
+    throw new Error(payload.error || 'Не удалось удалить незавершённую загрузку.')
+  }
 }
 
 export async function loadChatMediaBlob(path: string, maxBytes = CHAT_MEDIA_MAX_BYTES) {
   if (!path.startsWith('chat-media/')) {
     throw new Error('Некорректный путь медиафайла.')
   }
-  return getBlob(ref(storage, path), maxBytes)
+  const token = await authorizationToken()
+  const response = await fetch(`/api/messages/media?path=${encodeURIComponent(path)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  })
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as MediaApiResponse
+    throw new Error(payload.error || 'Защищённый файл недоступен.')
+  }
+  const length = Number(response.headers.get('content-length') || 0)
+  if (length > maxBytes) throw new Error('Файл превышает допустимый размер.')
+  const blob = await response.blob()
+  if (blob.size > maxBytes) throw new Error('Файл превышает допустимый размер.')
+  return blob
 }
 
 export async function downloadChatMedia(path: string, fileName: string) {
