@@ -1,4 +1,4 @@
-name: Apply MedStart owner admin upgrade
+name: Clean MedStart owner admin transport
 
 on:
   push:
@@ -10,11 +10,11 @@ permissions:
   contents: write
 
 concurrency:
-  group: apply-owner-admin-upgrade
+  group: clean-owner-admin-transport
   cancel-in-progress: false
 
 jobs:
-  apply:
+  cleanup:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
@@ -23,27 +23,17 @@ jobs:
         with:
           ref: agent/owner-admin-control-v14
           fetch-depth: 0
-      - name: Assemble and verify reviewed patch
-        shell: bash
+      - name: Remove temporary transport
         run: |
-          set -euo pipefail
-          cat .owner-admin-upgrade/chunk-*.txt > /tmp/owner-admin-upgrade.b64
-          test "$(wc -c < /tmp/owner-admin-upgrade.b64)" -eq 36244
-          base64 --decode /tmp/owner-admin-upgrade.b64 > /tmp/owner-admin-upgrade.patch.gz
-          echo "9750956d95e82271ff246e06e8884574032ed1ad824e3462ea971573a4068656  /tmp/owner-admin-upgrade.patch.gz" | sha256sum --check
-          gzip -dc /tmp/owner-admin-upgrade.patch.gz > /tmp/owner-admin-upgrade.patch
-          echo "68f45b98d30f04932692183cf6f5977b5f218324927601272db1d04ff4e3ea2f  /tmp/owner-admin-upgrade.patch" | sha256sum --check
-          test "$(grep -c '^+++ b/' /tmp/owner-admin-upgrade.patch)" -eq 11
-          ! grep '^+++ b/' /tmp/owner-admin-upgrade.patch | grep -q 'dashboard/messages'
-          git apply --check /tmp/owner-admin-upgrade.patch
-      - name: Apply owner admin upgrade
-        run: git apply /tmp/owner-admin-upgrade.patch
-      - name: Commit reviewed owner control center
+          rm -rf .owner-admin-upgrade
+          rm -f .github/workflows/owner-admin-snapshot.yml
+          rm -f .github/workflows/apply-owner-admin-upgrade.yml
+      - name: Commit clean branch
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add artifacts/medstart firestore.secure.rules scripts
-          git commit -m "Профессиональный центр управления владельца MedStart"
+          git add -A
+          git commit -m "Очистить транспорт центра управления владельца"
           git push origin HEAD:agent/owner-admin-control-v14
