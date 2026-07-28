@@ -5,7 +5,6 @@ on:
     branches:
       - main
       - 'fix/**'
-      - agent/live-workspace-anatomy-v19
     paths:
       - 'artifacts/medstart/**'
       - 'scripts/**'
@@ -19,8 +18,6 @@ on:
       - 'package.json'
       - 'tsconfig*.json'
       - '.github/workflows/**'
-      - '.github/live-workspace-v19.part*'
-      - '.github/live-workspace-v19.ready'
   pull_request:
     branches:
       - main
@@ -37,12 +34,10 @@ on:
       - 'package.json'
       - 'tsconfig*.json'
       - '.github/workflows/**'
-      - '.github/live-workspace-v19.part*'
-      - '.github/live-workspace-v19.ready'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: medstart-ci-${{ github.ref }}
@@ -55,35 +50,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: agent/live-workspace-anatomy-v19
-          fetch-depth: 0
-          show-progress: false
-
-      - name: Apply verified MedStart Live package
-        if: github.ref == 'refs/heads/agent/live-workspace-anatomy-v19' || github.head_ref == 'agent/live-workspace-anatomy-v19'
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -f .github/live-workspace-v19.ready ]; then
-            cat .github/live-workspace-v19.part* > /tmp/package.b64
-            test "$(wc -c < /tmp/package.b64)" = "26440"
-            echo "8911a17369f4d21608d80bfc86b34d801879578672d421e534f19e00f39b6158  /tmp/package.b64" | sha256sum -c -
-            base64 -d /tmp/package.b64 | gzip -dc > /tmp/full.patch
-            echo "215a117689623192d4599d6e945b9184849ddec46cf9d4f9bf5b683210071ecf  /tmp/full.patch" | sha256sum -c -
-            awk 'BEGIN { keep=0 } /^diff --git a\/artifacts\// { keep=1 } keep { print }' /tmp/full.patch > /tmp/product.patch
-            git fetch --quiet origin main
-            git checkout origin/main -- .github/workflows/medstart-ci.yml
-            git apply --check --verbose /tmp/product.patch
-            git apply /tmp/product.patch
-            rm -f .github/live-workspace-v19.part* .github/live-workspace-v19.ready
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git diff --cached --check
-            git commit -m "Профессионально переработать MedStart Live и анатомию"
-            git push origin HEAD:agent/live-workspace-anatomy-v19
-          fi
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4

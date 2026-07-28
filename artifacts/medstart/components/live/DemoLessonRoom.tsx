@@ -2,15 +2,19 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
+  Activity,
   ArrowLeft,
   Clock3,
   LayoutDashboard,
   MessageCircle,
   MonitorUp,
+  PanelRightClose,
+  PanelRightOpen,
   ShieldCheck,
   UsersRound,
   VideoOff,
 } from 'lucide-react'
+import AnatomyViewer from './AnatomyViewer'
 import LessonChat from './LessonChat'
 import MedicalWorkspace from './MedicalWorkspace'
 import { bookingDateTime, formatBookingDate, type Booking } from '@/lib/domain'
@@ -23,20 +27,20 @@ interface DemoLessonRoomProps {
   onLeave: () => void
 }
 
-type MobileView = 'board' | 'video' | 'chat'
+type MobileView = 'board' | 'anatomy' | 'video' | 'chat'
+type SideView = 'video' | 'chat' | 'anatomy'
 
 function VideoUnavailable() {
   return (
-    <div className="flex h-full min-h-[240px] flex-col items-center justify-center rounded-2xl border border-dashed border-amber-300/30 bg-amber-400/5 p-6 text-center">
-      <div className="rounded-2xl bg-amber-300/10 p-4 text-amber-200">
-        <VideoOff className="h-8 w-8" />
+    <div className="flex h-full min-h-[190px] flex-col items-center justify-center rounded-2xl border border-dashed border-amber-300/30 bg-amber-400/5 p-5 text-center">
+      <div className="rounded-2xl bg-amber-300/10 p-3 text-amber-200">
+        <VideoOff className="h-7 w-7" />
       </div>
-      <h2 className="mt-4 text-base font-bold text-white">
+      <h2 className="mt-3 text-sm font-bold text-white sm:text-base">
         Видеосервер подключим позже
       </h2>
-      <p className="mt-2 max-w-sm text-sm leading-6 text-slate-400">
-        Медицинская доска, снимки, 3D-анатомия, клинические шаблоны,
-        лаборатория, ЭКГ и чат уже доступны без платного сервера.
+      <p className="mt-2 max-w-sm text-xs leading-5 text-slate-400 sm:text-sm sm:leading-6">
+        Медицинская доска, снимки, анатомия, клинические шаблоны и чат уже работают без платного видеосервера.
       </p>
     </div>
   )
@@ -50,6 +54,8 @@ export default function DemoLessonRoom({
   onLeave,
 }: DemoLessonRoomProps) {
   const [mobileView, setMobileView] = useState<MobileView>('board')
+  const [sideView, setSideView] = useState<SideView>('chat')
+  const [sideOpen, setSideOpen] = useState(true)
   const [sessionStartedAt] = useState(() => Date.now())
   const [now, setNow] = useState(sessionStartedAt)
   const counterpart =
@@ -73,9 +79,9 @@ export default function DemoLessonRoom({
   }, [booking, now, sessionStartedAt])
 
   return (
-    <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-slate-950 text-white">
-      <header className="shrink-0 border-b border-white/10 bg-slate-950/95 px-3 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] backdrop-blur sm:px-5">
-        <div className="mx-auto flex max-w-[1800px] items-center gap-3">
+    <div className="flex h-dvh min-h-0 min-w-0 flex-col overflow-hidden bg-slate-950 text-white">
+      <header className="shrink-0 border-b border-white/10 bg-slate-950/95 px-3 pb-3 pt-[calc(0.65rem+env(safe-area-inset-top))] backdrop-blur sm:px-5 md:pb-2">
+        <div className="mx-auto flex max-w-[1900px] min-w-0 items-center gap-3">
           <button
             type="button"
             onClick={onLeave}
@@ -86,18 +92,18 @@ export default function DemoLessonRoom({
           </button>
 
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               <h1 className="truncate text-sm font-bold sm:text-base">
                 {booking.subject}
               </h1>
-              <span className="hidden rounded-full bg-violet-500/20 px-2 py-1 text-[10px] font-semibold text-violet-200 sm:inline">
+              <span className="hidden rounded-full bg-violet-500/20 px-2 py-1 text-[10px] font-semibold text-violet-200 lg:inline">
                 MedStart Medical Workspace
               </span>
             </div>
-            <p className="mt-0.5 flex items-center gap-2 truncate text-[11px] text-slate-400">
-              <span className="truncate">С вами: {counterpart}</span>
-              <span>·</span>
-              <span className="flex shrink-0 items-center gap-1">
+            <p className="mt-0.5 flex min-w-0 items-center gap-2 text-[11px] text-slate-400">
+              <span className="min-w-0 truncate">С вами: {counterpart}</span>
+              <span className="hidden sm:inline">·</span>
+              <span className="hidden shrink-0 items-center gap-1 sm:flex">
                 <Clock3 className="h-3 w-3" />
                 {timeLabel}
               </span>
@@ -106,15 +112,29 @@ export default function DemoLessonRoom({
 
           <div className="flex shrink-0 items-center gap-2 rounded-full bg-amber-400/10 px-3 py-2 text-[10px] font-semibold text-amber-100 sm:text-xs">
             <span className="h-2 w-2 rounded-full bg-amber-300" />
-            <span className="hidden sm:inline">Без видеосервера</span>
+            <span className="hidden lg:inline">Без видеосервера</span>
             <ShieldCheck className="h-3.5 w-3.5 text-amber-200" />
           </div>
+
+          <button
+            type="button"
+            onClick={() => setSideOpen((current) => !current)}
+            aria-label={sideOpen ? 'Скрыть боковую панель' : 'Показать боковую панель'}
+            className="ms-icon-btn ms-icon-btn-on-dark hidden md:inline-flex"
+          >
+            {sideOpen ? (
+              <PanelRightClose className="h-5 w-5" />
+            ) : (
+              <PanelRightOpen className="h-5 w-5" />
+            )}
+          </button>
         </div>
 
-        <nav className="mt-3 grid grid-cols-3 gap-1 rounded-xl bg-white/5 p-1 lg:hidden">
+        <nav className="mt-3 grid grid-cols-4 gap-1 rounded-xl bg-white/5 p-1 md:hidden">
           {(
             [
-              ['board', 'Меддоска', LayoutDashboard],
+              ['board', 'Доска', LayoutDashboard],
+              ['anatomy', '3D', Activity],
               ['video', 'Видео', UsersRound],
               ['chat', 'Чат', MessageCircle],
             ] as const
@@ -133,9 +153,15 @@ export default function DemoLessonRoom({
         </nav>
       </header>
 
-      <main className="mx-auto grid min-h-0 w-full max-w-[1800px] flex-1 gap-3 overflow-hidden p-2 sm:p-3 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <main
+        className={`mx-auto grid min-h-0 min-w-0 w-full max-w-[1900px] flex-1 gap-2 overflow-hidden p-1.5 sm:gap-3 sm:p-3 ${
+          sideOpen
+            ? 'md:grid-cols-[minmax(0,1fr)_minmax(280px,34vw)] xl:grid-cols-[minmax(0,1fr)_380px]'
+            : 'md:grid-cols-1'
+        }`}
+      >
         <div
-          className={`min-h-0 ${mobileView === 'board' ? 'block' : 'hidden'} lg:block`}
+          className={`${mobileView === 'board' ? 'block' : 'hidden'} min-h-0 min-w-0 max-w-full overflow-hidden md:block`}
         >
           <MedicalWorkspace
             bookingId={booking.id}
@@ -147,27 +173,71 @@ export default function DemoLessonRoom({
           />
         </div>
 
-        <aside className="hidden min-h-0 flex-col gap-3 overflow-hidden rounded-3xl border border-white/10 bg-slate-900/80 p-3 lg:flex">
-          <div className="max-h-[48%] min-h-[250px] overflow-hidden">
-            <VideoUnavailable />
+        {sideOpen && (
+          <aside className="hidden min-h-0 min-w-0 flex-col overflow-hidden rounded-[26px] border border-white/10 bg-slate-900/80 p-2 md:flex xl:rounded-3xl xl:p-3">
+            <div className="grid shrink-0 grid-cols-3 gap-1 rounded-xl bg-white/5 p-1">
+              <button
+                type="button"
+                onClick={() => setSideView('video')}
+                aria-pressed={sideView === 'video'}
+                className="ms-choice ms-choice-dark w-full text-xs"
+              >
+                <UsersRound className="h-4 w-4" />
+                Видео
+              </button>
+              <button
+                type="button"
+                onClick={() => setSideView('chat')}
+                aria-pressed={sideView === 'chat'}
+                className="ms-choice ms-choice-dark w-full text-xs"
+              >
+                <MessageCircle className="h-4 w-4" />
+                Чат
+              </button>
+              <button
+                type="button"
+                onClick={() => setSideView('anatomy')}
+                aria-pressed={sideView === 'anatomy'}
+                className="ms-choice ms-choice-dark w-full text-xs"
+              >
+                <Activity className="h-4 w-4" />
+                3D
+              </button>
+            </div>
+            <div className="mt-2 flex min-h-0 min-w-0 flex-1 overflow-hidden">
+              {sideView === 'video' ? (
+                <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-1">
+                  <VideoUnavailable />
+                </div>
+              ) : sideView === 'anatomy' ? (
+                <AnatomyViewer compact />
+              ) : (
+                <LessonChat booking={booking} userUid={userUid} />
+              )}
+            </div>
+          </aside>
+        )}
+
+        {mobileView === 'anatomy' && (
+          <div className="min-h-0 min-w-0 overflow-hidden md:hidden">
+            <AnatomyViewer />
           </div>
-          <LessonChat booking={booking} userUid={userUid} />
-        </aside>
+        )}
 
         {mobileView === 'video' && (
-          <div className="min-h-0 overflow-y-auto rounded-3xl border border-white/10 bg-slate-900 p-3 lg:hidden">
+          <div className="min-h-0 min-w-0 overflow-y-auto rounded-[26px] border border-white/10 bg-slate-900 p-3 md:hidden">
             <VideoUnavailable />
           </div>
         )}
 
         {mobileView === 'chat' && (
-          <div className="flex min-h-0 lg:hidden">
+          <div className="flex min-h-0 min-w-0 md:hidden">
             <LessonChat booking={booking} userUid={userUid} />
           </div>
         )}
       </main>
 
-      <footer className="shrink-0 border-t border-white/10 bg-slate-950/95 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] text-center text-[11px] text-slate-500 backdrop-blur">
+      <footer className="hidden shrink-0 border-t border-white/10 bg-slate-950/95 px-3 pb-[calc(0.45rem+env(safe-area-inset-bottom))] pt-2 text-center text-[11px] text-slate-500 backdrop-blur md:block">
         <span className="inline-flex items-center gap-1.5">
           <MonitorUp className="h-3.5 w-3.5 text-violet-300" />
           Учебный режим без видеосвязи. Совместные данные сохраняются в Firebase.

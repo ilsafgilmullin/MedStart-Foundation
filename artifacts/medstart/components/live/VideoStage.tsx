@@ -119,7 +119,7 @@ export default function VideoStage() {
   const waiting = participants.length < 2
 
   return (
-    <section className="flex min-h-0 flex-col">
+    <section className="flex h-full min-h-0 min-w-0 flex-col">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm font-semibold text-white">
           <UsersRound className="h-4 w-4 text-violet-300" />
@@ -133,7 +133,7 @@ export default function VideoStage() {
         )}
       </div>
 
-      <div className="min-h-0 space-y-3 overflow-y-auto pr-1">
+      <div className="min-h-0 min-w-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto pr-1">
         {screenShares.map((track) =>
           isTrackReference(track) ? (
             <article

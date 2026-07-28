@@ -56,7 +56,7 @@ function ControlButton({
       aria-label={label}
       disabled={disabled || busy}
       onClick={onClick}
-      className={`ms-btn ms-btn-live ${color}`}
+      className={`ms-btn ms-btn-live w-full justify-center sm:w-auto ${color}`}
     >
       {busy ? (
         <LoaderCircle className="h-5 w-5 animate-spin" />
@@ -215,7 +215,7 @@ export default function LessonControls({
   }
 
   return (
-    <div className="border-t border-white/10 bg-slate-950/95 px-3 py-3 backdrop-blur sm:px-5">
+    <div className="shrink-0 border-t border-white/10 bg-slate-950/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 backdrop-blur sm:px-5 sm:py-3">
       {weakConnection && (isCameraEnabled || isScreenShareEnabled) && (
         <button
           type="button"
@@ -227,7 +227,7 @@ export default function LessonControls({
         </button>
       )}
 
-      <div className="mx-auto flex max-w-4xl items-center justify-center gap-2 overflow-x-auto">
+      <div className="mx-auto grid max-w-4xl grid-cols-3 items-center justify-center gap-1.5 sm:flex sm:gap-2 sm:overflow-x-auto">
         <ControlButton
           label={isMicrophoneEnabled ? 'Выключить звук' : 'Включить звук'}
           active={isMicrophoneEnabled}

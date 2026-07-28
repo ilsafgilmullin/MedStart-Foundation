@@ -18,7 +18,7 @@ export default function LessonChat({ booking, userUid }: LessonChatProps) {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const messageScrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(
     () =>
@@ -38,7 +38,12 @@ export default function LessonChat({ booking, userUid }: LessonChatProps) {
   )
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: 'nearest' })
+    const container = messageScrollRef.current
+    if (!container) return
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: messages.length > 1 ? 'smooth' : 'auto',
+    })
   }, [messages])
 
   async function submit(event: FormEvent) {
@@ -63,13 +68,13 @@ export default function LessonChat({ booking, userUid }: LessonChatProps) {
   }
 
   return (
-    <section className="flex min-h-0 max-w-full flex-1 flex-col overflow-hidden overscroll-contain rounded-2xl border border-white/10 bg-white/5">
+    <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-hidden overscroll-contain rounded-2xl border border-white/10 bg-white/5">
       <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-sm font-semibold text-white">
         <MessageCircle className="h-4 w-4 text-violet-300" />
         Чат занятия
       </div>
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
+      <div ref={messageScrollRef} className="min-h-0 min-w-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto overscroll-contain p-3">
         {loading ? (
           <div className="flex h-full items-center justify-center">
             <LoaderCircle className="h-6 w-6 animate-spin text-violet-300" />
@@ -84,7 +89,7 @@ export default function LessonChat({ booking, userUid }: LessonChatProps) {
             return (
               <article
                 key={message.id}
-                className={`max-w-[88%] rounded-2xl px-3 py-2.5 ${
+                className={`min-w-0 max-w-[88%] overflow-hidden rounded-2xl px-3 py-2.5 [overflow-wrap:anywhere] ${
                   own
                     ? 'ml-auto rounded-br-md bg-violet-600 text-white'
                     : 'rounded-bl-md bg-white/10 text-slate-100'
@@ -119,7 +124,6 @@ export default function LessonChat({ booking, userUid }: LessonChatProps) {
             </p>
           </div>
         )}
-        <div ref={bottomRef} />
       </div>
 
       {error && (
@@ -131,7 +135,7 @@ export default function LessonChat({ booking, userUid }: LessonChatProps) {
 
       <form
         onSubmit={submit}
-        className="flex shrink-0 gap-2 border-t border-white/10 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
+        className="flex min-w-0 shrink-0 gap-2 border-t border-white/10 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3"
       >
         <input
           value={text}
