@@ -1,0 +1,45 @@
+name: Fix MedStart student settings audit
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/fix-student-settings-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout upgrade branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/student-workspace-upgrade-v12
+          fetch-depth: 0
+
+      - name: Remove unnecessary Service Worker update
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('artifacts/medstart/app/dashboard/settings/page.tsx')
+          source = path.read_text()
+          block = """      if ('serviceWorker' in navigator) {\n        const registration = await navigator.serviceWorker.getRegistration()\n        await registration?.update()\n      }\n"""
+          if source.count(block) != 1:
+              raise SystemExit('Expected exactly one Service Worker update block')
+          path.write_text(source.replace(block, ''))
+          PY
+          rm -f .github/workflows/fix-student-settings-audit.yml
+
+      - name: Commit audited fix
+        run: |
+          git config user.name 'MedStart Student Workspace Audit'
+          git config user.email 'student-workspace@medstart.local'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Исправить очистку кэша в настройках студента'
+          git push origin HEAD:agent/student-workspace-upgrade-v12
