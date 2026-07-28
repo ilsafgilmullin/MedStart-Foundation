@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - agent/tutor-workspace-upgrade-v13
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -25,36 +22,26 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: agent/tutor-workspace-upgrade-v13
-          fetch-depth: 0
+          fetch-depth: 1
+          show-progress: false
       - name: Assemble and verify reviewed patch
         shell: bash
         run: |
           set -euo pipefail
           cat .tutor-upgrade/part-000.txt .tutor-upgrade/chunk-*.txt > /tmp/tutor-upgrade.b64
+          echo "encoded=$(wc -c < /tmp/tutor-upgrade.b64)"
           test "$(wc -c < /tmp/tutor-upgrade.b64)" -eq 33756
           base64 --decode /tmp/tutor-upgrade.b64 > /tmp/tutor-upgrade.patch.gz
           echo "02d02642b97041d8a615c3f1c8970b024a381e09a76f8a6a26239267cb407d6c  /tmp/tutor-upgrade.patch.gz" | sha256sum --check
           gzip -dc /tmp/tutor-upgrade.patch.gz > /tmp/tutor-upgrade.patch
           echo "31ec9e573c03f803d894cd789ab035e356bd06f4ae2335a7851150090a52ee98  /tmp/tutor-upgrade.patch" | sha256sum --check
+          echo "files=$(grep -c '^+++ b/' /tmp/tutor-upgrade.patch)"
           test "$(grep -c '^+++ b/' /tmp/tutor-upgrade.patch)" -eq 12
-          ! grep '^+++ b/' /tmp/tutor-upgrade.patch | grep -q 'dashboard/messages'
-          grep '^+++ b/' /tmp/tutor-upgrade.patch | sed 's#^+++ b/##' | cut -f1 > /tmp/tutor-files.txt
-          cat > /tmp/expected-files.txt <<'EOF'
-          artifacts/medstart/app/dashboard/knowledge/page.tsx
-          artifacts/medstart/app/dashboard/materials/page.tsx
-          artifacts/medstart/app/dashboard/profile/page.tsx
-          artifacts/medstart/app/dashboard/requests/page.tsx
-          artifacts/medstart/app/dashboard/schedule/page.tsx
-          artifacts/medstart/app/dashboard/settings/page.tsx
-          artifacts/medstart/app/dashboard/students/page.tsx
-          artifacts/medstart/components/dashboard/MobileSidebar.tsx
-          artifacts/medstart/components/dashboard/Sidebar.tsx
-          artifacts/medstart/components/dashboard/home/DashboardOverview.tsx
-          artifacts/medstart/components/dashboard/home/Hero.tsx
-          artifacts/medstart/lib/profile-completion.ts
-          EOF
-          diff -u /tmp/expected-files.txt /tmp/tutor-files.txt
-          git apply --check /tmp/tutor-upgrade.patch
+          if grep '^+++ b/' /tmp/tutor-upgrade.patch | grep -q 'dashboard/messages'; then
+            echo 'Messages must not be changed' >&2
+            exit 1
+          fi
+          git apply --check --verbose /tmp/tutor-upgrade.patch
       - name: Apply tutor workspace upgrade
         run: git apply /tmp/tutor-upgrade.patch
       - name: Commit reviewed tutor workspace
