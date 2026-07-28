@@ -1,0 +1,43 @@
+name: Clean MedStart student workspace audit transport
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/student-workspace-cleanup.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: medstart-student-workspace-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout upgrade branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/student-workspace-upgrade-v12
+          fetch-depth: 0
+
+      - name: Remove temporary audit transport
+        run: |
+          rm -rf .github/student-workspace-patch
+          rm -f .github/workflows/student-workspace-apply.yml
+          rm -f .github/workflows/student-workspace-snapshot.yml
+          rm -f .github/workflows/student-workspace-cleanup.yml
+
+      - name: Commit clean branch
+        run: |
+          git config user.name 'MedStart Student Workspace Audit'
+          git config user.email 'student-workspace@medstart.local'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Удалить временные файлы аудита кабинета студента'
+          git push origin HEAD:agent/student-workspace-upgrade-v12
