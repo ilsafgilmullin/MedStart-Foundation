@@ -57,11 +57,24 @@ jobs:
           fetch-depth: 0
 
       - name: Apply mobile messenger stability patch
+        id: mobile_patch
         if: (github.event_name == 'push' && github.ref == 'refs/heads/agent/mobile-messenger-stability-v18') || (github.event_name == 'pull_request' && github.head_ref == 'agent/mobile-messenger-stability-v18')
-        run: node scripts/apply-mobile-messenger-stability-v18.mjs
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/apply-mobile-messenger-stability-v18.mjs 2>&1 | tee mobile-patch-v18.log
+
+      - name: Upload mobile patch diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-patch-v18-log
+          path: mobile-patch-v18.log
+          if-no-files-found: ignore
+          retention-days: 3
 
       - name: Commit product patch and restore CI
-        if: (github.event_name == 'push' && github.ref == 'refs/heads/agent/mobile-messenger-stability-v18') || (github.event_name == 'pull_request' && github.head_ref == 'agent/mobile-messenger-stability-v18')
+        if: steps.mobile_patch.outcome == 'success'
         run: |
           git fetch origin main
           git checkout origin/main -- .github/workflows/medstart-ci.yml
