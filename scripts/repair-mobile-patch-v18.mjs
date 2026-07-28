@@ -12,7 +12,7 @@ for (let index = 0; index < lines.length; index += 1) {
     lines[index] = "replace(bubble, '          className={`relative rounded-[22px] px-4 py-3 shadow-sm ${', '          className={`relative max-w-full overflow-hidden rounded-[22px] px-4 py-3 shadow-sm [overflow-wrap:anywhere] ${', 'bound message bubble')"
     repaired += 1
   } else if (lines[index].includes("'bound reaction picker'")) {
-    lines[index] = "replace(bubble, '                  className={`absolute bottom-10 z-20 flex gap-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl ${', '                  className={`absolute bottom-10 z-20 flex max-w-[calc(100vw-2rem)] gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl ${', 'bound reaction picker')"
+    lines[index] = "replace(bubble, 'className={`absolute bottom-10 z-20 flex gap-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl ${', 'className={`absolute bottom-10 z-20 flex max-w-[calc(100vw-2rem)] gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl ${', 'bound reaction picker')"
     repaired += 1
   }
 }
