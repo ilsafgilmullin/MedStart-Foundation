@@ -1,4 +1,4 @@
-// Browser-only preferences for the authenticated MedStart workspace.
+// Browser preferences for the authenticated MedStart workspace.
 export type DashboardDensity = 'comfortable' | 'compact'
 export type DashboardFontScale = 'normal' | 'large'
 
