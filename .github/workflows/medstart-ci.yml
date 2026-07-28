@@ -62,6 +62,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          node scripts/repair-mobile-patch-v18.mjs
           node scripts/apply-mobile-messenger-stability-v18.mjs 2>&1 | tee mobile-patch-v18.log
 
       - name: Upload mobile patch diagnostic
@@ -79,6 +80,7 @@ jobs:
           git fetch origin main
           git checkout origin/main -- .github/workflows/medstart-ci.yml
           rm -f scripts/apply-mobile-messenger-stability-v18.mjs
+          rm -f scripts/repair-mobile-patch-v18.mjs
           rm -f .github/workflows/apply-mobile-messenger-stability-v18.yml
           rm -f .github/mobile-messenger-trigger-v18*
           git config user.name "github-actions[bot]"
