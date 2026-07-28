@@ -317,6 +317,7 @@ export default function ProfilePage() {
     : 0
 
   async function copyTutorPreviewLink() {
+    if (!profile) return
     try {
       await navigator.clipboard.writeText(
         `${window.location.origin}/dashboard/tutors/${profile.uid}`,

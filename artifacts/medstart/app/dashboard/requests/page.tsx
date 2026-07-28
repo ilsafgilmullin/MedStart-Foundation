@@ -287,9 +287,9 @@ export default function TutorRequestsPage() {
           )}
 
           <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
-            {responseTemplates[decision].map((template) => (
+            {responseTemplates[decision].map((template, index) => (
               <button key={template} type="button" onClick={() => setResponse(template)} aria-pressed={response === template} className="ms-choice ms-choice-pill shrink-0">
-                Шаблон {responseTemplates[decision].indexOf(template) + 1}
+                Шаблон {index + 1}
               </button>
             ))}
           </div>
