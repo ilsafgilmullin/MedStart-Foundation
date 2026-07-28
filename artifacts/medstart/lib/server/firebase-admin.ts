@@ -10,7 +10,11 @@ import {
 } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore } from 'firebase-admin/firestore'
-import { MEDSTART_FIREBASE_PROJECT_ID } from '@/lib/firebase-public-config'
+import { getStorage } from 'firebase-admin/storage'
+import {
+  firebasePublicConfig,
+  MEDSTART_FIREBASE_PROJECT_ID,
+} from '@/lib/firebase-public-config'
 
 const ADMIN_APP_NAME = 'medstart-server-admin'
 
@@ -100,6 +104,7 @@ function getAdminApp(): App {
       {
         credential: cert(explicit),
         projectId: explicit.projectId,
+        storageBucket: firebasePublicConfig.storageBucket,
       },
       ADMIN_APP_NAME,
     )
@@ -110,6 +115,7 @@ function getAdminApp(): App {
       {
         credential: applicationDefault(),
         projectId: MEDSTART_FIREBASE_PROJECT_ID,
+        storageBucket: firebasePublicConfig.storageBucket,
       },
       ADMIN_APP_NAME,
     )
@@ -126,6 +132,10 @@ export function getFirebaseAdminAuth() {
 
 export function getFirebaseAdminDb() {
   return getFirestore(getAdminApp())
+}
+
+export function getFirebaseAdminBucket() {
+  return getStorage(getAdminApp()).bucket(firebasePublicConfig.storageBucket)
 }
 
 export function getFirebaseAdminProjectId() {

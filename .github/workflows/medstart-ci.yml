@@ -80,10 +80,16 @@ jobs:
           grep -q "direct-client-profile-create-blocked" artifacts/medstart/scripts/live-auth-audit.mjs
           ! grep -q 'medstart-board-' artifacts/medstart/components/live/ServerlessWhiteboard.tsx
           test -f artifacts/medstart/app/api/bookings/route.ts
+          test -f artifacts/medstart/app/api/messages/action/route.ts
+          test -f artifacts/medstart/app/api/messages/media/route.ts
           grep -q "fetch('/api/bookings'" artifacts/medstart/lib/bookings.ts
+          grep -q "fetch('/api/messages/action'" artifacts/medstart/lib/conversations.ts
+          grep -q "'/api/messages/media'" artifacts/medstart/lib/chat-media.ts
+          ! grep -R -q "from 'firebase/storage'" artifacts/medstart/lib/chat-media.ts artifacts/medstart/components/messages artifacts/medstart/app/dashboard/messages
           test -f scripts/test-critical-rules.mjs
           test -f scripts/test-medium-rules.mjs
           test -f scripts/test-auth-rules.mjs
+          test -f scripts/test-message-rules.mjs
           test -f scripts/final-audit-invariants.mjs
           test -f scripts/full-repository-audit.mjs
           test -f scripts/button-system-audit.mjs
@@ -110,7 +116,7 @@ jobs:
           pnpm dlx firebase-tools@15.24.0 emulators:exec
           --only firestore,storage
           --project demo-medstart
-          "node scripts/test-critical-rules.mjs && node scripts/test-medium-rules.mjs && node scripts/test-auth-rules.mjs"
+          "node scripts/test-critical-rules.mjs && node scripts/test-medium-rules.mjs && node scripts/test-auth-rules.mjs && node scripts/test-message-rules.mjs"
 
       - name: Lint MedStart
         run: pnpm --filter @workspace/medstart lint

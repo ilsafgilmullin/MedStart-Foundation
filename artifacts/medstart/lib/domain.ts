@@ -66,10 +66,44 @@ export interface Conversation {
   updatedAt?: unknown
 }
 
+export type ChatMessageKind =
+  | 'text'
+  | 'voice'
+  | 'video_note'
+  | 'file'
+  | 'medical_note'
+
+export type MedicalMessageTag =
+  | ''
+  | 'clinical_case'
+  | 'homework'
+  | 'ecg'
+  | 'lab'
+  | 'important'
+  | 'medication'
+
+export type MedicalReactionCode =
+  | 'heart'
+  | 'brain'
+  | 'stethoscope'
+  | 'dna'
+  | 'pill'
+  | 'check'
+
 export interface ChatMessage {
   id: string
   senderUid: string
+  senderName: string
+  senderRole: 'student' | 'tutor' | 'admin' | 'owner'
+  kind: ChatMessageKind
   text: string
+  medicalTag: MedicalMessageTag
+  mediaPath: string
+  mimeType: string
+  fileName: string
+  fileSize: number
+  durationMs: number
+  reactions: Record<string, MedicalReactionCode>
   createdAt?: unknown
 }
 

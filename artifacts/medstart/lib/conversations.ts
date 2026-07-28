@@ -1,47 +1,150 @@
 import {
   collection,
-  doc,
   limit,
   onSnapshot,
   orderBy,
   query,
-  serverTimestamp,
   where,
-  writeBatch,
+  type DocumentData,
   type Unsubscribe,
 } from 'firebase/firestore'
-import { db } from './firebase'
+import { auth, db } from './firebase'
 import {
   timestampToMillis,
   type ChatMessage,
+  type ChatMessageKind,
   type Conversation,
+  type MedicalMessageTag,
+  type MedicalReactionCode,
 } from './domain'
 
 const MAX_VISIBLE_CONVERSATIONS = 100
-const MAX_REALTIME_MESSAGES = 200
+const MAX_REALTIME_MESSAGES = 250
+
+export interface ConversationSubscriptionOptions {
+  moderator?: boolean
+}
+
+export interface ChatSender {
+  uid: string
+  name: string
+  role: 'student' | 'tutor' | 'admin' | 'owner'
+}
+
+export interface SendChatMessageInput {
+  kind?: ChatMessageKind
+  text?: string
+  medicalTag?: MedicalMessageTag
+  mediaPath?: string
+  mimeType?: string
+  fileName?: string
+  fileSize?: number
+  durationMs?: number
+}
+
+interface MessageApiResponse {
+  ok?: boolean
+  error?: string
+}
+
+function sortConversations(items: Conversation[]) {
+  return [...items]
+    .sort(
+      (left, right) =>
+        timestampToMillis(right.updatedAt) - timestampToMillis(left.updatedAt),
+    )
+    .slice(0, MAX_VISIBLE_CONVERSATIONS)
+}
+
+function normalizedMessage(id: string, data: DocumentData): ChatMessage {
+  const kind: ChatMessageKind = [
+    'text',
+    'voice',
+    'video_note',
+    'file',
+    'medical_note',
+  ].includes(String(data.kind))
+    ? (data.kind as ChatMessageKind)
+    : 'text'
+  const senderRole = ['student', 'tutor', 'admin', 'owner'].includes(
+    String(data.senderRole),
+  )
+    ? (data.senderRole as ChatMessage['senderRole'])
+    : 'student'
+
+  return {
+    id,
+    senderUid: String(data.senderUid || ''),
+    senderName: String(data.senderName || 'Участник диалога').slice(0, 160),
+    senderRole,
+    kind,
+    text: String(data.text || '').slice(0, 2_000),
+    medicalTag: String(data.medicalTag || '') as MedicalMessageTag,
+    mediaPath: String(data.mediaPath || '').slice(0, 1_000),
+    mimeType: String(data.mimeType || '').slice(0, 160),
+    fileName: String(data.fileName || '').slice(0, 240),
+    fileSize:
+      typeof data.fileSize === 'number' && Number.isFinite(data.fileSize)
+        ? Math.max(0, data.fileSize)
+        : 0,
+    durationMs:
+      typeof data.durationMs === 'number' && Number.isFinite(data.durationMs)
+        ? Math.max(0, data.durationMs)
+        : 0,
+    reactions:
+      data.reactions && typeof data.reactions === 'object'
+        ? (data.reactions as Record<string, MedicalReactionCode>)
+        : {},
+    createdAt: data.createdAt,
+  }
+}
+
+async function postMessageAction(body: Record<string, unknown>) {
+  const currentUser = auth.currentUser
+  if (!currentUser) {
+    throw new Error('Сессия авторизации устарела. Войдите повторно.')
+  }
+  const token = await currentUser.getIdToken()
+  const response = await fetch('/api/messages/action', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+  const payload = (await response.json().catch(() => ({}))) as MessageApiResponse
+  if (!response.ok) {
+    throw new Error(payload.error || 'Сервер не принял операцию с сообщением.')
+  }
+}
 
 export function subscribeToConversations(
   uid: string,
   onChange: (conversations: Conversation[]) => void,
   onError?: (error: Error) => void,
+  options: ConversationSubscriptionOptions = {},
 ): Unsubscribe {
-  const source = query(
-    collection(db, 'conversations'),
-    where('participantUids', 'array-contains', uid),
-  )
+  const source = options.moderator
+    ? query(
+        collection(db, 'conversations'),
+        orderBy('updatedAt', 'desc'),
+        limit(MAX_VISIBLE_CONVERSATIONS),
+      )
+    : query(
+        collection(db, 'conversations'),
+        where('participantUids', 'array-contains', uid),
+      )
 
   return onSnapshot(
     source,
     (snapshot) =>
       onChange(
-        snapshot.docs
-          .map((item) => ({ id: item.id, ...item.data() }) as Conversation)
-          .sort(
-            (left, right) =>
-              timestampToMillis(right.updatedAt) -
-              timestampToMillis(left.updatedAt),
-          )
-          .slice(0, MAX_VISIBLE_CONVERSATIONS),
+        sortConversations(
+          snapshot.docs.map(
+            (item) => ({ id: item.id, ...item.data() }) as Conversation,
+          ),
+        ),
       ),
     onError,
   )
@@ -63,39 +166,55 @@ export function subscribeToMessages(
     (snapshot) =>
       onChange(
         snapshot.docs
-          .map((item) => ({ id: item.id, ...item.data() }) as ChatMessage)
+          .map((item) => normalizedMessage(item.id, item.data()))
           .reverse(),
       ),
     onError,
   )
 }
 
-export async function sendMessage(
+export function sendMessage(
+  conversationId: string,
+  sender: ChatSender,
+  input: SendChatMessageInput,
+): Promise<void>
+export function sendMessage(
   conversationId: string,
   senderUid: string,
-  rawText: string,
+  text: string,
+): Promise<void>
+export async function sendMessage(
+  conversationId: string,
+  senderOrUid: ChatSender | string,
+  inputOrText: SendChatMessageInput | string,
 ): Promise<void> {
-  const text = rawText.trim()
-  if (!text) return
-  if (text.length > 2_000) {
-    throw new Error('Сообщение не может быть длиннее 2000 символов.')
+  const senderUid =
+    typeof senderOrUid === 'string' ? senderOrUid : senderOrUid.uid
+  if (auth.currentUser?.uid !== senderUid) {
+    throw new Error('Сессия отправителя не совпадает с текущим аккаунтом.')
   }
-
-  const conversationRef = doc(db, 'conversations', conversationId)
-  const messageRef = doc(collection(conversationRef, 'messages'))
-  const batch = writeBatch(db)
-
-  batch.set(messageRef, {
-    senderUid,
-    text,
-    createdAt: serverTimestamp(),
+  const message: SendChatMessageInput =
+    typeof inputOrText === 'string' ? { text: inputOrText } : inputOrText
+  await postMessageAction({
+    action: 'send',
+    conversationId,
+    message,
   })
-  batch.update(conversationRef, {
-    lastMessage: text,
-    lastSenderUid: senderUid,
-    lastMessageAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  })
+}
 
-  await batch.commit()
+export async function toggleMessageReaction(input: {
+  conversationId: string
+  messageId: string
+  uid: string
+  code: MedicalReactionCode
+}) {
+  if (auth.currentUser?.uid !== input.uid) {
+    throw new Error('Сессия реакции не совпадает с текущим аккаунтом.')
+  }
+  await postMessageAction({
+    action: 'reaction',
+    conversationId: input.conversationId,
+    messageId: input.messageId,
+    code: input.code,
+  })
 }
