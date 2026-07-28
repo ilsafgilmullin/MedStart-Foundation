@@ -65,24 +65,8 @@ jobs:
         run: |
           set -euo pipefail
           git apply /tmp/live-workspace-v19-product.patch
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('.github/workflows/medstart-ci.yml')
-          text = path.read_text()
-          required = "          test -f scripts/mobile-messenger-invariants.mjs\n"
-          addition = required + "          test -f scripts/live-workspace-invariants.mjs\n"
-          if 'test -f scripts/live-workspace-invariants.mjs' not in text:
-              if required not in text:
-                  raise SystemExit('CI required-file insertion point not found')
-              text = text.replace(required, addition, 1)
-          audit = "      - name: Audit mobile messenger invariants\n        run: node scripts/mobile-messenger-invariants.mjs\n"
-          audit_addition = audit + "\n      - name: Audit responsive live workspace\n        run: node scripts/live-workspace-invariants.mjs\n"
-          if 'Audit responsive live workspace' not in text:
-              if audit not in text:
-                  raise SystemExit('CI audit insertion point not found')
-              text = text.replace(audit, audit_addition, 1)
-          path.write_text(text)
-          PY
+          sed -i '/test -f scripts\/mobile-messenger-invariants.mjs/a\          test -f scripts/live-workspace-invariants.mjs' .github/workflows/medstart-ci.yml
+          python -c "from pathlib import Path; p=Path('.github/workflows/medstart-ci.yml'); t=p.read_text(); old='      - name: Audit mobile messenger invariants\n        run: node scripts/mobile-messenger-invariants.mjs\n'; new=old+'\n      - name: Audit responsive live workspace\n        run: node scripts/live-workspace-invariants.mjs\n'; assert old in t; p.write_text(t.replace(old,new,1))"
           rm -f .github/live-workspace-v19.part* .github/live-workspace-v19.ready
           git add -A
           git diff --cached --check
