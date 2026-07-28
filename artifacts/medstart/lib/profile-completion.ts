@@ -1,6 +1,6 @@
 import type { UserProfile } from './user-profile'
 
-// Shared role-aware completion model for student and tutor workspaces.
+// Shared role-aware completion model for the authenticated student and tutor workspaces.
 export interface ProfileCompletionResult {
   percent: number
   completed: number
