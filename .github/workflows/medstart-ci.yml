@@ -1,58 +1,186 @@
-name: Apply MedStart Live v19
+name: MedStart CI
 
 on:
+  push:
+    branches:
+      - main
+      - 'fix/**'
+      - agent/live-workspace-anatomy-v19
+    paths:
+      - 'artifacts/medstart/**'
+      - 'scripts/**'
+      - 'firestore.rules'
+      - 'firestore.secure.rules'
+      - 'storage.rules'
+      - 'firebase.json'
+      - 'firestore.indexes.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'package.json'
+      - 'tsconfig*.json'
+      - '.github/workflows/**'
+      - '.github/live-workspace-v19.part*'
+      - '.github/live-workspace-v19.ready'
   pull_request:
     branches:
       - main
     paths:
+      - 'artifacts/medstart/**'
+      - 'scripts/**'
+      - 'firestore.rules'
+      - 'firestore.secure.rules'
+      - 'storage.rules'
+      - 'firebase.json'
+      - 'firestore.indexes.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'package.json'
+      - 'tsconfig*.json'
+      - '.github/workflows/**'
       - '.github/live-workspace-v19.part*'
       - '.github/live-workspace-v19.ready'
-      - '.github/workflows/medstart-ci.yml'
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: medstart-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  apply:
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 40
     steps:
-      - name: Checkout branch
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: agent/live-workspace-anatomy-v19
           fetch-depth: 0
           show-progress: false
 
-      - name: Verify package
+      - name: Apply verified MedStart Live package
+        if: github.ref == 'refs/heads/agent/live-workspace-anatomy-v19' || github.head_ref == 'agent/live-workspace-anatomy-v19'
         shell: bash
         run: |
           set -euo pipefail
-          cat .github/live-workspace-v19.part* > /tmp/package.b64
-          test "$(wc -c < /tmp/package.b64)" = "26440"
-          echo "8911a17369f4d21608d80bfc86b34d801879578672d421e534f19e00f39b6158  /tmp/package.b64" | sha256sum -c -
-          base64 -d /tmp/package.b64 | gzip -dc > /tmp/full.patch
-          echo "215a117689623192d4599d6e945b9184849ddec46cf9d4f9bf5b683210071ecf  /tmp/full.patch" | sha256sum -c -
-          awk 'BEGIN { keep=0 } /^diff --git a\/artifacts\// { keep=1 } keep { print }' /tmp/full.patch > /tmp/product.patch
+          if [ -f .github/live-workspace-v19.ready ]; then
+            cat .github/live-workspace-v19.part* > /tmp/package.b64
+            test "$(wc -c < /tmp/package.b64)" = "26440"
+            echo "8911a17369f4d21608d80bfc86b34d801879578672d421e534f19e00f39b6158  /tmp/package.b64" | sha256sum -c -
+            base64 -d /tmp/package.b64 | gzip -dc > /tmp/full.patch
+            echo "215a117689623192d4599d6e945b9184849ddec46cf9d4f9bf5b683210071ecf  /tmp/full.patch" | sha256sum -c -
+            awk 'BEGIN { keep=0 } /^diff --git a\/artifacts\// { keep=1 } keep { print }' /tmp/full.patch > /tmp/product.patch
+            git fetch --quiet origin main
+            git checkout origin/main -- .github/workflows/medstart-ci.yml
+            git apply --check --verbose /tmp/product.patch
+            git apply /tmp/product.patch
+            rm -f .github/live-workspace-v19.part* .github/live-workspace-v19.ready
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git diff --cached --check
+            git commit -m "Профессионально переработать MedStart Live и анатомию"
+            git push origin HEAD:agent/live-workspace-anatomy-v19
+          fi
 
-      - name: Apply product files
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch --quiet origin main
-          git checkout origin/main -- .github/workflows/medstart-ci.yml
-          git apply --check /tmp/product.patch
-          git apply /tmp/product.patch
-          rm -f .github/live-workspace-v19.part* .github/live-workspace-v19.ready
-          git add -A
-          git diff --cached --check
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
 
-      - name: Commit and push
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Set up Java for Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Verify hardened Firebase configuration
+        run: |
+          test -f firestore.secure.rules
+          test -f storage.rules
+          grep -q '"rules": "firestore.secure.rules"' firebase.json
+          grep -q 'allow create, update: if false;' storage.rules
+          grep -A2 'match /users/{userId}' firestore.secure.rules | grep -q 'allow create: if false;'
+          grep -A2 'match /bookings/{bookingId}' firestore.secure.rules | grep -q 'allow create: if false;'
+          grep -A2 'match /conversations/{conversationId}' firestore.secure.rules | grep -q 'allow create: if false;'
+          grep -q "direct-client-profile-create-blocked" artifacts/medstart/scripts/live-auth-audit.mjs
+          ! grep -q 'medstart-board-' artifacts/medstart/components/live/ServerlessWhiteboard.tsx
+          test -f artifacts/medstart/app/api/bookings/route.ts
+          test -f artifacts/medstart/app/api/messages/action/route.ts
+          test -f artifacts/medstart/app/api/messages/media/route.ts
+          grep -q "fetch('/api/bookings'" artifacts/medstart/lib/bookings.ts
+          grep -q "fetch('/api/messages/action'" artifacts/medstart/lib/conversations.ts
+          grep -q "'/api/messages/media'" artifacts/medstart/lib/chat-media.ts
+          ! grep -R -q "from 'firebase/storage'" artifacts/medstart/lib/chat-media.ts artifacts/medstart/components/messages artifacts/medstart/app/dashboard/messages
+          test -f scripts/test-critical-rules.mjs
+          test -f scripts/test-medium-rules.mjs
+          test -f scripts/test-auth-rules.mjs
+          test -f scripts/test-message-rules.mjs
+          test -f scripts/final-audit-invariants.mjs
+          test -f scripts/full-repository-audit.mjs
+          test -f scripts/button-system-audit.mjs
+          test -f scripts/mobile-messenger-invariants.mjs
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high
+
+      - name: Run full repository audit
+        run: node scripts/full-repository-audit.mjs
+
+      - name: Audit unified button system
+        run: node scripts/button-system-audit.mjs
+
+      - name: Run final static audit invariants
+        run: node scripts/final-audit-invariants.mjs
+
+      - name: Audit mobile messenger invariants
+        run: node scripts/mobile-messenger-invariants.mjs
+
+      - name: Compile and test Firebase security rules
+        env:
+          CI: 'true'
+        run: >-
+          pnpm dlx firebase-tools@15.24.0 emulators:exec
+          --only firestore,storage
+          --project demo-medstart
+          "node scripts/test-critical-rules.mjs && node scripts/test-medium-rules.mjs && node scripts/test-auth-rules.mjs && node scripts/test-message-rules.mjs"
+
+      - name: Lint MedStart
+        run: pnpm --filter @workspace/medstart lint
+
+      - name: Typecheck MedStart
         shell: bash
         run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Профессионально переработать MedStart Live и анатомию"
-          git push origin HEAD:agent/live-workspace-anatomy-v19
+          set -o pipefail
+          pnpm --filter @workspace/medstart typecheck 2>&1 | tee typecheck.log
+
+      - name: Upload typecheck report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: medstart-typecheck
+          path: typecheck.log
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Build MedStart
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: test-api-key
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: example.firebaseapp.com
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: example
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: example.appspot.com
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '123456789'
+          NEXT_PUBLIC_FIREBASE_APP_ID: 1:123456789:web:test
+          NEXT_PUBLIC_OWNER_UID: test-owner
+        run: pnpm --filter @workspace/medstart build
