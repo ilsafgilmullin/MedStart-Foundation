@@ -103,15 +103,7 @@ export interface ChatMessage {
   fileName: string
   fileSize: number
   durationMs: number
-  createdAt?: unknown
-}
-
-export interface ChatReaction {
-  id: string
-  conversationId: string
-  messageId: string
-  uid: string
-  code: MedicalReactionCode
+  reactions: Record<string, MedicalReactionCode>
   createdAt?: unknown
 }
 
@@ -266,72 +258,163 @@ function zonedDateTimeToMillis(
   const day = Number(dateMatch[3])
   const hour = Number(timeMatch[1])
   const minute = Number(timeMatch[2])
+  const utcGuess = Date.UTC(year, month - 1, day, hour, minute)
+  const guessedDate = new Date(utcGuess)
+  if (
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31 ||
+    hour > 23 ||
+    minute > 59 ||
+    guessedDate.getUTCFullYear() !== year ||
+    guessedDate.getUTCMonth() !== month - 1 ||
+    guessedDate.getUTCDate() !== day
+  ) {
+    return 0
+  }
 
-  let guess = Date.UTC(year, month - 1, day, hour, minute)
   try {
-    const formatter = new Intl.DateTimeFormat('en-CA', {
+    const formatter = new Intl.DateTimeFormat('en-US-u-ca-gregory-nu-latn', {
       timeZone: timeZone || 'Europe/Moscow',
+      hourCycle: 'h23',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
-      hourCycle: 'h23',
     })
-    const parts = Object.fromEntries(
-      formatter
-        .formatToParts(new Date(guess))
-        .filter((part) => part.type !== 'literal')
-        .map((part) => [part.type, Number(part.value)]),
-    )
-    const displayedAsUtc = Date.UTC(
-      parts.year,
-      parts.month - 1,
-      parts.day,
-      parts.hour,
-      parts.minute,
-      parts.second,
-    )
-    guess -= displayedAsUtc - guess
+
+    const offsetAt = (millis: number) => {
+      const parts = Object.fromEntries(
+        formatter
+          .formatToParts(new Date(millis))
+          .filter((part) => part.type !== 'literal')
+          .map((part) => [part.type, Number(part.value)]),
+      )
+      return (
+        Date.UTC(
+          parts.year,
+          parts.month - 1,
+          parts.day,
+          parts.hour,
+          parts.minute,
+          parts.second,
+        ) - millis
+      )
+    }
+
+    const firstPass = utcGuess - offsetAt(utcGuess)
+    return utcGuess - offsetAt(firstPass)
   } catch {
-    return guess
+    const localFallback = Date.parse(`${date}T${time || '00:00'}:00`)
+    return Number.isNaN(localFallback) ? 0 : localFallback
   }
-  return guess
 }
 
-export function bookingStartMillis(booking: Booking): number {
-  const fromTimestamp = timestampToMillis(booking.requestedStartAt)
-  if (fromTimestamp) return fromTimestamp
+export function bookingDateTime(booking: Booking): number {
+  const authoritative = timestampToMillis(booking.requestedStartAt)
+  if (authoritative) return authoritative
   return zonedDateTimeToMillis(
     booking.requestedDate,
     booking.requestedTime,
-    booking.timezone,
+    booking.timezone || 'Europe/Moscow',
   )
 }
 
 export function sortBookings(items: Booking[]): Booking[] {
   return [...items].sort((left, right) => {
-    const statusWeight: Record<BookingStatus, number> = {
-      pending: 0,
-      accepted: 1,
-      completed: 2,
-      declined: 3,
-      cancelled: 4,
-    }
+    const leftDate = bookingDateTime(left)
+    const rightDate = bookingDateTime(right)
     return (
-      statusWeight[left.status] - statusWeight[right.status] ||
-      bookingStartMillis(left) - bookingStartMillis(right) ||
+      rightDate - leftDate ||
       timestampToMillis(right.createdAt) - timestampToMillis(left.createdAt)
     )
   })
 }
 
+export function formatLessonDate(
+  date: string,
+  time: string,
+  options: Intl.DateTimeFormatOptions = {},
+  timeZone = 'Europe/Moscow',
+): string {
+  const millis = zonedDateTimeToMillis(date, time, timeZone)
+  if (!millis) return `${date} ${time}`.trim()
+
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone,
+    ...options,
+  }).format(new Date(millis))
+}
+
+export function formatBookingDate(
+  booking: Booking,
+  options: Intl.DateTimeFormatOptions = {},
+): string {
+  const authoritative = timestampToMillis(booking.requestedStartAt)
+  if (authoritative) {
+    return new Intl.DateTimeFormat('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: booking.timezone || 'Europe/Moscow',
+      ...options,
+    }).format(new Date(authoritative))
+  }
+  return formatLessonDate(
+    booking.requestedDate,
+    booking.requestedTime,
+    options,
+    booking.timezone || 'Europe/Moscow',
+  )
+}
+
 export function formatMessageTime(value: unknown): string {
   const millis = timestampToMillis(value)
-  if (!millis) return ''
+  if (!millis) return 'сейчас'
   return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(millis))
+}
+
+export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
+  pending: 'Ожидает ответа',
+  accepted: 'Подтверждено',
+  declined: 'Отклонено',
+  cancelled: 'Отменено',
+  completed: 'Завершено',
+}
+
+export const WEEKDAYS: Array<{ key: Weekday; label: string; short: string }> = [
+  { key: 'monday', label: 'Понедельник', short: 'Пн' },
+  { key: 'tuesday', label: 'Вторник', short: 'Вт' },
+  { key: 'wednesday', label: 'Среда', short: 'Ср' },
+  { key: 'thursday', label: 'Четверг', short: 'Чт' },
+  { key: 'friday', label: 'Пятница', short: 'Пт' },
+  { key: 'saturday', label: 'Суббота', short: 'Сб' },
+  { key: 'sunday', label: 'Воскресенье', short: 'Вс' },
+]
+
+export const DEFAULT_AVAILABILITY: TutorAvailability['days'] = {
+  monday: { enabled: true, start: '10:00', end: '19:00' },
+  tuesday: { enabled: true, start: '10:00', end: '19:00' },
+  wednesday: { enabled: true, start: '10:00', end: '19:00' },
+  thursday: { enabled: true, start: '10:00', end: '19:00' },
+  friday: { enabled: true, start: '10:00', end: '19:00' },
+  saturday: { enabled: false, start: '10:00', end: '16:00' },
+  sunday: { enabled: false, start: '10:00', end: '16:00' },
+}
+
+export function conversationIdFor(firstUid: string, secondUid: string): string {
+  return [firstUid, secondUid].sort().join('__')
 }
