@@ -93,10 +93,10 @@ function normalizedMessage(id: string, data: DocumentData): ChatMessage {
         : 0,
     reactions:
       data.reactions && typeof data.reactions === 'object'
-        ? data.reactions
+        ? (data.reactions as Record<string, MedicalReactionCode>)
         : {},
     createdAt: data.createdAt,
-  } as ChatMessage
+  }
 }
 
 async function postMessageAction(body: Record<string, unknown>) {
@@ -173,18 +173,32 @@ export function subscribeToMessages(
   )
 }
 
-export async function sendMessage(
+export function sendMessage(
   conversationId: string,
   sender: ChatSender,
   input: SendChatMessageInput,
+): Promise<void>
+export function sendMessage(
+  conversationId: string,
+  senderUid: string,
+  text: string,
+): Promise<void>
+export async function sendMessage(
+  conversationId: string,
+  senderOrUid: ChatSender | string,
+  inputOrText: SendChatMessageInput | string,
 ): Promise<void> {
-  if (auth.currentUser?.uid !== sender.uid) {
+  const senderUid =
+    typeof senderOrUid === 'string' ? senderOrUid : senderOrUid.uid
+  if (auth.currentUser?.uid !== senderUid) {
     throw new Error('Сессия отправителя не совпадает с текущим аккаунтом.')
   }
+  const message: SendChatMessageInput =
+    typeof inputOrText === 'string' ? { text: inputOrText } : inputOrText
   await postMessageAction({
     action: 'send',
     conversationId,
-    message: input,
+    message,
   })
 }
 
