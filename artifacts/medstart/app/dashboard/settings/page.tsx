@@ -242,10 +242,6 @@ export default function SettingsPage() {
             .map((key) => window.caches.delete(key)),
         )
       }
-      if ('serviceWorker' in navigator) {
-        const registration = await navigator.serviceWorker.getRegistration()
-        await registration?.update()
-      }
       setMessage('Кэш приложения очищен. Личные настройки и данные сохранены.')
     } catch {
       setError('Не удалось очистить кэш на этом устройстве.')
