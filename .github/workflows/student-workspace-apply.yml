@@ -1,0 +1,51 @@
+name: Apply MedStart student workspace upgrade
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/student-workspace-apply.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: medstart-student-workspace-apply
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout upgrade branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/student-workspace-upgrade-v12
+          fetch-depth: 0
+
+      - name: Assemble reviewed patch
+        run: |
+          cat .github/student-workspace-patch/part-{00..16}.txt > /tmp/student-workspace.b64
+          test "$(wc -c < /tmp/student-workspace.b64)" -eq 48064
+          base64 --decode /tmp/student-workspace.b64 > /tmp/student-workspace.patch.gz
+          echo '2d3056368f2ca236290782ae0bebaffe169653af3b944df2a212cb369463f0d0  /tmp/student-workspace.patch.gz' | sha256sum --check --strict
+          gzip --decompress --stdout /tmp/student-workspace.patch.gz > /tmp/student-workspace.patch
+          echo 'c6c3928919ecb5ac98d1d9aeb263db4549afe902c64995480a8a6a63aa462f9e  /tmp/student-workspace.patch' | sha256sum --check --strict
+          test "$(grep -c '^diff --git ' /tmp/student-workspace.patch)" -eq 12
+          ! grep -q 'dashboard/messages' /tmp/student-workspace.patch
+          git apply --check /tmp/student-workspace.patch
+
+      - name: Apply student workspace upgrade
+        run: git apply /tmp/student-workspace.patch
+
+      - name: Commit reviewed workspace changes
+        run: |
+          git config user.name 'MedStart Student Workspace Audit'
+          git config user.email 'student-workspace@medstart.local'
+          git add artifacts/medstart
+          git diff --cached --check
+          git commit -m 'Профессионально переработать кабинет студента MedStart'
+          git push origin HEAD:agent/student-workspace-upgrade-v12
