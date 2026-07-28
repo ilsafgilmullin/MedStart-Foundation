@@ -1,6 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { NextResponse } from 'next/server'
-import { PRIMARY_OWNER_UID } from '@/lib/access-control'
 import {
   adminErrorResponse,
   assertTargetIsNotOwner,
@@ -192,7 +191,6 @@ async function setRole(actor: AdminActor, body: ActionBody) {
   if (!targetUid || !nextRole) throw new Error('Выберите корректную роль.')
   assertTargetIsNotOwner(targetUid)
 
-  const db = getFirebaseAdminDb()
   const { reference, data } = await targetProfile(targetUid)
   if (data.status === 'blocked' || data.status === 'deleted') {
     throw new Error('Сначала восстановите активный доступ пользователя.')
