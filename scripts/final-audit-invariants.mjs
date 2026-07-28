@@ -53,6 +53,10 @@ const requiredFiles = [
   'artifacts/medstart/app/api/auth/register/route.ts',
   'artifacts/medstart/app/api/auth/password-reset/route.ts',
   'artifacts/medstart/app/api/health/auth/route.ts',
+  'artifacts/medstart/app/api/admin/overview/route.ts',
+  'artifacts/medstart/app/api/admin/action/route.ts',
+  'artifacts/medstart/lib/admin-control.ts',
+  'artifacts/medstart/lib/server/admin-control.ts',
   'artifacts/medstart/components/auth/AuthHealthBanner.tsx',
   'artifacts/medstart/components/auth/AuthShell.tsx',
   'artifacts/medstart/components/auth/PasswordField.tsx',
@@ -82,6 +86,9 @@ const loginRouteSource = await readFile(join(sourceRoot, 'app', 'api', 'auth', '
 const registerRouteSource = await readFile(join(sourceRoot, 'app', 'api', 'auth', 'register', 'route.ts'), 'utf8')
 const resetRouteSource = await readFile(join(sourceRoot, 'app', 'api', 'auth', 'password-reset', 'route.ts'), 'utf8')
 const healthRouteSource = await readFile(join(sourceRoot, 'app', 'api', 'health', 'auth', 'route.ts'), 'utf8')
+const adminOverviewRouteSource = await readFile(join(sourceRoot, 'app', 'api', 'admin', 'overview', 'route.ts'), 'utf8')
+const adminActionRouteSource = await readFile(join(sourceRoot, 'app', 'api', 'admin', 'action', 'route.ts'), 'utf8')
+const adminServerSource = await readFile(join(sourceRoot, 'lib', 'server', 'admin-control.ts'), 'utf8')
 const nextConfigSource = await readFile(join(sourceRoot, 'next.config.ts'), 'utf8')
 const serviceWorkerSource = await readFile(join(sourceRoot, 'public', 'sw.js'), 'utf8')
 const authShellSource = await readFile(join(sourceRoot, 'components', 'auth', 'AuthShell.tsx'), 'utf8')
@@ -127,6 +134,16 @@ for (const marker of ['firebaseIdentityRequest', "requestType: 'PASSWORD_RESET'"
 }
 for (const marker of ['FirebaseAdminConfigurationError', 'ownerAccount', 'ownerProfile', 'withTimeout']) {
   if (!healthRouteSource.includes(marker)) failures.push(`Authentication health route is missing: ${marker}`)
+}
+
+for (const marker of ['requireAdminActor', 'listAllAuthUsers', 'adminAuditLogs', 'ownerProtected']) {
+  if (!adminOverviewRouteSource.includes(marker)) failures.push(`Admin overview route is missing: ${marker}`)
+}
+for (const marker of ['requireOwner', 'assertTargetIsNotOwner', 'revokeRefreshTokens', 'writeAdminAudit', 'set_booking_status']) {
+  if (!adminActionRouteSource.includes(marker)) failures.push(`Admin action route is missing: ${marker}`)
+}
+for (const marker of ['verifyIdToken(token, true)', 'PRIMARY_OWNER_UID', 'adminAuditLogs']) {
+  if (!adminServerSource.includes(marker)) failures.push(`Admin server guard is missing: ${marker}`)
 }
 
 if (!nextConfigSource.includes("!isProduction ? [\"'unsafe-eval'\"] : []")) failures.push('Development CSP can block Next.js hydration in Replit')

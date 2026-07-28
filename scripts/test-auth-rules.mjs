@@ -111,6 +111,41 @@ async function run() {
     }),
   )
 
+  const ownerUid = 'm8JbbeeXMmZzywUwHboOyMm9MnG2'
+  const adminUid = 'auth-audit-admin'
+  const owner = environment.authenticatedContext(ownerUid, {
+    email: 'owner@example.test',
+    email_verified: true,
+  })
+  const admin = environment.authenticatedContext(adminUid, {
+    email: `${adminUid}@example.test`,
+    email_verified: true,
+  })
+
+  await environment.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), 'users', adminUid), {
+      ...studentProfile(adminUid, `${adminUid}@example.test`),
+      role: 'admin',
+    })
+    await setDoc(doc(context.firestore(), 'adminAuditLogs', 'seed-audit'), {
+      actorUid: ownerUid,
+      actorRole: 'owner',
+      action: 'seed',
+      summary: 'Rules audit seed',
+      createdAt: serverTimestamp(),
+    })
+  })
+
+  await assertSucceeds(getDoc(doc(owner.firestore(), 'adminAuditLogs', 'seed-audit')))
+  await assertFails(getDoc(doc(admin.firestore(), 'adminAuditLogs', 'seed-audit')))
+  await assertFails(
+    setDoc(doc(owner.firestore(), 'adminAuditLogs', 'client-created'), {
+      actorUid: ownerUid,
+      action: 'client-write',
+      createdAt: serverTimestamp(),
+    }),
+  )
+
   console.log('Authentication and server-only registration Firebase rules suite passed.')
 }
 

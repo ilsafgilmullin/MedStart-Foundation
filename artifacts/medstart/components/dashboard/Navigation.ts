@@ -50,7 +50,7 @@ const tutor = [
 const moderator = [
   { name: 'Главная', href: '/dashboard', icon: Home },
   {
-    name: 'Администрирование',
+    name: 'Центр управления',
     href: '/dashboard/admin',
     icon: ShieldCheck,
   },
