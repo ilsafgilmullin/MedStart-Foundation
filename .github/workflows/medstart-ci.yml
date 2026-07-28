@@ -8,17 +8,25 @@ on:
       - '.github/live-workspace-v19.part*'
       - '.github/live-workspace-v19.ready'
       - '.github/workflows/medstart-ci.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/live-workspace-v19.part*'
+      - '.github/live-workspace-v19.ready'
+      - '.github/workflows/medstart-ci.yml'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: apply-live-workspace-v19
+  group: apply-live-workspace-v19-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   apply:
+    if: github.event_name != 'pull_request' || github.head_ref == 'agent/live-workspace-anatomy-v19'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
