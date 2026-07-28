@@ -47,6 +47,19 @@ interface MessageApiResponse {
   error?: string
 }
 
+class MessageNetworkError extends Error {}
+
+function friendlyMessageNetworkError() {
+  return new Error('Связь с сервером MedStart прервалась. Проверьте интернет и повторите действие.')
+}
+
+function newRequestId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 function sortConversations(items: Conversation[]) {
   return [...items]
     .sort(
@@ -99,23 +112,52 @@ function normalizedMessage(id: string, data: DocumentData): ChatMessage {
   }
 }
 
-async function postMessageAction(body: Record<string, unknown>) {
+async function performMessageAction(body: Record<string, unknown>, forceRefresh = false) {
   const currentUser = auth.currentUser
   if (!currentUser) {
     throw new Error('Сессия авторизации устарела. Войдите повторно.')
   }
-  const token = await currentUser.getIdToken()
-  const response = await fetch('/api/messages/action', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  })
+  const token = await currentUser.getIdToken(forceRefresh)
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), 25_000)
+  let response: Response
+  try {
+    response = await fetch('/api/messages/action', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+  } catch {
+    throw new MessageNetworkError('NETWORK')
+  } finally {
+    window.clearTimeout(timer)
+  }
   const payload = (await response.json().catch(() => ({}))) as MessageApiResponse
   if (!response.ok) {
     throw new Error(payload.error || 'Сервер не принял операцию с сообщением.')
+  }
+}
+
+async function postMessageAction(body: Record<string, unknown>, retryNetwork = false) {
+  try {
+    await performMessageAction(body)
+  } catch (error) {
+    if (retryNetwork && error instanceof MessageNetworkError) {
+      try {
+        await performMessageAction(body, true)
+        return
+      } catch (retryError) {
+        if (!(retryError instanceof MessageNetworkError)) throw retryError
+      }
+    } else if (!(error instanceof MessageNetworkError)) {
+      throw error
+    }
+    throw friendlyMessageNetworkError()
   }
 }
 
@@ -197,9 +239,10 @@ export async function sendMessage(
     typeof inputOrText === 'string' ? { text: inputOrText } : inputOrText
   await postMessageAction({
     action: 'send',
+    requestId: newRequestId(),
     conversationId,
     message,
-  })
+  }, true)
 }
 
 export async function toggleMessageReaction(input: {

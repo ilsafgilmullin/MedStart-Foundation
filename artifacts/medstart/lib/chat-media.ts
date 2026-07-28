@@ -16,10 +16,26 @@ interface MediaApiResponse {
   error?: string
 }
 
-async function authorizationToken() {
+async function authorizationToken(forceRefresh = false) {
   const user = auth.currentUser
   if (!user) throw new Error('Сессия авторизации устарела. Войдите повторно.')
-  return user.getIdToken()
+  return user.getIdToken(forceRefresh)
+}
+
+function mediaNetworkError(fallback: string) {
+  return new Error(`${fallback} Проверьте интернет и повторите действие.`)
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs = 30_000) {
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } catch {
+    throw mediaNetworkError('Связь с сервером MedStart прервалась.')
+  } finally {
+    window.clearTimeout(timer)
+  }
 }
 
 export function validateChatAttachment(file: File) {
@@ -57,16 +73,27 @@ export async function uploadChatMedia(input: {
     const request = new XMLHttpRequest()
     request.open('POST', '/api/messages/media')
     request.setRequestHeader('Authorization', `Bearer ${token}`)
-    request.responseType = 'json'
+    request.responseType = 'text'
+    request.timeout = 90_000
     request.upload.onprogress = (event) => {
       if (!event.lengthComputable) return
       input.onProgress?.(Math.max(1, Math.round((event.loaded / event.total) * 100)))
     }
-    request.onerror = () => reject(new Error('Сеть прервала защищённую загрузку.'))
+    request.onerror = () => reject(mediaNetworkError('Сеть прервала защищённую загрузку.'))
+    request.ontimeout = () => reject(mediaNetworkError('Сервер не успел принять запись.'))
+    request.onabort = () => reject(new Error('Загрузка записи отменена.'))
     request.onload = () => {
-      const payload = (request.response || {}) as MediaApiResponse
+      let payload: MediaApiResponse = {}
+      try {
+        payload = JSON.parse(request.responseText || '{}') as MediaApiResponse
+      } catch {
+        payload = {}
+      }
       if (request.status < 200 || request.status >= 300 || !payload.path) {
-        reject(new Error(payload.error || 'Сервер не принял медиафайл.'))
+        const fallback = request.status === 413
+          ? 'Запись слишком большая. Сделайте видеокружок короче и повторите.'
+          : 'Сервер не принял медиафайл.'
+        reject(new Error(payload.error || fallback))
         return
       }
       input.onProgress?.(100)
@@ -79,14 +106,14 @@ export async function uploadChatMedia(input: {
 export async function deleteChatMedia(path: string) {
   if (!path.startsWith('chat-media/')) return
   const token = await authorizationToken()
-  const response = await fetch('/api/messages/media', {
+  const response = await fetchWithTimeout('/api/messages/media', {
     method: 'DELETE',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ path }),
-  })
+  }, 20_000)
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as MediaApiResponse
     throw new Error(payload.error || 'Не удалось удалить незавершённую загрузку.')
@@ -98,10 +125,10 @@ export async function loadChatMediaBlob(path: string, maxBytes = CHAT_MEDIA_MAX_
     throw new Error('Некорректный путь медиафайла.')
   }
   const token = await authorizationToken()
-  const response = await fetch(`/api/messages/media?path=${encodeURIComponent(path)}`, {
+  const response = await fetchWithTimeout(`/api/messages/media?path=${encodeURIComponent(path)}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: 'no-store',
-  })
+  }, 45_000)
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as MediaApiResponse
     throw new Error(payload.error || 'Защищённый файл недоступен.')

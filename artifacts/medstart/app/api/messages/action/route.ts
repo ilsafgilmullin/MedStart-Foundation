@@ -52,6 +52,7 @@ const safeFiles = new Set([
 interface ActionBody {
   action?: unknown
   conversationId?: unknown
+  requestId?: unknown
   messageId?: unknown
   code?: unknown
   message?: {
@@ -87,6 +88,10 @@ function text(value: unknown, max = 2_000) {
   return typeof value === 'string' ? value.trim().slice(0, max) : ''
 }
 
+function baseMime(value: string) {
+  return value.split(';', 1)[0].trim().toLowerCase()
+}
+
 function integer(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.max(0, Math.round(value))
@@ -109,6 +114,8 @@ async function verifiedMedia(input: {
   if (!exists) throw new Error('Загруженный медиафайл не найден.')
   const [metadata] = await file.getMetadata()
   const actualType = String(metadata.contentType || '')
+  const actualBaseType = baseMime(actualType)
+  const claimedBaseType = baseMime(input.claimedType)
   const actualSize = Number(metadata.size || 0)
   const custom = metadata.metadata || {}
   if (
@@ -120,16 +127,16 @@ async function verifiedMedia(input: {
   if (!actualSize || actualSize !== input.claimedSize || actualSize > 25 * 1024 * 1024) {
     throw new Error('Размер медиафайла не прошёл проверку.')
   }
-  if (actualType !== input.claimedType) {
+  if (!actualBaseType || actualBaseType !== claimedBaseType) {
     throw new Error('Тип медиафайла не прошёл проверку.')
   }
-  if (input.kind === 'voice' && !actualType.startsWith('audio/')) {
+  if (input.kind === 'voice' && !actualBaseType.startsWith('audio/')) {
     throw new Error('Голосовое сообщение должно быть аудиофайлом.')
   }
-  if (input.kind === 'video_note' && !actualType.startsWith('video/')) {
+  if (input.kind === 'video_note' && !actualBaseType.startsWith('video/')) {
     throw new Error('Видеокружок должен быть видеофайлом.')
   }
-  if (input.kind === 'file' && !safeFiles.has(actualType)) {
+  if (input.kind === 'file' && !safeFiles.has(actualBaseType)) {
     throw new Error('Этот тип вложения запрещён.')
   }
 }
@@ -138,6 +145,10 @@ async function send(request: Request, body: ActionBody) {
   const actor = await requireMessageActor(request)
   rateLimit(actor.uid, 'send')
   const conversationId = text(body.conversationId, 400)
+  const requestId = text(body.requestId, 80)
+  if (requestId && !/^[a-zA-Z0-9_-]{8,80}$/.test(requestId)) {
+    throw new Error('Некорректный идентификатор отправки.')
+  }
   await requireConversationAccess(conversationId, actor)
 
   const raw = body.message || {}
@@ -185,7 +196,13 @@ async function send(request: Request, body: ActionBody) {
 
   const db = getFirebaseAdminDb()
   const conversationRef = db.collection('conversations').doc(conversationId)
-  const messageRef = conversationRef.collection('messages').doc()
+  const messageRef = requestId
+    ? conversationRef.collection('messages').doc(requestId)
+    : conversationRef.collection('messages').doc()
+  if (requestId) {
+    const existing = await messageRef.get()
+    if (existing.exists) return { messageId: messageRef.id }
+  }
   const preview = messagePreview(kind, messageText, fileName)
   const batch = db.batch()
   batch.set(messageRef, {

@@ -81,7 +81,12 @@ function presentation(
   ownUid: string,
   moderatorMode: boolean,
 ) {
-  const participants = conversation.participantUids.map((uid) => ({
+  const participantUids = [...new Set([
+    ...conversation.participantUids,
+    ...Object.keys(conversation.participantNames || {}),
+    ...Object.keys(conversation.participantAvatars || {}),
+  ])]
+  const participants = participantUids.map((uid) => ({
     uid,
     name: conversation.participantNames[uid] || 'Пользователь MedStart',
     avatar: conversation.participantAvatars[uid] || '',
@@ -134,6 +139,14 @@ function prettyDate(value: string) {
       }).format(date)
 }
 
+function friendlyMessengerError(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message.trim() : ''
+  if (/load failed|failed to fetch|network|networkerror|abort|timeout/i.test(message)) {
+    return 'Связь с сервером MedStart прервалась. Проверьте интернет и повторите действие.'
+  }
+  return message || fallback
+}
+
 export default function MedicalMessenger() {
   const { user, profile, role } = useAuth()
   const moderatorMode = role === 'admin' || role === 'owner'
@@ -157,7 +170,7 @@ export default function MedicalMessenger() {
   >(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [privacyConfirmed, setPrivacyConfirmed] = useState(false)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const messageScrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const requestedConversation = useRef('')
 
@@ -237,7 +250,12 @@ export default function MedicalMessenger() {
   }, [selected?.latestBookingId])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const container = messageScrollRef.current
+    if (!container) return
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: messages.length > 1 ? 'smooth' : 'auto',
+    })
   }, [messages])
 
   useEffect(() => {
@@ -287,7 +305,7 @@ export default function MedicalMessenger() {
       setMedicalTag(tag)
       setError(
         caught instanceof Error
-          ? caught.message
+          ? friendlyMessengerError(caught, 'Не удалось отправить сообщение.')
           : 'Не удалось отправить сообщение.',
       )
     } finally {
@@ -358,7 +376,7 @@ export default function MedicalMessenger() {
       setPrivacyConfirmed(false)
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Не удалось отправить вложение.',
+        friendlyMessengerError(caught, 'Не удалось отправить вложение.'),
       )
     }
   }
@@ -390,7 +408,7 @@ export default function MedicalMessenger() {
     : null
 
   return (
-    <div className="flex h-[calc(100dvh-96px)] min-h-[650px] flex-col gap-3">
+    <div className="flex h-[calc(100dvh-108px)] min-h-[560px] w-full min-w-0 max-w-full flex-col gap-3 overflow-hidden sm:h-[calc(100dvh-96px)] sm:min-h-[650px]">
       <header className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-teal-700">
@@ -424,7 +442,7 @@ export default function MedicalMessenger() {
         </div>
       )}
 
-      <section className="relative grid min-h-0 flex-1 overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-xl lg:grid-cols-[340px_minmax(0,1fr)] xl:grid-cols-[360px_minmax(520px,1fr)_320px]">
+      <section className="relative grid min-h-0 min-w-0 w-full max-w-full flex-1 overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-xl sm:rounded-[30px] lg:grid-cols-[340px_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)_320px]">
         <ConversationList
           conversations={filteredConversations}
           total={conversations.length}
@@ -439,7 +457,7 @@ export default function MedicalMessenger() {
         />
 
         <main
-          className={`${selected ? 'flex' : 'hidden lg:flex'} min-h-0 flex-col bg-slate-50`}
+          className={`${selected ? 'flex' : 'hidden lg:flex'} min-h-0 min-w-0 max-w-full flex-col overflow-hidden bg-slate-50`}
         >
           {selected && selectedPresentation ? (
             <>
@@ -458,7 +476,7 @@ export default function MedicalMessenger() {
                 </div>
               )}
 
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-[radial-gradient(circle_at_top_right,_rgba(13,148,136,0.08),_transparent_38%),linear-gradient(to_bottom,_#f8fafc,_#f1f5f9)] p-3 sm:p-5 lg:p-6">
+              <div ref={messageScrollRef} className="min-h-0 min-w-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain bg-[radial-gradient(circle_at_top_right,_rgba(13,148,136,0.08),_transparent_38%),linear-gradient(to_bottom,_#f8fafc,_#f1f5f9)] p-3 sm:p-5 lg:p-6">
                 {messagesLoading ? (
                   <div className="flex h-full items-center justify-center text-slate-500">
                     <LoaderCircle className="mr-2 h-5 w-5 animate-spin" />
@@ -478,7 +496,7 @@ export default function MedicalMessenger() {
                 ) : (
                   <EmptyConversation />
                 )}
-                <div ref={bottomRef} />
+                <div aria-hidden="true" />
               </div>
 
               <Composer
@@ -882,63 +900,8 @@ function Composer({
         </div>
       )}
 
-      <div className="flex items-center gap-2 px-3 pt-3 sm:hidden">
-        <button
-          type="button"
-          onClick={onToggleEmoji}
-          disabled={sending}
-          className="ms-btn ms-btn-soft min-h-9 flex-1 px-3 py-2 text-xs"
-        >
-          <Smile className="h-4 w-4" /> Эмодзи
-        </button>
-        <button
-          type="button"
-          onClick={onVideo}
-          disabled={sending}
-          className="ms-btn ms-btn-soft min-h-9 flex-1 px-3 py-2 text-xs"
-        >
-          <Camera className="h-4 w-4" /> Видеокружок
-        </button>
-      </div>
-
-      <form onSubmit={onSubmit} className="p-3 sm:p-4">
-        <div className="flex items-end gap-2 rounded-[24px] border border-slate-200 bg-slate-50 p-2 focus-within:border-teal-500 focus-within:ring-4 focus-within:ring-teal-100">
-          <div className="flex shrink-0 items-center gap-1">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
-              className="hidden"
-              onChange={(event) => onChooseAttachment(event.target.files?.[0])}
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={sending}
-              className="ms-icon-btn ms-icon-btn-neutral"
-              aria-label="Прикрепить файл"
-            >
-              <Paperclip className="h-5 w-5" />
-            </button>
-            <button
-              type="button"
-              onClick={onToggleMedical}
-              disabled={sending}
-              className="ms-icon-btn ms-icon-btn-neutral"
-              aria-label="Медицинские инструменты"
-            >
-              <Stethoscope className="h-5 w-5" />
-            </button>
-            <button
-              type="button"
-              onClick={onToggleEmoji}
-              disabled={sending}
-              className="ms-icon-btn ms-icon-btn-neutral hidden sm:flex"
-              aria-label="Медицинские эмодзи"
-            >
-              <Smile className="h-5 w-5" />
-            </button>
-          </div>
+      <form onSubmit={onSubmit} className="min-w-0 p-3 sm:p-4">
+        <div className="min-w-0 rounded-[22px] border border-slate-200 bg-slate-50 p-2 focus-within:border-teal-500 focus-within:ring-4 focus-within:ring-teal-100 sm:rounded-[24px]">
           <textarea
             value={draft}
             onChange={(event) => onDraftChange(event.target.value)}
@@ -959,42 +922,40 @@ function Composer({
                 ? 'Напишите служебное сообщение MedStart…'
                 : 'Напишите сообщение…'
             }
-            className="max-h-32 min-h-11 min-w-0 flex-1 resize-none bg-transparent px-2 py-2.5 text-sm leading-6 outline-none"
+            className="max-h-32 min-h-12 w-full min-w-0 resize-none bg-transparent px-2 py-2.5 text-sm leading-6 outline-none [overflow-wrap:anywhere]"
           />
-          <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              onClick={onVoice}
-              disabled={sending}
-              className="ms-icon-btn ms-icon-btn-neutral"
-              aria-label="Записать голосовое"
-            >
-              <Mic className="h-5 w-5" />
-            </button>
-            <button
-              type="button"
-              onClick={onVideo}
-              disabled={sending}
-              className="ms-icon-btn ms-icon-btn-neutral hidden sm:flex"
-              aria-label="Записать видеокружок"
-            >
-              <Camera className="h-5 w-5" />
-            </button>
-            <button
-              disabled={sending || !draft.trim()}
-              className="ms-icon-btn ms-icon-btn-primary"
-              aria-label="Отправить"
-            >
-              {sending ? (
-                <LoaderCircle className="h-5 w-5 animate-spin" />
-              ) : (
-                <Send className="h-5 w-5" />
-              )}
+          <div className="mt-1 flex min-w-0 items-center justify-between gap-2 border-t border-slate-200/80 pt-2">
+            <div className="flex min-w-0 items-center gap-1 overflow-x-auto overscroll-x-contain pb-0.5">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
+                className="hidden"
+                onChange={(event) => onChooseAttachment(event.target.files?.[0])}
+              />
+              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={sending} className="ms-icon-btn ms-icon-btn-neutral shrink-0" aria-label="Прикрепить файл">
+                <Paperclip className="h-5 w-5" />
+              </button>
+              <button type="button" onClick={onToggleMedical} disabled={sending} className="ms-icon-btn ms-icon-btn-neutral shrink-0" aria-label="Медицинские инструменты">
+                <Stethoscope className="h-5 w-5" />
+              </button>
+              <button type="button" onClick={onToggleEmoji} disabled={sending} className="ms-icon-btn ms-icon-btn-neutral shrink-0" aria-label="Медицинские эмодзи">
+                <Smile className="h-5 w-5" />
+              </button>
+              <button type="button" onClick={onVoice} disabled={sending} className="ms-icon-btn ms-icon-btn-neutral shrink-0" aria-label="Записать голосовое">
+                <Mic className="h-5 w-5" />
+              </button>
+              <button type="button" onClick={onVideo} disabled={sending} className="ms-icon-btn ms-icon-btn-neutral shrink-0" aria-label="Записать видеокружок">
+                <Camera className="h-5 w-5" />
+              </button>
+            </div>
+            <button disabled={sending || !draft.trim()} className="ms-icon-btn ms-icon-btn-primary shrink-0" aria-label="Отправить">
+              {sending ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
             </button>
           </div>
         </div>
-        <div className="mt-2 flex items-center justify-between gap-3 px-1 text-[11px] text-slate-400">
-          <span>Enter — отправить · Shift+Enter — новая строка</span>
+        <div className="mt-2 flex items-center justify-end gap-3 px-1 text-[11px] text-slate-400 sm:justify-between">
+          <span className="hidden sm:inline">Enter — отправить · Shift+Enter — новая строка</span>
           <span>{draft.length}/2000</span>
         </div>
       </form>
