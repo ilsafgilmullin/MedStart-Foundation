@@ -1,12 +1,16 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import {
   Bell,
+  BookOpenCheck,
   CheckCircle2,
   Clock3,
+  CalendarDays,
   Database,
   Download,
+  FolderOpen,
   Eye,
   Gauge,
   KeyRound,
@@ -18,6 +22,7 @@ import {
   ShieldCheck,
   Smartphone,
   Sparkles,
+  Stethoscope,
   TextCursorInput,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
@@ -93,7 +98,7 @@ function formatAccountDate(value?: string) {
 }
 
 export default function SettingsPage() {
-  const { user, profile } = useAuth()
+  const { user, profile, role } = useAuth()
   const [preferences, setPreferences] =
     useState<NotificationPreferences>(defaults)
   const [timezone, setTimezone] = useState('Europe/Moscow')
@@ -203,7 +208,7 @@ export default function SettingsPage() {
         role: profile.role,
         status: profile.status,
       },
-      learningProfile: {
+      profileData: {
         name: profile.displayName,
         institution: profile.institution || '',
         fieldOfStudy: profile.fieldOfStudy || '',
@@ -214,6 +219,13 @@ export default function SettingsPage() {
         lessonDuration: profile.lessonDuration || 60,
         lessonFormats: profile.lessonFormats || ['online'],
         bio: profile.bio || '',
+        specialization: profile.specialization || '',
+        professionalTitle: profile.title || '',
+        experience: profile.experience || '',
+        lessonPrice: profile.lessonPrice || 0,
+        rating: profile.rating || 0,
+        reviewsCount: profile.reviewsCount || 0,
+        isPublic: profile.isPublic,
       },
       notificationPreferences: preferences,
     }
@@ -266,12 +278,13 @@ export default function SettingsPage() {
           <div>
             <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-bold ring-1 ring-white/15">
               <Sparkles className="h-4 w-4 text-cyan-200" />
-              Персональный MedStart
+              {role === 'tutor' ? 'Рабочее пространство преподавателя' : 'Персональный MedStart'}
             </span>
             <h1 className="mt-4 text-3xl font-black sm:text-4xl">Настройки</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-teal-50/80 sm:text-base">
-              Управляйте расписанием, уведомлениями, удобством интерфейса и
-              безопасностью аккаунта с одного экрана.
+              {role === 'tutor'
+                ? 'Настройте рабочее время, профессиональный профиль, уведомления, интерфейс и безопасность аккаунта.'
+                : 'Управляйте расписанием, уведомлениями, удобством интерфейса и безопасностью аккаунта с одного экрана.'}
             </p>
           </div>
           <div className="rounded-2xl border border-white/15 bg-white/10 p-4 text-sm">
@@ -294,6 +307,60 @@ export default function SettingsPage() {
           <CheckCircle2 className="h-5 w-5 shrink-0" />
           {message}
         </div>
+      )}
+
+      {role === 'tutor' && profile && (
+        <section className="rounded-[28px] border border-teal-200 bg-gradient-to-br from-teal-50 via-white to-cyan-50 p-5 shadow-sm sm:p-7">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-white p-3 text-teal-700 shadow-sm ring-1 ring-teal-100">
+                  <Stethoscope className="h-6 w-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-slate-950">Рабочие настройки репетитора</h2>
+                  <p className="mt-1 text-sm text-slate-500">Ключевые параметры, которые видят студенты и использует расписание.</p>
+                </div>
+              </div>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-2xl bg-white p-4 ring-1 ring-teal-100">
+                  <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-400">Статус анкеты</p>
+                  <p className="mt-2 font-black text-slate-950">{profile.status === 'active' ? 'Опубликована' : profile.status === 'pending' ? 'На проверке' : 'Требует внимания'}</p>
+                </div>
+                <div className="rounded-2xl bg-white p-4 ring-1 ring-teal-100">
+                  <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-400">Стоимость</p>
+                  <p className="mt-2 font-black text-slate-950">{profile.lessonPrice ? `${profile.lessonPrice.toLocaleString('ru-RU')} ₽` : 'Не указана'}</p>
+                </div>
+                <div className="rounded-2xl bg-white p-4 ring-1 ring-teal-100">
+                  <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-400">Длительность</p>
+                  <p className="mt-2 font-black text-slate-950">{profile.lessonDuration ?? 60} минут</p>
+                </div>
+                <div className="rounded-2xl bg-white p-4 ring-1 ring-teal-100">
+                  <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-400">Формат</p>
+                  <p className="mt-2 font-black text-slate-950">{profile.lessonFormats?.includes('in_person') ? 'Онлайн и очно' : 'Онлайн'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="mt-6 flex flex-wrap gap-2">
+            <Link href="/dashboard/profile" className="ms-btn ms-btn-primary ms-btn-sm">
+              <Stethoscope className="h-4 w-4" />
+              Профессиональный профиль
+            </Link>
+            <Link href="/dashboard/schedule" className="ms-btn ms-btn-secondary ms-btn-sm">
+              <CalendarDays className="h-4 w-4" />
+              Рабочие часы
+            </Link>
+            <Link href="/dashboard/materials" className="ms-btn ms-btn-secondary ms-btn-sm">
+              <FolderOpen className="h-4 w-4" />
+              Материалы
+            </Link>
+            <Link href="/dashboard/knowledge" className="ms-btn ms-btn-soft ms-btn-sm">
+              <BookOpenCheck className="h-4 w-4" />
+              Учебная база
+            </Link>
+          </div>
+        </section>
       )}
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
@@ -579,7 +646,7 @@ export default function SettingsPage() {
             className="ms-btn ms-btn-secondary"
           >
             <Download className="h-5 w-5" />
-            Скачать данные профиля
+            {role === 'tutor' ? 'Скачать профессиональные данные' : 'Скачать данные профиля'}
           </button>
           <button
             type="button"

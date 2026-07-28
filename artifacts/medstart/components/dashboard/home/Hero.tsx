@@ -9,25 +9,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-
-function profileCompletion(profile: ReturnType<typeof useAuth>['profile']) {
-  if (!profile) return 0
-  const fields = [
-    profile.firstName,
-    profile.lastName,
-    profile.avatar,
-    profile.fieldOfStudy,
-    profile.studyYear,
-    profile.institution,
-    profile.city,
-    profile.subjects?.length,
-    profile.bio,
-    profile.timezone,
-  ]
-  return Math.round(
-    (fields.filter((value) => Boolean(value)).length / fields.length) * 100,
-  )
-}
+import { getProfileCompletion } from '@/lib/profile-completion'
 
 export default function Hero() {
   const { profile, role } = useAuth()
@@ -35,7 +17,7 @@ export default function Hero() {
   const tutorPending = role === 'tutor' && profile?.status === 'pending'
   const tutorRejected = role === 'tutor' && profile?.status === 'rejected'
   const isModerator = role === 'admin' || role === 'owner'
-  const completion = profileCompletion(profile)
+  const completion = getProfileCompletion(profile)
 
   const description = isModerator
     ? 'Проверяйте анкеты репетиторов и управляйте доступом к каталогу MedStart.'
@@ -101,7 +83,7 @@ export default function Hero() {
           </div>
         </div>
 
-        {role === 'student' && (
+        {(role === 'student' || role === 'tutor') && (
           <Link
             href="/dashboard/profile"
             className="rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur-sm transition hover:bg-white/15"
@@ -109,25 +91,31 @@ export default function Hero() {
             <div className="flex items-center justify-between gap-3">
               <span className="inline-flex items-center gap-2 text-sm font-bold text-white">
                 <Sparkles className="h-4 w-4 text-cyan-200" />
-                Профиль обучения
+                {role === 'tutor' ? 'Профиль преподавателя' : 'Профиль обучения'}
               </span>
               <span className="text-sm font-black text-cyan-100">
-                {completion}%
+                {completion.percent}%
               </span>
             </div>
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/15">
               <div
                 className="h-full rounded-full bg-cyan-300 transition-all"
-                style={{ width: `${completion}%` }}
+                style={{ width: `${completion.percent}%` }}
               />
             </div>
             <p className="mt-3 text-sm leading-6 text-teal-50/80">
-              {completion >= 80
-                ? 'Профиль заполнен — рекомендации будут точнее.'
-                : 'Добавьте вуз, курс и сложные дисциплины для персональных рекомендаций.'}
+              {role === 'tutor'
+                ? completion.percent >= 85
+                  ? profile?.status === 'active'
+                    ? 'Анкета готова к работе и полноценно представлена в каталоге.'
+                    : 'Анкета заполнена и готова к проверке.'
+                  : `Добавьте: ${completion.missing.slice(0, 2).join(' и ').toLowerCase()}.`
+                : completion.percent >= 80
+                  ? 'Профиль заполнен — рекомендации будут точнее.'
+                  : 'Добавьте вуз, курс и сложные дисциплины для персональных рекомендаций.'}
             </p>
             <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-bold text-white">
-              Дополнить профиль
+              {role === 'tutor' ? 'Улучшить анкету' : 'Дополнить профиль'}
               <ArrowRight className="h-4 w-4" />
             </span>
           </Link>

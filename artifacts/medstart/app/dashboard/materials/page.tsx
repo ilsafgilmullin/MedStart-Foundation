@@ -65,7 +65,7 @@ export default function MaterialsPage() {
   const [error, setError] = useState('')
   const [queryText, setQueryText] = useState('')
   const [kindFilter, setKindFilter] = useState<'all' | MaterialKind>('all')
-  const [tutorFilter, setTutorFilter] = useState('all')
+  const [personFilter, setPersonFilter] = useState('all')
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
   const requestedStudent = useRef('')
 
@@ -134,12 +134,14 @@ export default function MaterialsPage() {
     })
   }, [bookings])
 
-  const tutors = useMemo(
+  const people = useMemo(
     () =>
-      [...new Set(materials.map((item) => item.tutorName).filter(Boolean))].sort(
-        (left, right) => left.localeCompare(right, 'ru'),
-      ),
-    [materials],
+      [...new Set(
+        materials
+          .map((item) => role === 'tutor' ? item.studentName : item.tutorName)
+          .filter(Boolean),
+      )].sort((left, right) => left.localeCompare(right, 'ru')),
+    [materials, role],
   )
 
   const filteredMaterials = useMemo(() => {
@@ -156,16 +158,21 @@ export default function MaterialsPage() {
       return (
         (!query || text.includes(query)) &&
         (kindFilter === 'all' || material.kind === kindFilter) &&
-        (tutorFilter === 'all' || material.tutorName === tutorFilter)
+        (personFilter === 'all' ||
+          (role === 'tutor'
+            ? material.studentName === personFilter
+            : material.tutorName === personFilter))
       )
     })
-  }, [kindFilter, materials, queryText, tutorFilter])
+  }, [kindFilter, materials, personFilter, queryText, role])
 
   const completedCount = materials.filter((item) => completedIds.has(item.id)).length
   const videoCount = materials.filter((item) => item.kind === 'video').length
   const documentCount = materials.filter(
     (item) => item.kind === 'document' || item.kind === 'link',
   ).length
+  const uniqueStudents = new Set(materials.map((item) => item.studentUid)).size
+  const noteCount = materials.filter((item) => item.kind === 'note').length
 
   function toggleCompleted(materialId: string) {
     setCompletedIds((current) => {
@@ -238,27 +245,33 @@ export default function MaterialsPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+      {role === 'tutor' ? (
+        <header className="overflow-hidden rounded-[32px] bg-gradient-to-br from-slate-950 via-teal-950 to-teal-800 p-6 text-white shadow-xl sm:p-8">
+          <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
+            <div>
+              <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-bold ring-1 ring-white/15">
+                <FolderOpen className="h-4 w-4 text-cyan-200" />
+                Методический кабинет
+              </span>
+              <h1 className="mt-4 text-3xl font-black sm:text-4xl">Материалы студентам</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-teal-50/80 sm:text-base">
+                Создавайте персональную библиотеку для каждого студента: документы, видео, ссылки, памятки и задания после занятия.
+              </p>
+            </div>
+            <button type="button" onClick={() => setOpen(true)} disabled={!bookingOptions.length} className="ms-btn ms-btn-white disabled:cursor-not-allowed disabled:opacity-50">
+              <Plus className="h-5 w-5" />
+              Добавить материал
+            </button>
+          </div>
+        </header>
+      ) : (
+        <header>
           <h1 className="text-3xl font-black text-slate-950">Материалы</h1>
           <p className="mt-2 max-w-2xl text-slate-500">
-            {role === 'tutor'
-              ? 'Делитесь ссылками, видео, документами и заметками со студентами.'
-              : 'Файлы, задания и рекомендации, которые преподаватели оставили после занятий.'}
+            Файлы, задания и рекомендации, которые преподаватели оставили после занятий.
           </p>
-        </div>
-        {role === 'tutor' && (
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            disabled={!bookingOptions.length}
-            className="ms-btn ms-btn-primary disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Plus className="h-5 w-5" />
-            Добавить материал
-          </button>
-        )}
-      </header>
+        </header>
+      )}
 
       {role === 'student' && (
         <section className="grid gap-4 sm:grid-cols-3">
@@ -276,6 +289,31 @@ export default function MaterialsPage() {
             <p className="text-sm font-bold text-teal-800">Изучено</p>
             <p className="mt-2 text-3xl font-black text-teal-950">{completedCount}</p>
             <p className="mt-1 text-xs text-teal-700">Отмечено вами</p>
+          </article>
+        </section>
+      )}
+
+      {role === 'tutor' && (
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">Всего материалов</p>
+            <p className="mt-2 text-3xl font-black text-slate-950">{materials.length}</p>
+            <p className="mt-1 text-xs text-slate-400">В персональных библиотеках</p>
+          </article>
+          <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">Студентов</p>
+            <p className="mt-2 text-3xl font-black text-slate-950">{uniqueStudents}</p>
+            <p className="mt-1 text-xs text-slate-400">Получали материалы</p>
+          </article>
+          <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">Видео и источники</p>
+            <p className="mt-2 text-3xl font-black text-slate-950">{videoCount + documentCount}</p>
+            <p className="mt-1 text-xs text-slate-400">Для самостоятельной работы</p>
+          </article>
+          <article className="rounded-3xl border border-teal-200 bg-teal-50 p-5 shadow-sm">
+            <p className="text-sm font-bold text-teal-800">Методические заметки</p>
+            <p className="mt-2 text-3xl font-black text-teal-950">{noteCount}</p>
+            <p className="mt-1 text-xs text-teal-700">Пояснения и задания</p>
           </article>
         </section>
       )}
@@ -344,16 +382,16 @@ export default function MaterialsPage() {
         </section>
       )}
 
-      {role === 'student' && materials.length > 0 && (
+      {materials.length > 0 && (
         <section className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
             <Filter className="h-4 w-4 text-teal-700" />
-            Найти нужный материал
+            {role === 'tutor' ? 'Управление библиотекой студентов' : 'Найти нужный материал'}
           </div>
           <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_220px_220px]">
             <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 focus-within:border-teal-500 focus-within:ring-4 focus-within:ring-teal-100">
               <Search className="h-5 w-5 text-slate-400" />
-              <input value={queryText} onChange={(event) => setQueryText(event.target.value)} placeholder="Название, комментарий или преподаватель" className="w-full bg-transparent outline-none" />
+              <input value={queryText} onChange={(event) => setQueryText(event.target.value)} placeholder={role === 'tutor' ? 'Название, комментарий или студент' : 'Название, комментарий или преподаватель'} className="w-full bg-transparent outline-none" />
             </label>
             <select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as 'all' | MaterialKind)} className={inputClass}>
               <option value="all">Все типы</option>
@@ -361,10 +399,10 @@ export default function MaterialsPage() {
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
-            <select value={tutorFilter} onChange={(event) => setTutorFilter(event.target.value)} className={inputClass}>
-              <option value="all">Все преподаватели</option>
-              {tutors.map((tutorName) => (
-                <option key={tutorName} value={tutorName}>{tutorName}</option>
+            <select value={personFilter} onChange={(event) => setPersonFilter(event.target.value)} className={inputClass}>
+              <option value="all">{role === 'tutor' ? 'Все студенты' : 'Все преподаватели'}</option>
+              {people.map((personName) => (
+                <option key={personName} value={personName}>{personName}</option>
               ))}
             </select>
           </div>

@@ -8,14 +8,18 @@ import {
   CalendarDays,
   CalendarPlus,
   CheckCircle2,
+  CopyCheck,
   CircleCheckBig,
   Clock3,
   History,
   Hourglass,
   LoaderCircle,
+  Banknote,
   Save,
   Search,
-} from 'lucide-react'
+  UsersRound,
+}
+ from 'lucide-react'
 import BookingCard from '@/components/dashboard/BookingCard'
 import { useAuth } from '@/hooks/useAuth'
 import {
@@ -68,7 +72,7 @@ function downloadCalendarEvent(booking: Booking) {
     `DTSTART:${calendarDate(start)}`,
     `DTEND:${calendarDate(end)}`,
     `SUMMARY:${escapeCalendarText(`MedStart: ${booking.subject}`)}`,
-    `DESCRIPTION:${escapeCalendarText(`Занятие с ${booking.tutorName}. ${booking.goal || ''}`)}`,
+    `DESCRIPTION:${escapeCalendarText(`Предмет: ${booking.subject}. Студент: ${booking.studentName}. Преподаватель: ${booking.tutorName}. ${booking.goal || ''}`)}`, 
     'END:VEVENT',
     'END:VCALENDAR',
   ].join('\r\n')
@@ -167,6 +171,38 @@ export default function SchedulePage() {
   const completedCount = bookings.filter(
     (booking) => booking.status === 'completed',
   ).length
+  const weekEnd = Date.now() + 7 * 24 * 60 * 60 * 1000
+  const weekCount = bookings.filter(
+    (booking) =>
+      booking.status === 'accepted' &&
+      bookingDateTime(booking) >= Date.now() &&
+      bookingDateTime(booking) <= weekEnd,
+  ).length
+  const activeStudents = new Set(
+    bookings
+      .filter(
+        (booking) =>
+          booking.status === 'accepted' || booking.status === 'completed',
+      )
+      .map((booking) => booking.studentUid),
+  ).size
+  const completedValue = bookings
+    .filter((booking) => booking.status === 'completed')
+    .reduce((sum, booking) => sum + Math.max(0, Number(booking.price) || 0), 0)
+  const enabledDays = availability
+    ? WEEKDAYS.filter((day) => availability.days[day.key].enabled).length
+    : 0
+  const weeklyHours = availability
+    ? WEEKDAYS.reduce((sum, day) => {
+        const value = availability.days[day.key]
+        if (!value.enabled) return sum
+        const [startHour, startMinute] = value.start.split(':').map(Number)
+        const [endHour, endMinute] = value.end.split(':').map(Number)
+        const minutes =
+          endHour * 60 + endMinute - (startHour * 60 + startMinute)
+        return sum + Math.max(0, minutes) / 60
+      }, 0)
+    : 0
 
   const visibleBookings = useMemo(() => {
     const selected = bookings.filter((booking) => {
@@ -264,6 +300,25 @@ export default function SchedulePage() {
     })
   }
 
+  function applyAvailabilityTemplate(
+    template: 'weekdays' | 'evenings' | 'clear',
+  ) {
+    setAvailability((current) => {
+      if (!current) return current
+      const next = { ...current.days }
+      for (const day of WEEKDAYS) {
+        const weekend = day.key === 'saturday' || day.key === 'sunday'
+        next[day.key] =
+          template === 'clear'
+            ? { enabled: false, start: '09:00', end: '18:00' }
+            : template === 'weekdays'
+              ? { enabled: !weekend, start: '09:00', end: '18:00' }
+              : { enabled: !weekend, start: '17:00', end: '21:00' }
+      }
+      return { ...current, days: next }
+    })
+  }
+
   async function saveHours() {
     if (!availability) return
     setSavingHours(true)
@@ -320,6 +375,26 @@ export default function SchedulePage() {
         </section>
       )}
 
+      {role === 'tutor' && (
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <SummaryCard title="Предстоящие" value={upcomingCount} note={`На 7 дней: ${weekCount}`} icon={CalendarCheck2} tone="teal" />
+          <SummaryCard title="Новые заявки" value={pendingCount} note="Требуют решения" icon={Hourglass} tone="amber" />
+          <SummaryCard title="Студенты" value={activeStudents} note={`Завершено: ${completedCount}`} icon={UsersRound} tone="violet" />
+          <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-slate-500">Сумма проведённых</p>
+                <p className="mt-2 text-3xl font-black text-slate-950">{completedValue.toLocaleString('ru-RU')} ₽</p>
+                <p className="mt-1 text-xs text-slate-400">По стоимости занятий</p>
+              </div>
+              <div className="rounded-2xl bg-sky-50 p-3 text-sky-700 ring-1 ring-sky-100">
+                <Banknote className="h-5 w-5" />
+              </div>
+            </div>
+          </article>
+        </section>
+      )}
+
       {error && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
@@ -358,6 +433,29 @@ export default function SchedulePage() {
 
           {availability ? (
             <div className="mt-6 space-y-3">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl bg-teal-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.1em] text-teal-700">Рабочих дней</p>
+                  <p className="mt-1 text-2xl font-black text-slate-950">{enabledDays}</p>
+                </div>
+                <div className="rounded-2xl bg-sky-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.1em] text-sky-700">Часов в неделю</p>
+                  <p className="mt-1 text-2xl font-black text-slate-950">{weeklyHours.toFixed(1)}</p>
+                </div>
+                <div className="rounded-2xl bg-violet-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.1em] text-violet-700">Часовой пояс</p>
+                  <p className="mt-1 truncate text-sm font-black text-slate-950">{availability.timezone}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <span className="mr-1 inline-flex items-center gap-1.5 text-sm font-bold text-slate-600">
+                  <CopyCheck className="h-4 w-4 text-teal-700" />
+                  Быстрый шаблон:
+                </span>
+                <button type="button" onClick={() => applyAvailabilityTemplate('weekdays')} className="ms-btn ms-btn-secondary ms-btn-sm">Будни 09–18</button>
+                <button type="button" onClick={() => applyAvailabilityTemplate('evenings')} className="ms-btn ms-btn-secondary ms-btn-sm">Вечера 17–21</button>
+                <button type="button" onClick={() => applyAvailabilityTemplate('clear')} className="ms-btn ms-btn-soft ms-btn-sm">Очистить</button>
+              </div>
               {WEEKDAYS.map((day) => {
                 const value = availability.days[day.key]
                 return (
@@ -399,17 +497,15 @@ export default function SchedulePage() {
                   <p className="text-sm font-bold text-cyan-100">Ближайшее подтверждённое занятие</p>
                   <h2 className="mt-2 text-2xl font-black sm:text-3xl">{nextLesson.subject}</h2>
                   <p className="mt-2 text-teal-50/85">{formatBookingDate(nextLesson)} · {nextLesson.durationMinutes} минут</p>
-                  {role === 'student' && (
-                    <p className="mt-3 text-sm text-teal-50/75">Преподаватель: {nextLesson.tutorName}</p>
-                  )}
+                  <p className="mt-3 text-sm text-teal-50/75">
+                    {role === 'tutor' ? `Студент: ${nextLesson.studentName}` : `Преподаватель: ${nextLesson.tutorName}`}
+                  </p>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  {role === 'student' && (
-                    <button type="button" onClick={() => downloadCalendarEvent(nextLesson)} className="ms-btn ms-btn-on-dark">
-                      <CalendarPlus className="h-4 w-4" />
-                      В календарь
-                    </button>
-                  )}
+                  <button type="button" onClick={() => downloadCalendarEvent(nextLesson)} className="ms-btn ms-btn-on-dark">
+                    <CalendarPlus className="h-4 w-4" />
+                    В календарь
+                  </button>
                   <Link
                     href={nextLesson.format === 'online' ? ROUTES.LESSON(nextLesson.id) : `/dashboard/messages?conversation=${nextLesson.conversationId}`}
                     className="ms-btn ms-btn-white"
