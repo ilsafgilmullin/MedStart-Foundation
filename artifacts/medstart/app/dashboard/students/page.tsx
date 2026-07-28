@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import ProfilePhoto from '@/components/dashboard/ProfilePhoto'
+import PresenceBadge from '@/components/presence/PresenceBadge'
 import { subscribeToBookingsForUser } from '@/lib/bookings'
 import { subscribeToMaterialsForUser } from '@/lib/materials'
 import {
@@ -293,6 +294,7 @@ export default function TutorStudentsPage() {
                 Личная заметка преподавателя
               </p>
               <h2 className="mt-2 text-2xl font-black text-slate-950">{selected.name}</h2>
+              <PresenceBadge uid={selected.uid} className="mt-2" />
               <p className="mt-2 text-sm leading-6 text-slate-600">
                 Зафиксируйте темы для повторения, план следующего занятия или
                 особенности объяснения. Заметка хранится только на этом устройстве.
@@ -367,6 +369,7 @@ export default function TutorStudentsPage() {
                   )}
                   <div className="min-w-0 flex-1">
                     <h2 className="truncate text-lg font-black text-slate-950">{student.name}</h2>
+                    <PresenceBadge uid={student.uid} compact className="mt-1" />
                     <p className="mt-1 text-sm text-slate-500">
                       {student.completedCount} завершено · {student.materialsCount} материалов
                     </p>

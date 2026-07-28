@@ -38,6 +38,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import ProfilePhoto from '@/components/dashboard/ProfilePhoto'
+import PresenceBadge from '@/components/presence/PresenceBadge'
 import {
   fetchAdminControlOverview,
   runAdminControlAction,
@@ -729,6 +730,7 @@ function ModerationPanel({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-xl font-black text-slate-950">{user.displayName}</h3>
+                      <PresenceBadge uid={user.uid} compact />
                       <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-800">На проверке</span>
                     </div>
                     <p className="mt-1 break-all text-sm text-slate-500">{user.email}</p>

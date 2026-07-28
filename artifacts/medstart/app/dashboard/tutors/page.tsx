@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { subscribeToPublicTutors } from '@/lib/firestore'
 import ProfilePhoto from '@/components/dashboard/ProfilePhoto'
+import PresenceBadge from '@/components/presence/PresenceBadge'
 import { useAuth } from '@/hooks/useAuth'
 import type { LessonFormat, UserProfile } from '@/lib/user-profile'
 
@@ -359,6 +360,7 @@ export default function TutorsPage() {
                     <p className="mt-1 line-clamp-2 text-sm font-bold text-teal-700">
                       {tutor.specialization || 'Медицинский преподаватель'}
                     </p>
+                    <PresenceBadge uid={tutor.uid} compact className="mt-2" />
                   </div>
                 </div>
 
