@@ -4,7 +4,10 @@ import {
   getFirebaseAdminAuth,
   getFirebaseAdminDb,
 } from '@/lib/server/firebase-admin'
-import { createLessonToken } from '@/lib/server/livekit'
+import {
+  createLessonToken,
+  getLiveVideoAvailability,
+} from '@/lib/server/livekit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -14,7 +17,10 @@ const VIDEO_ROOM_CLOSE_AFTER_MS = 4 * 60 * 60 * 1000
 
 interface TokenRequestBody {
   bookingId?: unknown
+  mode?: unknown
 }
+
+type JoinMode = 'video' | 'audio' | 'workspace'
 
 function jsonError(message: string, status: number) {
   return NextResponse.json(
@@ -35,16 +41,9 @@ function isLiveKitConfigurationError(error: unknown) {
   )
 }
 
-function isVideoServerEnabled() {
-  const value = process.env.MEDSTART_LIVE_VIDEO_ENABLED
-    ?.trim()
-    .toLowerCase()
-
-  return value === 'true' || value === '1' || value === 'yes'
-}
-
 function demoCredentials(booking: Booking) {
   return {
+    mode: 'workspace' as const,
     serverUrl: 'demo://local',
     roomName: `medstart-demo-${booking.id}`,
     participantToken: 'protected-no-server-mode',
@@ -143,7 +142,9 @@ function videoRoomWindowError(booking: Booking, nowMs = Date.now()) {
 
   const opensAt = startMs - VIDEO_ROOM_OPEN_BEFORE_MS
   const closesAt =
-    startMs + Math.max(30, durationMinutes) * 60 * 1000 + VIDEO_ROOM_CLOSE_AFTER_MS
+    startMs +
+    Math.max(30, durationMinutes) * 60 * 1000 +
+    VIDEO_ROOM_CLOSE_AFTER_MS
 
   if (nowMs < opensAt) {
     return 'Видеокомната откроется за 30 минут до начала занятия.'
@@ -173,13 +174,28 @@ export async function POST(request: Request) {
     return jsonError('Некорректный идентификатор занятия.', 400)
   }
 
+  const mode: JoinMode =
+    body.mode === undefined
+      ? 'workspace'
+      : body.mode === 'video' ||
+          body.mode === 'audio' ||
+          body.mode === 'workspace'
+        ? body.mode
+        : 'workspace'
+  if (body.mode !== undefined && mode !== body.mode) {
+    return jsonError('Некорректный режим подключения.', 400)
+  }
+
   try {
     const decoded = await getFirebaseAdminAuth().verifyIdToken(
       authorization.slice('Bearer '.length),
       true,
     )
     if (!decoded.email_verified) {
-      return jsonError('Подтвердите электронную почту перед входом в занятие.', 403)
+      return jsonError(
+        'Подтвердите электронную почту перед входом в занятие.',
+        403,
+      )
     }
     const database = getFirebaseAdminDb()
     const [snapshot, userSnapshot] = await Promise.all([
@@ -219,11 +235,18 @@ export async function POST(request: Request) {
       return jsonError('Это занятие запланировано в очном формате.', 409)
     }
 
-    // До подключения собственного видеосервера MedStart намеренно работает
-    // в защищённом режиме медицинской доски. Наличие старых LIVEKIT_* secrets
-    // больше не заставляет клиент подключаться к недоступному серверу.
-    if (!isVideoServerEnabled()) {
+    if (mode === 'workspace') {
       return demoResponse(booking)
+    }
+
+    const videoAvailability = getLiveVideoAvailability()
+    if (!videoAvailability.enabled) {
+      return jsonError(
+        videoAvailability.code === 'disabled'
+          ? 'Собственный видеосервер MedStart пока не активирован. Откройте медицинскую доску без звонка.'
+          : 'Настройка собственного видеосервера MedStart не завершена.',
+        503,
+      )
     }
 
     const windowError = videoRoomWindowError(booking)
@@ -248,7 +271,12 @@ export async function POST(request: Request) {
         throw error
       }
 
-      return demoResponse(booking)
+      return jsonError(
+        error instanceof Error
+          ? error.message
+          : 'Собственный видеосервер MedStart временно недоступен.',
+        503,
+      )
     }
   } catch (error) {
     const message =
