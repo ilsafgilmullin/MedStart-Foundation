@@ -1,71 +1,165 @@
 'use client'
 
-import { useMemo, useRef, useState, type PointerEvent } from 'react'
+import { createElement, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ChevronLeft,
-  ChevronRight,
+  Box,
+  ClipboardList,
   Focus,
+  LoaderCircle,
   Maximize2,
   Minus,
   Plus,
   Rotate3d,
   ScanSearch,
+  TriangleAlert,
 } from 'lucide-react'
 import {
-  ANATOMY_LAYERS,
-  ANATOMY_REGIONS,
-  ANATOMY_VIEWS,
+  ANATOMY_MODELS,
+  HRA_LICENSE_URL,
+  HRA_SOURCE_URL,
   anatomyDataUri,
-  type AnatomyLayer,
+  type AnatomyModelId,
   type AnatomyView,
 } from '@/lib/anatomy-model'
 
 interface AnatomyViewerProps {
   compact?: boolean
-  initialLayer?: AnatomyLayer
-  initialView?: AnatomyView
+  initialModel?: AnatomyModelId
   initialRegion?: string
   onShowOnBoard?: (input: {
-    layer: AnatomyLayer
+    layer: 'organs'
     view: AnatomyView
     region: string
     imageUrl: string
     label: string
   }) => void
+  onAddToCase?: (label: string) => void
+}
+
+type ViewerStatus = 'loading' | 'ready' | 'error' | 'fallback'
+
+interface ModelViewerElement extends HTMLElement {
+  src?: string
+}
+
+let modelViewerLoader: Promise<void> | null = null
+
+function supportsWebGl() {
+  try {
+    const canvas = document.createElement('canvas')
+    return Boolean(canvas.getContext('webgl2') || canvas.getContext('webgl'))
+  } catch {
+    return false
+  }
+}
+
+function ensureModelViewer() {
+  if (customElements.get('model-viewer')) return Promise.resolve()
+  if (modelViewerLoader) return modelViewerLoader
+
+  modelViewerLoader = new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[data-medstart-model-viewer]',
+    )
+    const finish = () => {
+      void customElements.whenDefined('model-viewer').then(() => resolve())
+    }
+
+    if (existing) {
+      existing.addEventListener('load', finish, { once: true })
+      existing.addEventListener('error', reject, { once: true })
+      finish()
+      return
+    }
+
+    const script = document.createElement('script')
+    script.type = 'module'
+    script.src = '/vendor/model-viewer/model-viewer.min.js'
+    script.dataset.medstartModelViewer = 'true'
+    script.addEventListener('load', finish, { once: true })
+    script.addEventListener('error', reject, { once: true })
+    document.head.appendChild(script)
+  })
+
+  return modelViewerLoader
 }
 
 export default function AnatomyViewer({
   compact = false,
-  initialLayer = 'organs',
-  initialView = 'front',
-  initialRegion = 'thorax',
+  initialModel = 'heart',
+  initialRegion,
   onShowOnBoard,
+  onAddToCase,
 }: AnatomyViewerProps) {
-  const [layer, setLayer] = useState<AnatomyLayer>(initialLayer)
-  const [view, setView] = useState<AnatomyView>(initialView)
-  const [region, setRegion] = useState(initialRegion)
-  const [zoom, setZoom] = useState(1)
-  const dragStart = useRef<number | null>(null)
-  const selectedRegion =
-    ANATOMY_REGIONS.find((item) => item.id === region) ?? ANATOMY_REGIONS[2]
-  const imageUrl = useMemo(() => anatomyDataUri(layer, view, region), [layer, view, region])
+  const initial =
+    ANATOMY_MODELS.find(
+      (item) => item.id === initialModel || item.region === initialRegion,
+    ) ?? ANATOMY_MODELS[0]
+  const [modelId, setModelId] = useState<AnatomyModelId>(initial.id)
+  const [selectedStructure, setSelectedStructure] = useState(
+    initial.structures[0],
+  )
+  const [status, setStatus] = useState<ViewerStatus>('loading')
+  const [fieldOfView, setFieldOfView] = useState(35)
+  const elementRef = useRef<ModelViewerElement | null>(null)
+  const model =
+    ANATOMY_MODELS.find((item) => item.id === modelId) ?? ANATOMY_MODELS[0]
+  const boardImageUrl = useMemo(
+    () => anatomyDataUri('organs', 'front', model.region),
+    [model.region],
+  )
 
-  function rotate(direction: number) {
-    const index = ANATOMY_VIEWS.findIndex((item) => item.id === view)
-    const next = (index + direction + ANATOMY_VIEWS.length) % ANATOMY_VIEWS.length
-    setView(ANATOMY_VIEWS[next].id)
-  }
+  useEffect(() => {
+    if (!supportsWebGl()) {
+      setStatus('fallback')
+      return
+    }
 
-  function pointerDown(event: PointerEvent<HTMLDivElement>) {
-    dragStart.current = event.clientX
-    event.currentTarget.setPointerCapture?.(event.pointerId)
-  }
+    let active = true
+    void ensureModelViewer()
+      .then(() => {
+        if (active) setStatus('loading')
+      })
+      .catch(() => {
+        if (active) setStatus('error')
+      })
+    return () => {
+      active = false
+    }
+  }, [])
 
-  function pointerUp(event: PointerEvent<HTMLDivElement>) {
-    if (dragStart.current === null) return
-    const delta = event.clientX - dragStart.current
-    dragStart.current = null
-    if (Math.abs(delta) > 42) rotate(delta > 0 ? -1 : 1)
+  useEffect(() => {
+    setSelectedStructure(model.structures[0])
+    setStatus((current) => (current === 'fallback' ? current : 'loading'))
+  }, [model])
+
+  useEffect(() => {
+    elementRef.current?.setAttribute('field-of-view', `${fieldOfView}deg`)
+  }, [fieldOfView])
+
+  const modelElement = createElement('model-viewer', {
+    ref: (node: ModelViewerElement | null) => {
+      elementRef.current = node
+    },
+    src: model.file,
+    alt: `${model.label}, интерактивная трёхмерная анатомическая модель`,
+    'camera-controls': true,
+    'touch-action': 'pan-y',
+    'interaction-prompt': 'auto',
+    'shadow-intensity': '1',
+    'environment-image': 'neutral',
+    'camera-orbit': '0deg 75deg auto',
+    'field-of-view': `${fieldOfView}deg`,
+    loading: 'eager',
+    className: 'h-full min-h-[300px] w-full bg-transparent',
+    onLoad: () => setStatus('ready'),
+    onError: () => setStatus('error'),
+  })
+
+  function resetCamera() {
+    setFieldOfView(35)
+    elementRef.current?.setAttribute('camera-orbit', '0deg 75deg auto')
+    elementRef.current?.removeAttribute('camera-target')
   }
 
   return (
@@ -75,115 +169,201 @@ export default function AnatomyViewer({
           <div className="min-w-0">
             <p className="flex items-center gap-2 text-sm font-bold">
               <Rotate3d className="h-4 w-4 text-violet-300" />
-              Интерактивная анатомия
+              Интерактивная 3D-анатомия
             </p>
             <p className="mt-1 truncate text-[11px] text-slate-400">
-              Слои, области и четыре проекции человеческого тела
+              Настоящие полигональные модели HRA/NIH
             </p>
           </div>
-          <span className="rounded-full bg-teal-400/10 px-2.5 py-1 text-[10px] font-semibold text-teal-200">
-            2.5D
+          <span className="rounded-full bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-200">
+            3D · GLB
           </span>
         </div>
       </header>
 
-      <div className={`grid min-h-0 min-w-0 flex-1 ${compact ? 'grid-rows-[minmax(260px,1fr)_auto]' : 'lg:grid-cols-[minmax(300px,1fr)_320px]'}`}>
+      <div
+        className={`grid min-h-0 min-w-0 flex-1 ${
+          compact
+            ? 'grid-rows-[minmax(280px,1fr)_auto]'
+            : 'lg:grid-cols-[minmax(320px,1fr)_330px]'
+        }`}
+      >
         <div className="flex min-h-0 min-w-0 flex-col p-2 sm:p-3">
-          <div
-            onPointerDown={pointerDown}
-            onPointerUp={pointerUp}
-            onPointerCancel={() => {
-              dragStart.current = null
-            }}
-            className="relative flex min-h-[300px] min-w-0 flex-1 touch-pan-y select-none items-center justify-center overflow-hidden rounded-2xl bg-slate-950 sm:min-h-[420px]"
-          >
-            <img
-              src={imageUrl}
-              alt={`${selectedRegion.label}, ${ANATOMY_LAYERS.find((item) => item.id === layer)?.label}`}
-              draggable={false}
-              className="h-full max-h-[760px] w-full object-contain transition-transform duration-300"
-              style={{ transform: `scale(${zoom})` }}
-            />
-            <button
-              type="button"
-              aria-label="Предыдущая проекция"
-              onClick={() => rotate(-1)}
-              className="ms-icon-btn ms-icon-btn-on-dark absolute left-2 top-1/2 -translate-y-1/2"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <button
-              type="button"
-              aria-label="Следующая проекция"
-              onClick={() => rotate(1)}
-              className="ms-icon-btn ms-icon-btn-on-dark absolute right-2 top-1/2 -translate-y-1/2"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
-            <div className="absolute bottom-2 right-2 flex gap-1 rounded-xl bg-slate-950/75 p-1 backdrop-blur">
-              <button type="button" onClick={() => setZoom((value) => Math.max(.8, value - .1))} className="ms-icon-btn ms-icon-btn-on-dark ms-icon-btn-sm" aria-label="Уменьшить модель"><Minus className="h-4 w-4" /></button>
-              <button type="button" onClick={() => setZoom(1)} className="ms-icon-btn ms-icon-btn-on-dark ms-icon-btn-sm" aria-label="Сбросить масштаб"><Focus className="h-4 w-4" /></button>
-              <button type="button" onClick={() => setZoom((value) => Math.min(1.6, value + .1))} className="ms-icon-btn ms-icon-btn-on-dark ms-icon-btn-sm" aria-label="Увеличить модель"><Plus className="h-4 w-4" /></button>
-            </div>
-            <p className="absolute bottom-3 left-3 hidden rounded-lg bg-slate-950/70 px-2 py-1 text-[10px] text-slate-300 backdrop-blur sm:block">
-              Проведите по модели для вращения
-            </p>
+          <div className="relative flex min-h-[320px] min-w-0 flex-1 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b from-slate-950 to-indigo-950 sm:min-h-[460px]">
+            {status === 'fallback' || status === 'error' ? (
+              <div className="flex h-full w-full flex-col items-center justify-center p-4">
+                <img
+                  src={boardImageUrl}
+                  alt={`Схематическая проекция: ${model.label}`}
+                  className="min-h-0 max-h-[620px] w-full object-contain"
+                />
+                <p className="mt-2 flex items-center gap-2 text-center text-xs text-amber-200">
+                  <TriangleAlert className="h-4 w-4 shrink-0" />
+                  3D недоступно на этом устройстве — показана облегчённая схема.
+                </p>
+              </div>
+            ) : (
+              modelElement
+            )}
+
+            {status === 'loading' && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/55">
+                <div className="rounded-2xl border border-white/10 bg-slate-950/90 px-5 py-4 text-center shadow-xl">
+                  <LoaderCircle className="mx-auto h-6 w-6 animate-spin text-violet-300" />
+                  <p className="mt-2 text-xs text-slate-300">
+                    Загружаем только выбранный орган…
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {status !== 'fallback' && status !== 'error' && (
+              <div className="absolute bottom-2 right-2 flex gap-1 rounded-xl bg-slate-950/80 p-1 backdrop-blur">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFieldOfView((value) => Math.min(60, value + 5))
+                  }
+                  className="ms-icon-btn ms-icon-btn-on-dark ms-icon-btn-sm"
+                  aria-label="Уменьшить модель"
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={resetCamera}
+                  className="ms-icon-btn ms-icon-btn-on-dark ms-icon-btn-sm"
+                  aria-label="Сбросить положение модели"
+                >
+                  <Focus className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFieldOfView((value) => Math.max(15, value - 5))
+                  }
+                  className="ms-icon-btn ms-icon-btn-on-dark ms-icon-btn-sm"
+                  aria-label="Увеличить модель"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
         <aside className="min-h-0 min-w-0 overflow-y-auto border-t border-white/10 p-3 lg:border-l lg:border-t-0">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[.14em] text-slate-500">Система</p>
-            <div className="mt-2 grid grid-cols-2 gap-1.5">
-              {ANATOMY_LAYERS.map((item) => (
-                <button key={item.id} type="button" onClick={() => setLayer(item.id)} aria-pressed={layer === item.id} className="ms-choice ms-choice-dark w-full justify-start px-2 py-2 text-[11px]">
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                  {item.shortLabel}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <p className="text-[10px] font-bold uppercase tracking-[.14em] text-slate-500">Проекция</p>
-            <div className="mt-2 grid grid-cols-2 gap-1.5">
-              {ANATOMY_VIEWS.map((item) => (
-                <button key={item.id} type="button" onClick={() => setView(item.id)} aria-pressed={view === item.id} className="ms-choice ms-choice-dark w-full px-2 py-2 text-[11px]">
-                  {item.shortLabel}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <p className="text-[10px] font-bold uppercase tracking-[.14em] text-slate-500">Область</p>
-            <select value={region} onChange={(event) => setRegion(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-teal-400">
-              {ANATOMY_REGIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-            </select>
+          <p className="text-[10px] font-bold uppercase tracking-[.14em] text-slate-500">
+            Модель
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-1.5">
+            {ANATOMY_MODELS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setModelId(item.id)}
+                aria-pressed={model.id === item.id}
+                className="ms-choice ms-choice-dark w-full justify-start px-2 py-2 text-[11px]"
+              >
+                <Box className="h-3.5 w-3.5" />
+                {item.label}
+              </button>
+            ))}
           </div>
 
           <article className="mt-4 rounded-2xl border border-violet-400/20 bg-violet-500/10 p-3">
             <div className="flex items-start gap-2">
               <ScanSearch className="mt-0.5 h-4 w-4 shrink-0 text-violet-300" />
               <div className="min-w-0">
-                <h3 className="text-sm font-bold">{selectedRegion.label}</h3>
-                <p className="mt-0.5 text-[11px] italic text-violet-200">{selectedRegion.latin}</p>
+                <h3 className="text-sm font-bold">{model.label}</h3>
+                <p className="mt-0.5 text-[11px] italic text-violet-200">
+                  {model.latin}
+                </p>
               </div>
             </div>
-            <p className="mt-2 text-[11px] leading-5 text-slate-300">{selectedRegion.description}</p>
-            <p className="mt-2 border-t border-white/10 pt-2 text-[11px] leading-5 text-teal-100">{selectedRegion.clinical}</p>
+            <p className="mt-2 text-[11px] leading-5 text-slate-300">
+              {model.description}
+            </p>
+            {!compact && (
+              <p className="mt-2 border-t border-white/10 pt-2 text-[11px] leading-5 text-teal-100">
+                {model.clinical}
+              </p>
+            )}
           </article>
+
+          <div className="mt-4">
+            <p className="text-[10px] font-bold uppercase tracking-[.14em] text-slate-500">
+              Анатомический ориентир
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {model.structures.map((structure) => (
+                <button
+                  key={structure}
+                  type="button"
+                  onClick={() => setSelectedStructure(structure)}
+                  aria-pressed={selectedStructure === structure}
+                  className="ms-choice ms-choice-dark ms-choice-pill px-2 py-1.5 text-[10px]"
+                >
+                  {structure}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {onShowOnBoard && (
             <button
               type="button"
-              onClick={() => onShowOnBoard({ layer, view, region, imageUrl, label: `${selectedRegion.label} · ${ANATOMY_LAYERS.find((item) => item.id === layer)?.shortLabel}` })}
-              className="ms-btn ms-btn-primary mt-3 w-full"
+              onClick={() =>
+                onShowOnBoard({
+                  layer: 'organs',
+                  view: 'front',
+                  region: model.region,
+                  imageUrl: boardImageUrl,
+                  label: `${model.label} · схематическая проекция`,
+                })
+              }
+              className="ms-btn ms-btn-primary mt-4 w-full"
             >
               <Maximize2 className="h-4 w-4" />
-              Показать на доске
+              Показать проекцию на доске
             </button>
           )}
+
+          {onAddToCase && (
+            <button
+              type="button"
+              onClick={() =>
+                onAddToCase(`${model.label}: ${selectedStructure}`)
+              }
+              className="ms-btn ms-btn-on-dark mt-2 w-full"
+            >
+              <ClipboardList className="h-4 w-4" />
+              Добавить ориентир в кейс
+            </button>
+          )}
+
+          <p className="mt-4 text-[10px] leading-4 text-slate-500">
+            Источник:{' '}
+            <a
+              href={HRA_SOURCE_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="text-violet-300 underline"
+            >
+              Human Reference Atlas / HuBMAP
+            </a>
+            . Лицензия{' '}
+            <a
+              href={HRA_LICENSE_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="text-violet-300 underline"
+            >
+              CC BY 4.0
+            </a>
+            . Модели оптимизированы для MedStart. Только для обучения, не для
+            диагностики.
+          </p>
         </aside>
       </div>
     </section>

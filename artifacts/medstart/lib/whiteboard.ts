@@ -28,7 +28,7 @@ export function subscribeToWhiteboard(
 ): Unsubscribe {
   const source = query(
     elementsCollection(bookingId),
-    orderBy('createdAtMs', 'asc'),
+    orderBy('createdAtMs', 'desc'),
     limit(MAX_REALTIME_ELEMENTS),
   )
 

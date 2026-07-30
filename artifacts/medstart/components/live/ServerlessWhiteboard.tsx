@@ -31,6 +31,10 @@ import type {
   WhiteboardPoint,
 } from '@/lib/domain'
 import {
+  compactRealtimeElement,
+  type WhiteboardRealtimeChannel,
+} from '@/lib/live-whiteboard'
+import {
   clearWhiteboard,
   deleteWhiteboardElement,
   saveWhiteboardElement,
@@ -43,12 +47,15 @@ interface ServerlessWhiteboardProps {
   userName: string
   tutorUid: string
   canClear: boolean
+  realtime?: WhiteboardRealtimeChannel
   backgroundImageUrl?: string
   backgroundLabel?: string
   onClearBackground?: () => void
 }
 
 const MAX_POINTS = 1_200
+const MAX_ELEMENTS = 1_200
+const MAX_REMOTE_DRAFTS = 64
 
 const toolItems: Array<{
   kind: WhiteboardElementKind
@@ -111,9 +118,15 @@ function isBoardElement(value: unknown): value is WhiteboardElement {
     item.id.length > 0 &&
     item.id.length <= 160 &&
     typeof item.kind === 'string' &&
-    ['pen', 'marker', 'eraser', 'line', 'rectangle', 'ellipse', 'text'].includes(
-      item.kind,
-    ) &&
+    [
+      'pen',
+      'marker',
+      'eraser',
+      'line',
+      'rectangle',
+      'ellipse',
+      'text',
+    ].includes(item.kind) &&
     typeof item.authorUid === 'string' &&
     typeof item.authorName === 'string' &&
     typeof item.color === 'string' &&
@@ -144,9 +157,9 @@ function mergeElement(
 ) {
   const index = current.findIndex((item) => item.id === incoming.id)
   if (index === -1) {
-    return [...current, incoming].sort(
-      (left, right) => left.createdAtMs - right.createdAtMs,
-    )
+    return [...current, incoming]
+      .sort((left, right) => left.createdAtMs - right.createdAtMs)
+      .slice(-MAX_ELEMENTS)
   }
   const next = [...current]
   next[index] = incoming
@@ -260,7 +273,10 @@ function drawContainedImage(
   width: number,
   height: number,
 ) {
-  const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight)
+  const scale = Math.min(
+    width / image.naturalWidth,
+    height / image.naturalHeight,
+  )
   const drawWidth = image.naturalWidth * scale
   const drawHeight = image.naturalHeight * scale
   context.drawImage(
@@ -276,7 +292,9 @@ export default function ServerlessWhiteboard({
   bookingId,
   userUid,
   userName,
+  tutorUid,
   canClear,
+  realtime,
   backgroundImageUrl = '',
   backgroundLabel = '',
   onClearBackground,
@@ -286,8 +304,12 @@ export default function ServerlessWhiteboard({
   const elementsRef = useRef<WhiteboardElement[]>([])
   const draftRef = useRef<WhiteboardElement | null>(null)
   const redoRef = useRef<WhiteboardElement[]>([])
+  const lastDraftSentAtRef = useRef(0)
   const [elements, setElements] = useState<WhiteboardElement[]>([])
   const [draft, setDraft] = useState<WhiteboardElement | null>(null)
+  const [remoteDrafts, setRemoteDrafts] = useState<
+    Record<string, WhiteboardElement>
+  >({})
   const [tool, setTool] = useState<WhiteboardElementKind>('pen')
   const [color, setColor] = useState(colors[1])
   const [size, setSize] = useState(4)
@@ -306,13 +328,92 @@ export default function ServerlessWhiteboard({
       subscribeToWhiteboard(
         bookingId,
         (next) => {
-          setElements(next.filter(isBoardElement))
+          const valid = next.filter(isBoardElement).slice(-MAX_ELEMENTS)
+          setElements(valid)
+          setRemoteDrafts((current) => {
+            const remaining = { ...current }
+            for (const element of valid) delete remaining[element.id]
+            return remaining
+          })
           setSyncState(navigator.onLine ? 'saved' : 'offline')
         },
         () => setSyncState(navigator.onLine ? 'error' : 'offline'),
       ),
     [bookingId],
   )
+
+  useEffect(() => {
+    if (!realtime) return
+
+    return realtime.subscribe((packet, senderUid) => {
+      if (senderUid === userUid) return
+
+      if (packet.type === 'clear') {
+        if (senderUid !== tutorUid) return
+        setElements([])
+        setRemoteDrafts({})
+        return
+      }
+
+      if (packet.type === 'delete') {
+        setElements((current) => {
+          const target = current.find((item) => item.id === packet.elementId)
+          if (
+            target &&
+            target.authorUid !== senderUid &&
+            senderUid !== tutorUid
+          ) {
+            return current
+          }
+          return current.filter((item) => item.id !== packet.elementId)
+        })
+        setRemoteDrafts((current) => {
+          const target = current[packet.elementId]
+          if (
+            target &&
+            target.authorUid !== senderUid &&
+            senderUid !== tutorUid
+          ) {
+            return current
+          }
+          const next = { ...current }
+          delete next[packet.elementId]
+          return next
+        })
+        return
+      }
+
+      if (
+        !isBoardElement(packet.element) ||
+        packet.element.authorUid !== senderUid
+      ) {
+        return
+      }
+
+      if (packet.type === 'draft') {
+        setRemoteDrafts((current) => {
+          const next = { ...current }
+          const keys = Object.keys(next)
+          if (
+            !(packet.element.id in next) &&
+            keys.length >= MAX_REMOTE_DRAFTS
+          ) {
+            delete next[keys[0]]
+          }
+          next[packet.element.id] = packet.element
+          return next
+        })
+        return
+      }
+
+      setRemoteDrafts((current) => {
+        const next = { ...current }
+        delete next[packet.element.id]
+        return next
+      })
+      setElements((current) => mergeElement(current, packet.element))
+    })
+  }, [realtime, tutorUid, userUid])
 
   useEffect(() => {
     const update = () => {
@@ -348,6 +449,9 @@ export default function ServerlessWhiteboard({
       for (const element of elements) {
         drawElement(context, element, rect.width, rect.height)
       }
+      for (const remoteDraft of Object.values(remoteDrafts)) {
+        drawElement(context, remoteDraft, rect.width, rect.height)
+      }
       if (draft) drawElement(context, draft, rect.width, rect.height)
     }
 
@@ -356,7 +460,7 @@ export default function ServerlessWhiteboard({
     const observer = new ResizeObserver(render)
     observer.observe(container)
     return () => observer.disconnect()
-  }, [draft, elements])
+  }, [draft, elements, remoteDrafts])
 
   const status = useMemo(() => {
     if (!online || syncState === 'offline') {
@@ -405,6 +509,20 @@ export default function ServerlessWhiteboard({
   async function persistElement(element: WhiteboardElement, clearRedo = true) {
     setElements((current) => mergeElement(current, element))
     if (clearRedo) redoRef.current = []
+    if (realtime) {
+      void realtime
+        .publish(
+          {
+            version: 1,
+            type: 'commit',
+            element: compactRealtimeElement(element, true),
+          },
+          true,
+        )
+        .catch(() => {
+          // Firestore remains the durable fallback if the fast channel drops.
+        })
+    }
     setSyncState(navigator.onLine ? 'saving' : 'offline')
     try {
       await saveWhiteboardElement(bookingId, element)
@@ -445,7 +563,8 @@ export default function ServerlessWhiteboard({
     let next: WhiteboardElement
     if (isStrokeKind(current.kind)) {
       const last = current.points[current.points.length - 1]
-      if (last && Math.hypot(point.x - last.x, point.y - last.y) < 0.0015) return
+      if (last && Math.hypot(point.x - last.x, point.y - last.y) < 0.0015)
+        return
       const points =
         current.points.length >= MAX_POINTS
           ? current.points
@@ -455,6 +574,21 @@ export default function ServerlessWhiteboard({
       next = { ...current, endX: point.x, endY: point.y }
     }
     updateDraft(next)
+    if (realtime && performance.now() - lastDraftSentAtRef.current >= 50) {
+      lastDraftSentAtRef.current = performance.now()
+      void realtime
+        .publish(
+          {
+            version: 1,
+            type: 'draft',
+            element: compactRealtimeElement(next, false),
+          },
+          false,
+        )
+        .catch(() => {
+          // The final element is still delivered reliably and saved in Firestore.
+        })
+    }
   }
 
   function pointerUp(event: ReactPointerEvent<HTMLCanvasElement>) {
@@ -473,6 +607,13 @@ export default function ServerlessWhiteboard({
 
   async function removeElement(element: WhiteboardElement) {
     setElements((current) => current.filter((item) => item.id !== element.id))
+    if (realtime) {
+      void realtime
+        .publish({ version: 1, type: 'delete', elementId: element.id }, true)
+        .catch(() => {
+          // Firestore remains authoritative.
+        })
+    }
     setSyncState(navigator.onLine ? 'saving' : 'offline')
     try {
       await deleteWhiteboardElement(bookingId, element.id)
@@ -495,7 +636,10 @@ export default function ServerlessWhiteboard({
   function redo() {
     const element = redoRef.current.pop()
     if (!element) return
-    void persistElement({ ...element, id: newId(), createdAtMs: Date.now() }, false)
+    void persistElement(
+      { ...element, id: newId(), createdAtMs: Date.now() },
+      false,
+    )
   }
 
   async function clearAll() {
@@ -509,7 +653,13 @@ export default function ServerlessWhiteboard({
     }
     const previousElements = elementsRef.current
     setElements([])
+    setRemoteDrafts({})
     redoRef.current = []
+    if (realtime) {
+      void realtime.publish({ version: 1, type: 'clear' }, true).catch(() => {
+        // Firestore remains authoritative.
+      })
+    }
     setSyncState(navigator.onLine ? 'saving' : 'offline')
     try {
       await clearWhiteboard(bookingId)
@@ -558,7 +708,10 @@ export default function ServerlessWhiteboard({
                 Умная медицинская доска
               </h2>
               <p className="text-[11px] text-slate-500">
-                {elements.length} аннотаций · синхронизация через Firebase
+                {elements.length} аннотаций ·{' '}
+                {realtime
+                  ? 'LiveKit + Firebase'
+                  : 'синхронизация через Firebase'}
               </p>
             </div>
           </div>
@@ -718,19 +871,23 @@ export default function ServerlessWhiteboard({
             tool === 'text' ? 'cursor-text' : 'cursor-crosshair'
           }`}
         />
-        {!elements.length && !draft && !backgroundImageUrl && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-8 text-center">
-            <div className="rounded-3xl border border-violet-100 bg-white/90 px-6 py-5 shadow-sm backdrop-blur">
-              <PenLine className="mx-auto h-7 w-7 text-violet-600" />
-              <p className="mt-3 font-bold text-slate-800">
-                Доска готова к работе
-              </p>
-              <p className="mt-1 max-w-xs text-sm text-slate-500">
-                Рисуйте вместе или наложите снимок и анатомическую модель из медицинских инструментов.
-              </p>
+        {!elements.length &&
+          !Object.keys(remoteDrafts).length &&
+          !draft &&
+          !backgroundImageUrl && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-8 text-center">
+              <div className="rounded-3xl border border-violet-100 bg-white/90 px-6 py-5 shadow-sm backdrop-blur">
+                <PenLine className="mx-auto h-7 w-7 text-violet-600" />
+                <p className="mt-3 font-bold text-slate-800">
+                  Доска готова к работе
+                </p>
+                <p className="mt-1 max-w-xs text-sm text-slate-500">
+                  Рисуйте вместе или наложите снимок и анатомическую модель из
+                  медицинских инструментов.
+                </p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
       </div>
     </section>
   )

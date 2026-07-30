@@ -17,6 +17,9 @@ import {
   Wifi,
 } from 'lucide-react'
 import type { LiveSessionCredentials } from '@/components/live/LiveLessonRoom'
+import PrejoinDeviceCheck, {
+  type DeviceSelection,
+} from '@/components/live/PrejoinDeviceCheck'
 import { useAuth } from '@/hooks/useAuth'
 import { getBooking } from '@/lib/bookings'
 import { ROUTES } from '@/lib/constants'
@@ -27,62 +30,7 @@ type JoinMode = 'video' | 'audio' | 'workspace'
 interface LiveStatus {
   videoEnabled: boolean
   mode: 'live' | 'workspace'
-  reason: 'ready' | 'disabled' | 'incomplete' | 'invalid-url'
-}
-
-function mediaAccessErrorMessage(error: unknown, mode: JoinMode) {
-  if (!(error instanceof DOMException)) {
-    return 'Не удалось проверить камеру и микрофон.'
-  }
-
-  if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
-    return mode === 'video'
-      ? 'Разрешите MedStart доступ к камере и микрофону в настройках браузера либо войдите только с голосом.'
-      : 'Разрешите MedStart доступ к микрофону в настройках браузера.'
-  }
-  if (error.name === 'NotFoundError' || error.name === 'OverconstrainedError') {
-    return mode === 'video'
-      ? 'Камера или микрофон не найдены. Подключите устройство либо войдите только с голосом.'
-      : 'Микрофон не найден. Проверьте подключение устройства.'
-  }
-  if (error.name === 'NotReadableError' || error.name === 'AbortError') {
-    return 'Камера или микрофон заняты другим приложением. Закройте его и повторите попытку.'
-  }
-
-  return 'Не удалось проверить камеру и микрофон. Проверьте разрешения браузера.'
-}
-
-async function verifyMediaAccess(mode: Exclude<JoinMode, 'workspace'>) {
-  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
-    throw new Error(
-      'Камера и микрофон доступны только по защищённому HTTPS-соединению.',
-    )
-  }
-
-  let stream: MediaStream | null = null
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        channelCount: 1,
-      },
-      video:
-        mode === 'video'
-          ? {
-              facingMode: 'user',
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-              frameRate: { ideal: 24, max: 30 },
-            }
-          : false,
-    })
-  } catch (error) {
-    throw new Error(mediaAccessErrorMessage(error, mode))
-  } finally {
-    stream?.getTracks().forEach((track) => track.stop())
-  }
+  reason: 'ready' | 'disabled' | 'incomplete' | 'invalid-url' | 'unreachable'
 }
 
 function RoomLoader({ label }: { label: string }) {
@@ -119,10 +67,16 @@ export default function LessonPage() {
   const [booking, setBooking] = useState<Booking | null>(null)
   const [loading, setLoading] = useState(true)
   const [joining, setJoining] = useState<JoinMode | null>(null)
+  const [setupMode, setSetupMode] = useState<'video' | 'audio' | null>(null)
   const [credentials, setCredentials] = useState<LiveSessionCredentials | null>(
     null,
   )
   const [joinWithVideo, setJoinWithVideo] = useState(true)
+  const [lastLiveMode, setLastLiveMode] = useState<'video' | 'audio'>('video')
+  const [deviceSelection, setDeviceSelection] = useState<DeviceSelection>({
+    cameraDeviceId: '',
+    microphoneDeviceId: '',
+  })
   const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null)
   const [error, setError] = useState('')
 
@@ -193,13 +147,16 @@ export default function LessonPage() {
     }
   }, [authLoading, bookingId, profile, router, user])
 
-  async function join(mode: JoinMode) {
-    if (!user || !booking) return
+  async function join(
+    mode: JoinMode,
+    selectedDevices = deviceSelection,
+  ): Promise<boolean> {
+    if (!user || !booking) return false
     if (mode !== 'workspace' && liveStatus?.videoEnabled === false) {
       setError(
         'Собственный видеосервер MedStart пока не активирован. Откройте медицинскую доску без звонка.',
       )
-      return
+      return false
     }
 
     setJoining(mode)
@@ -209,10 +166,6 @@ export default function LessonPage() {
     let timeout: number | null = null
 
     try {
-      if (mode !== 'workspace') {
-        await verifyMediaAccess(mode)
-      }
-
       controller = new AbortController()
       timeout = window.setTimeout(() => controller?.abort(), 15_000)
       const idToken = await user.getIdToken()
@@ -237,7 +190,12 @@ export default function LessonPage() {
       }
 
       setJoinWithVideo(mode === 'video')
+      if (mode !== 'workspace') {
+        setLastLiveMode(mode)
+        setDeviceSelection(selectedDevices)
+      }
       setCredentials(payload)
+      return true
     } catch (caught) {
       setError(
         caught instanceof DOMException && caught.name === 'AbortError'
@@ -246,6 +204,7 @@ export default function LessonPage() {
             ? caught.message
             : 'Не удалось открыть комнату занятия.',
       )
+      return false
     } finally {
       if (timeout !== null) window.clearTimeout(timeout)
       setJoining(null)
@@ -254,6 +213,38 @@ export default function LessonPage() {
 
   function leave() {
     router.replace(ROUTES.SCHEDULE)
+  }
+
+  async function reconnectLive() {
+    setCredentials(null)
+    setError('')
+    await join(lastLiveMode, deviceSelection)
+  }
+
+  async function continueOnBoard() {
+    setCredentials(null)
+    setError('')
+    await join('workspace')
+  }
+
+  if (setupMode && booking && user) {
+    return (
+      <PrejoinDeviceCheck
+        mode={setupMode}
+        initialSelection={deviceSelection}
+        connectionError={error}
+        onCancel={() => {
+          setSetupMode(null)
+          setError('')
+        }}
+        onConfirm={async (selection) => {
+          setDeviceSelection(selection)
+          const successful = await join(setupMode, selection)
+          if (successful) setSetupMode(null)
+          return successful
+        }}
+      />
+    )
   }
 
   if (credentials && booking && user && profile) {
@@ -282,20 +273,42 @@ export default function LessonPage() {
           userName={profile.displayName}
           participantRole={participantRole}
           joinWithVideo={joinWithVideo}
+          cameraDeviceId={deviceSelection.cameraDeviceId}
+          microphoneDeviceId={deviceSelection.microphoneDeviceId}
           onLeave={leave}
           onConnectionError={setError}
         />
         {error && (
           <div className="fixed left-1/2 top-20 z-[100] flex w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 items-start gap-3 rounded-2xl border border-amber-300/30 bg-amber-950/95 p-4 text-sm text-amber-100 shadow-2xl backdrop-blur">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
-            <p className="flex-1">{error}</p>
-            <button
-              type="button"
-              onClick={() => setError('')}
-              className="ms-btn ms-btn-on-dark ms-btn-sm"
-            >
-              Закрыть
-            </button>
+            <div className="min-w-0 flex-1">
+              <p>{error}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void reconnectLive()}
+                  disabled={joining !== null}
+                  className="ms-btn ms-btn-primary ms-btn-sm"
+                >
+                  Переподключиться
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void continueOnBoard()}
+                  disabled={joining !== null}
+                  className="ms-btn ms-btn-on-dark ms-btn-sm"
+                >
+                  Продолжить на доске
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setError('')}
+                  className="ms-btn ms-btn-on-dark ms-btn-sm"
+                >
+                  Закрыть
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </>
@@ -421,7 +434,9 @@ export default function LessonPage() {
                     ? 'Проверяем доступность собственного видеосервера…'
                     : videoEnabled
                       ? 'Собственный видеосервер настроен. Перед входом MedStart проверит камеру и микрофон.'
-                      : 'Видеосервер пока не активирован. Медицинская доска и чат остаются доступными.'}
+                      : liveStatus?.reason === 'unreachable'
+                        ? 'Видеосервер настроен, но сейчас не отвечает. Медицинская доска и чат остаются доступными.'
+                        : 'Видеосервер пока не активирован. Медицинская доска и чат остаются доступными.'}
                 </p>
               </div>
             </div>
@@ -438,7 +453,10 @@ export default function LessonPage() {
                 <>
                   <button
                     type="button"
-                    onClick={() => void join('video')}
+                    onClick={() => {
+                      setError('')
+                      setSetupMode('video')
+                    }}
                     disabled={joining !== null}
                     className="ms-btn ms-btn-primary ms-btn-lg ms-btn-block"
                   >
@@ -453,7 +471,10 @@ export default function LessonPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => void join('audio')}
+                    onClick={() => {
+                      setError('')
+                      setSetupMode('audio')
+                    }}
                     disabled={joining !== null}
                     className="ms-btn ms-btn-on-dark ms-btn-lg ms-btn-block"
                   >

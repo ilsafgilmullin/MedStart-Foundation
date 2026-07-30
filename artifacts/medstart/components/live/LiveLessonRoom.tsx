@@ -8,6 +8,7 @@ import {
   useConnectionQualityIndicator,
   useConnectionState,
   useLocalParticipant,
+  useRoomContext,
 } from '@livekit/components-react'
 import {
   AudioPresets,
@@ -33,6 +34,7 @@ import LessonControls from './LessonControls'
 import MedicalWorkspace from './MedicalWorkspace'
 import VideoStage from './VideoStage'
 import { bookingDateTime, formatBookingDate, type Booking } from '@/lib/domain'
+import { createWhiteboardRealtimeChannel } from '@/lib/live-whiteboard'
 
 export interface LiveSessionCredentials {
   mode: 'live' | 'workspace'
@@ -48,6 +50,8 @@ interface LiveLessonRoomProps {
   userName: string
   participantRole: 'student' | 'tutor'
   joinWithVideo: boolean
+  cameraDeviceId: string
+  microphoneDeviceId: string
   onLeave: () => void
   onConnectionError: (message: string) => void
 }
@@ -81,12 +85,17 @@ function Workspace({
   participantRole,
   onLeave,
   onConnectionError,
-}: Omit<LiveLessonRoomProps, 'credentials' | 'joinWithVideo'>) {
+}: Omit<
+  LiveLessonRoomProps,
+  'credentials' | 'joinWithVideo' | 'cameraDeviceId' | 'microphoneDeviceId'
+>) {
   const [mobileView, setMobileView] = useState<MobileView>('board')
   const [sideView, setSideView] = useState<SideView>('video')
   const [sideOpen, setSideOpen] = useState(true)
   const [now, setNow] = useState(Date.now())
   const state = useConnectionState()
+  const room = useRoomContext()
+  const realtime = useMemo(() => createWhiteboardRealtimeChannel(room), [room])
   const { localParticipant } = useLocalParticipant()
   const { quality } = useConnectionQualityIndicator({
     participant: localParticipant,
@@ -203,6 +212,7 @@ function Workspace({
             tutorUid={booking.tutorUid}
             canClear={participantRole === 'tutor'}
             participantRole={participantRole}
+            realtime={realtime}
           />
         </div>
 
@@ -282,6 +292,8 @@ export default function LiveLessonRoom({
   userName,
   participantRole,
   joinWithVideo,
+  cameraDeviceId,
+  microphoneDeviceId,
   onLeave,
   onConnectionError,
 }: LiveLessonRoomProps) {
@@ -303,6 +315,7 @@ export default function LiveLessonRoom({
       serverUrl={credentials.serverUrl}
       connect
       audio={{
+        deviceId: microphoneDeviceId || undefined,
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
@@ -310,6 +323,7 @@ export default function LiveLessonRoom({
       video={
         joinWithVideo
           ? {
+              deviceId: cameraDeviceId || undefined,
               resolution: VideoPresets.h720.resolution,
               frameRate: 24,
             }

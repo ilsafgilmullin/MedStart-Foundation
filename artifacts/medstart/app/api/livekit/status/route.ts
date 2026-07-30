@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { getLiveVideoAvailability } from '@/lib/server/livekit'
+import { checkLiveVideoAvailability } from '@/lib/server/livekit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-export function GET() {
-  const availability = getLiveVideoAvailability()
+export async function GET() {
+  const availability = await checkLiveVideoAvailability()
 
   return NextResponse.json(
     {
