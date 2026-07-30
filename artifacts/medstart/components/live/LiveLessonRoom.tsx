@@ -35,6 +35,7 @@ import VideoStage from './VideoStage'
 import { bookingDateTime, formatBookingDate, type Booking } from '@/lib/domain'
 
 export interface LiveSessionCredentials {
+  mode: 'live' | 'workspace'
   serverUrl: string
   roomName: string
   participantToken: string
@@ -149,7 +150,9 @@ function Workspace({
           <button
             type="button"
             onClick={() => setSideOpen((current) => !current)}
-            aria-label={sideOpen ? 'Скрыть боковую панель' : 'Показать боковую панель'}
+            aria-label={
+              sideOpen ? 'Скрыть боковую панель' : 'Показать боковую панель'
+            }
             className="ms-icon-btn ms-icon-btn-on-dark hidden md:inline-flex"
           >
             {sideOpen ? (
