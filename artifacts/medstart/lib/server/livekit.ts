@@ -10,17 +10,55 @@ interface CreateLessonTokenInput {
   participantRole: 'student' | 'tutor'
 }
 
-function liveKitConfig() {
+export type LiveVideoAvailabilityCode =
+  'ready' | 'disabled' | 'incomplete' | 'invalid-url'
+
+export interface LiveVideoAvailability {
+  enabled: boolean
+  code: LiveVideoAvailabilityCode
+}
+
+function isEnabledFlag(value: string | undefined) {
+  const normalized = value?.trim().toLowerCase()
+  return normalized === 'true' || normalized === '1' || normalized === 'yes'
+}
+
+export function getLiveVideoAvailability(): LiveVideoAvailability {
+  if (!isEnabledFlag(process.env.MEDSTART_LIVE_VIDEO_ENABLED)) {
+    return { enabled: false, code: 'disabled' }
+  }
+
   const serverUrl = process.env.LIVEKIT_URL?.trim()
   const apiKey = process.env.LIVEKIT_API_KEY?.trim()
   const apiSecret = process.env.LIVEKIT_API_SECRET?.trim()
 
   if (!serverUrl || !apiKey || !apiSecret) {
-    throw new Error('Сервер видеосвязи MedStart ещё не подключён.')
+    return { enabled: false, code: 'incomplete' }
   }
   if (!serverUrl.startsWith('wss://')) {
+    return { enabled: false, code: 'invalid-url' }
+  }
+
+  return { enabled: true, code: 'ready' }
+}
+
+function liveKitConfig() {
+  const availability = getLiveVideoAvailability()
+  if (availability.code === 'disabled') {
+    throw new Error('Видеосвязь MedStart пока не активирована.')
+  }
+  if (availability.code === 'incomplete') {
+    throw new Error(
+      'Настройка видеосвязи MedStart не завершена: проверьте LIVEKIT_URL, LIVEKIT_API_KEY и LIVEKIT_API_SECRET.',
+    )
+  }
+  if (availability.code === 'invalid-url') {
     throw new Error('LIVEKIT_URL должен начинаться с wss://.')
   }
+
+  const serverUrl = process.env.LIVEKIT_URL!.trim()
+  const apiKey = process.env.LIVEKIT_API_KEY!.trim()
+  const apiSecret = process.env.LIVEKIT_API_SECRET!.trim()
 
   return { serverUrl, apiKey, apiSecret }
 }
@@ -53,6 +91,7 @@ export async function createLessonToken(input: CreateLessonTokenInput) {
   })
 
   return {
+    mode: 'live' as const,
     serverUrl,
     roomName,
     participantToken: await token.toJwt(),
