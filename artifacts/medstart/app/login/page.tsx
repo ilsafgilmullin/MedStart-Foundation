@@ -28,10 +28,16 @@ export default function LoginPage() {
         <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
           <span className="text-slate-500">Ещё нет аккаунта?</span>
           <div className="flex flex-wrap gap-4 font-semibold">
-            <Link href="/register/student" className="text-teal-700 hover:text-teal-900">
-              Я студент
+            <Link
+              href="/register/student"
+              className="text-teal-700 hover:text-teal-900"
+            >
+              Я ученик
             </Link>
-            <Link href="/register/tutor" className="text-teal-700 hover:text-teal-900">
+            <Link
+              href="/register/tutor"
+              className="text-teal-700 hover:text-teal-900"
+            >
               Я репетитор
             </Link>
           </div>
@@ -72,7 +78,10 @@ export default function LoginPage() {
             <ShieldCheck className="h-4 w-4 text-teal-600" />
             Защищённая проверка
           </span>
-          <Link href={recoveryHref} className="font-semibold text-teal-700 hover:text-teal-900">
+          <Link
+            href={recoveryHref}
+            className="font-semibold text-teal-700 hover:text-teal-900"
+          >
             Не помню пароль
           </Link>
         </div>

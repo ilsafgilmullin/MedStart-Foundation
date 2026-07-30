@@ -4,7 +4,8 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'MedStart',
     short_name: 'MedStart',
-    description: 'Медицинские репетиторы и профессиональные онлайн-занятия.',
+    description:
+      'Подготовка к ОГЭ и ЕГЭ, медицинские дисциплины и индивидуальные онлайн-занятия.',
     start_url: '/dashboard',
     display: 'standalone',
     background_color: '#f8fafc',

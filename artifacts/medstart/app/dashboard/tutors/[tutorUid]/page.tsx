@@ -25,6 +25,11 @@ import ProfilePhoto from '@/components/dashboard/ProfilePhoto'
 import { subscribeToAvailability } from '@/lib/availability'
 import { createBooking } from '@/lib/bookings'
 import { WEEKDAYS, type TutorAvailability } from '@/lib/domain'
+import {
+  SCHOOL_EXAM_LABELS,
+  learnerTrackFor,
+  tutorAudiencesFor,
+} from '@/lib/education'
 import { getPublicTutor } from '@/lib/firestore'
 import type { LessonFormat, UserProfile } from '@/lib/user-profile'
 
@@ -92,7 +97,6 @@ export default function TutorProfilePage() {
     if (!tutor) return
     return subscribeToAvailability(tutor.uid, setAvailability, () => undefined)
   }, [tutor])
-
 
   useEffect(() => {
     try {
@@ -190,11 +194,34 @@ export default function TutorProfilePage() {
         <p className="mt-2 text-slate-600">
           Анкета могла быть снята с публикации.
         </p>
-        <Link
-          href="/dashboard/tutors"
-          className="mt-6 ms-btn ms-btn-primary"
-        >
+        <Link href="/dashboard/tutors" className="mt-6 ms-btn ms-btn-primary">
           Вернуться в каталог
+        </Link>
+      </div>
+    )
+  }
+
+  const learnerTrack = learnerTrackFor(profile)
+  const tutorSupportsLearner =
+    profile?.role !== 'student' ||
+    (tutorAudiencesFor(tutor).includes(learnerTrack) &&
+      (learnerTrack !== 'school' ||
+        !profile.schoolExam ||
+        tutor.examTypes?.includes(profile.schoolExam) === true))
+
+  if (!tutorSupportsLearner) {
+    return (
+      <div className="mx-auto max-w-xl rounded-3xl border border-amber-200 bg-amber-50 p-8 text-center">
+        <AlertTriangle className="mx-auto h-10 w-10 text-amber-600" />
+        <h1 className="mt-4 text-xl font-bold text-slate-900">
+          Направление не совпадает
+        </h1>
+        <p className="mt-2 leading-6 text-slate-600">
+          Этот преподаватель не работает с вашей учебной траекторией или не
+          готовит к выбранному экзамену.
+        </p>
+        <Link href="/dashboard/tutors" className="mt-6 ms-btn ms-btn-primary">
+          Выбрать подходящего преподавателя
         </Link>
       </div>
     )
@@ -202,10 +229,7 @@ export default function TutorProfilePage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <Link
-        href="/dashboard/tutors"
-        className="ms-link-action text-sm"
-      >
+      <Link href="/dashboard/tutors" className="ms-link-action text-sm">
         <ArrowLeft className="h-4 w-4" />
         Каталог репетиторов
       </Link>
@@ -243,15 +267,33 @@ export default function TutorProfilePage() {
                       onClick={toggleFavorite}
                       aria-pressed={favorite}
                       className={`ms-icon-btn ${favorite ? 'ms-icon-btn-danger' : 'ms-icon-btn-neutral'}`}
-                      aria-label={favorite ? 'Убрать из избранного' : 'Добавить в избранное'}
+                      aria-label={
+                        favorite
+                          ? 'Убрать из избранного'
+                          : 'Добавить в избранное'
+                      }
                     >
-                      <Heart className={`h-5 w-5 ${favorite ? 'fill-current' : ''}`} />
+                      <Heart
+                        className={`h-5 w-5 ${favorite ? 'fill-current' : ''}`}
+                      />
                     </button>
                   )}
                 </div>
                 <p className="mt-2 text-lg font-bold text-teal-700">
-                  {tutor.specialization || 'Медицинский репетитор'}
+                  {tutor.specialization || 'Преподаватель'}
                 </p>
+                {Boolean(tutor.examTypes?.length) && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {tutor.examTypes!.map((exam) => (
+                      <span
+                        key={exam}
+                        className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700"
+                      >
+                        Подготовка к {SCHOOL_EXAM_LABELS[exam]}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {tutor.title && (
                   <p className="mt-1 text-slate-500">{tutor.title}</p>
                 )}
@@ -345,16 +387,23 @@ export default function TutorProfilePage() {
                     Насколько профиль подходит вам
                   </h2>
                   <p className="mt-1 text-sm leading-6 text-slate-600">
-                    Сравнение строится по дисциплинам, которые вы указали в профиле обучения.
+                    {learnerTrack === 'school'
+                      ? 'Сравнение учитывает экзамен и предметы, которые вы указали в профиле.'
+                      : 'Сравнение строится по дисциплинам, которые вы указали в профиле обучения.'}
                   </p>
                 </div>
               </div>
               {matchingSubjects.length ? (
                 <div className="mt-5">
-                  <p className="text-sm font-bold text-emerald-800">Совпадающие дисциплины</p>
+                  <p className="text-sm font-bold text-emerald-800">
+                    Совпадающие дисциплины
+                  </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {matchingSubjects.map((item) => (
-                      <span key={item} className="rounded-full bg-white px-3 py-1.5 text-sm font-bold text-teal-800 ring-1 ring-teal-200">
+                      <span
+                        key={item}
+                        className="rounded-full bg-white px-3 py-1.5 text-sm font-bold text-teal-800 ring-1 ring-teal-200"
+                      >
                         {item}
                       </span>
                     ))}
@@ -362,21 +411,28 @@ export default function TutorProfilePage() {
                 </div>
               ) : (
                 <p className="mt-5 rounded-2xl bg-white p-4 text-sm leading-6 text-slate-600 ring-1 ring-slate-200">
-                  Прямых совпадений пока нет. Оцените опыт и описание преподавателя либо добавьте нужные дисциплины в свой профиль.
+                  Прямых совпадений пока нет. Оцените опыт и описание
+                  преподавателя либо добавьте нужные дисциплины в свой профиль.
                 </p>
               )}
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                   <ShieldCheck className="h-5 w-5 text-teal-700" />
-                  <p className="mt-2 text-sm font-bold text-slate-900">Профиль проверен</p>
+                  <p className="mt-2 text-sm font-bold text-slate-900">
+                    Профиль проверен
+                  </p>
                 </div>
                 <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                   <Video className="h-5 w-5 text-teal-700" />
-                  <p className="mt-2 text-sm font-bold text-slate-900">Занятие в MedStart</p>
+                  <p className="mt-2 text-sm font-bold text-slate-900">
+                    Занятие в MedStart
+                  </p>
                 </div>
                 <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                   <ClipboardCheck className="h-5 w-5 text-teal-700" />
-                  <p className="mt-2 text-sm font-bold text-slate-900">Материалы после занятия</p>
+                  <p className="mt-2 text-sm font-bold text-slate-900">
+                    Материалы после занятия
+                  </p>
                 </div>
               </div>
             </section>
@@ -455,7 +511,7 @@ export default function TutorProfilePage() {
                   Профиль репетитора
                 </h2>
                 <p className="mt-2 text-sm text-slate-500">
-                  Отправлять заявки могут аккаунты студентов.
+                  Отправлять заявки могут аккаунты учеников.
                 </p>
               </div>
             ) : (
@@ -470,7 +526,9 @@ export default function TutorProfilePage() {
                   <p className="font-bold">Что произойдёт дальше</p>
                   <ol className="mt-2 space-y-1.5 text-teal-800">
                     <li>1. Преподаватель рассмотрит заявку.</li>
-                    <li>2. После подтверждения занятие появится в расписании.</li>
+                    <li>
+                      2. После подтверждения занятие появится в расписании.
+                    </li>
                     <li>3. В назначенное время откроется MedStart Live.</li>
                   </ol>
                 </div>
@@ -486,7 +544,11 @@ export default function TutorProfilePage() {
                       className={inputClass}
                       value={subject}
                       onChange={(event) => setSubject(event.target.value)}
-                      placeholder="Например: анатомия"
+                      placeholder={
+                        learnerTrack === 'school'
+                          ? 'Например: математика'
+                          : 'Например: анатомия'
+                      }
                       required
                     />
                   </label>

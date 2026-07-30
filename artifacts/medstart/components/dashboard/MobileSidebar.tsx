@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { HeartPulse, LogOut, Sparkles, X } from 'lucide-react'
 import { getNavigation } from './Navigation'
 import { useAuth } from '@/hooks/useAuth'
+import { learnerTrackFor } from '@/lib/education'
 import { getProfileCompletion } from '@/lib/profile-completion'
 
 const roleNames = {
@@ -27,6 +28,12 @@ export default function MobileSidebar({
   const name = profile?.displayName || profile?.email || 'Пользователь'
   const initial = name.slice(0, 1).toUpperCase()
   const completion = getProfileCompletion(profile)
+  const roleLabel =
+    role === 'student' && learnerTrackFor(profile) === 'school'
+      ? 'Школьник'
+      : role
+        ? roleNames[role]
+        : 'Пользователь'
 
   async function exit() {
     await logout()
@@ -64,7 +71,13 @@ export default function MobileSidebar({
                 MedStart
               </span>
               <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-teal-700">
-                {role === 'owner' ? 'Центр владельца' : role === 'admin' ? 'Панель администратора' : role === 'tutor' ? 'Кабинет преподавателя' : 'Учебный кабинет'}
+                {role === 'owner'
+                  ? 'Центр владельца'
+                  : role === 'admin'
+                    ? 'Панель администратора'
+                    : role === 'tutor'
+                      ? 'Кабинет преподавателя'
+                      : 'Учебный кабинет'}
               </span>
             </span>
           </Link>
@@ -105,27 +118,28 @@ export default function MobileSidebar({
         </nav>
 
         <div className="border-t border-slate-200 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
-          {(role === 'student' || role === 'tutor') && completion.percent < 100 && (
-            <Link
-              href="/dashboard/profile"
-              onClick={onClose}
-              className="mb-3 block rounded-2xl border border-teal-100 bg-teal-50 p-3"
-            >
-              <div className="flex items-center justify-between gap-3 text-xs font-black text-teal-800">
-                <span className="inline-flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  {role === 'tutor' ? 'Улучшить анкету' : 'Заполнить профиль'}
-                </span>
-                <span>{completion.percent}%</span>
-              </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-teal-100">
-                <div
-                  className="h-full rounded-full bg-teal-600"
-                  style={{ width: `${completion.percent}%` }}
-                />
-              </div>
-            </Link>
-          )}
+          {(role === 'student' || role === 'tutor') &&
+            completion.percent < 100 && (
+              <Link
+                href="/dashboard/profile"
+                onClick={onClose}
+                className="mb-3 block rounded-2xl border border-teal-100 bg-teal-50 p-3"
+              >
+                <div className="flex items-center justify-between gap-3 text-xs font-black text-teal-800">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {role === 'tutor' ? 'Улучшить анкету' : 'Заполнить профиль'}
+                  </span>
+                  <span>{completion.percent}%</span>
+                </div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-teal-100">
+                  <div
+                    className="h-full rounded-full bg-teal-600"
+                    style={{ width: `${completion.percent}%` }}
+                  />
+                </div>
+              </Link>
+            )}
 
           <Link
             href="/dashboard/profile"
@@ -140,7 +154,7 @@ export default function MobileSidebar({
                 {name}
               </span>
               <span className="mt-0.5 block text-sm text-slate-500">
-                {role ? roleNames[role] : 'Пользователь'}
+                {roleLabel}
               </span>
             </span>
           </Link>

@@ -30,7 +30,7 @@ interface DemoLessonRoomProps {
 type MobileView = 'board' | 'anatomy' | 'video' | 'chat'
 type SideView = 'video' | 'chat' | 'anatomy'
 
-function VideoUnavailable() {
+function VideoUnavailable({ schoolLesson }: { schoolLesson: boolean }) {
   return (
     <div className="flex h-full min-h-[190px] flex-col items-center justify-center rounded-2xl border border-dashed border-amber-300/30 bg-amber-400/5 p-5 text-center">
       <div className="rounded-2xl bg-amber-300/10 p-3 text-amber-200">
@@ -40,8 +40,9 @@ function VideoUnavailable() {
         Режим без звонка
       </h2>
       <p className="mt-2 max-w-sm text-xs leading-5 text-slate-400 sm:text-sm sm:leading-6">
-        Медицинская доска, снимки, анатомия, клинические шаблоны и чат работают
-        независимо от видеосервера.
+        {schoolLesson
+          ? 'Совместная доска, заметки и чат работают независимо от видеосервера.'
+          : 'Медицинская доска, снимки, 3D-анатомия, клинические шаблоны и чат работают независимо от видеосервера.'}
       </p>
     </div>
   )
@@ -61,6 +62,19 @@ export default function DemoLessonRoom({
   const [now, setNow] = useState(sessionStartedAt)
   const counterpart =
     participantRole === 'tutor' ? booking.studentName : booking.tutorName
+  const schoolLesson = booking.learnerTrack === 'school'
+  const mobileTabs = [
+    {
+      view: 'board' as const,
+      label: schoolLesson ? 'Доска' : 'Меддоска',
+      icon: LayoutDashboard,
+    },
+    ...(schoolLesson
+      ? []
+      : [{ view: 'anatomy' as const, label: '3D', icon: Activity }]),
+    { view: 'video' as const, label: 'Видео', icon: UsersRound },
+    { view: 'chat' as const, label: 'Чат', icon: MessageCircle },
+  ]
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30_000)
@@ -97,8 +111,10 @@ export default function DemoLessonRoom({
               <h1 className="truncate text-sm font-bold sm:text-base">
                 {booking.subject}
               </h1>
-              <span className="hidden rounded-full bg-violet-500/20 px-2 py-1 text-[10px] font-semibold text-violet-200 lg:inline">
-                MedStart Medical Workspace
+              <span className="hidden rounded-full bg-violet-500/20 px-2 py-1 text-[10px] font-semibold text-violet-200 sm:inline">
+                {schoolLesson
+                  ? 'MedStart School Workspace'
+                  : 'MedStart Medical Workspace'}
               </span>
             </div>
             <p className="mt-0.5 flex min-w-0 items-center gap-2 text-[11px] text-slate-400">
@@ -133,15 +149,12 @@ export default function DemoLessonRoom({
           </button>
         </div>
 
-        <nav className="mt-3 grid grid-cols-4 gap-1 rounded-xl bg-white/5 p-1 md:hidden">
-          {(
-            [
-              ['board', 'Доска', LayoutDashboard],
-              ['anatomy', '3D', Activity],
-              ['video', 'Видео', UsersRound],
-              ['chat', 'Чат', MessageCircle],
-            ] as const
-          ).map(([view, label, Icon]) => (
+        <nav
+          className={`mt-3 grid gap-1 rounded-xl bg-white/5 p-1 md:hidden ${
+            schoolLesson ? 'grid-cols-3' : 'grid-cols-4'
+          }`}
+        >
+          {mobileTabs.map(({ view, label, icon: Icon }) => (
             <button
               key={view}
               type="button"
@@ -173,12 +186,17 @@ export default function DemoLessonRoom({
             tutorUid={booking.tutorUid}
             canClear={participantRole === 'tutor'}
             participantRole={participantRole}
+            learnerTrack={booking.learnerTrack}
           />
         </div>
 
         {sideOpen && (
           <aside className="hidden min-h-0 min-w-0 flex-col overflow-hidden rounded-[26px] border border-white/10 bg-slate-900/80 p-2 md:flex xl:rounded-3xl xl:p-3">
-            <div className="grid shrink-0 grid-cols-3 gap-1 rounded-xl bg-white/5 p-1">
+            <div
+              className={`grid shrink-0 gap-1 rounded-xl bg-white/5 p-1 ${
+                schoolLesson ? 'grid-cols-2' : 'grid-cols-3'
+              }`}
+            >
               <button
                 type="button"
                 onClick={() => setSideView('video')}
@@ -197,22 +215,24 @@ export default function DemoLessonRoom({
                 <MessageCircle className="h-4 w-4" />
                 Чат
               </button>
-              <button
-                type="button"
-                onClick={() => setSideView('anatomy')}
-                aria-pressed={sideView === 'anatomy'}
-                className="ms-choice ms-choice-dark w-full text-xs"
-              >
-                <Activity className="h-4 w-4" />
-                3D
-              </button>
+              {!schoolLesson && (
+                <button
+                  type="button"
+                  onClick={() => setSideView('anatomy')}
+                  aria-pressed={sideView === 'anatomy'}
+                  className="ms-choice ms-choice-dark w-full text-xs"
+                >
+                  <Activity className="h-4 w-4" />
+                  3D
+                </button>
+              )}
             </div>
             <div className="mt-2 flex min-h-0 min-w-0 flex-1 overflow-hidden">
               {sideView === 'video' ? (
                 <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-1">
-                  <VideoUnavailable />
+                  <VideoUnavailable schoolLesson={schoolLesson} />
                 </div>
-              ) : sideView === 'anatomy' ? (
+              ) : sideView === 'anatomy' && !schoolLesson ? (
                 <AnatomyViewer compact />
               ) : (
                 <LessonChat booking={booking} userUid={userUid} />
@@ -221,7 +241,7 @@ export default function DemoLessonRoom({
           </aside>
         )}
 
-        {mobileView === 'anatomy' && (
+        {!schoolLesson && mobileView === 'anatomy' && (
           <div className="min-h-0 min-w-0 overflow-hidden md:hidden">
             <AnatomyViewer />
           </div>
@@ -229,7 +249,7 @@ export default function DemoLessonRoom({
 
         {mobileView === 'video' && (
           <div className="min-h-0 min-w-0 overflow-y-auto rounded-[26px] border border-white/10 bg-slate-900 p-3 md:hidden">
-            <VideoUnavailable />
+            <VideoUnavailable schoolLesson={schoolLesson} />
           </div>
         )}
 
@@ -243,7 +263,7 @@ export default function DemoLessonRoom({
       <footer className="hidden shrink-0 border-t border-white/10 bg-slate-950/95 px-3 pb-[calc(0.45rem+env(safe-area-inset-bottom))] pt-2 text-center text-[11px] text-slate-500 backdrop-blur md:block">
         <span className="inline-flex items-center gap-1.5">
           <MonitorUp className="h-3.5 w-3.5 text-violet-300" />
-          Учебный режим без звонка. Совместные данные сохраняются автоматически.
+          Учебный режим без звонка. Доска и чат сохраняются автоматически.
         </span>
       </footer>
     </div>

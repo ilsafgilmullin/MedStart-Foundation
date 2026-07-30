@@ -49,6 +49,7 @@ import {
   type MedicalWorkspaceData,
   type PrivacyChecklist,
 } from '@/lib/medical-workspace'
+import type { LearnerTrack } from '@/lib/education'
 
 interface MedicalWorkspaceProps {
   bookingId: string
@@ -58,6 +59,7 @@ interface MedicalWorkspaceProps {
   canClear: boolean
   participantRole: 'student' | 'tutor'
   realtime?: WhiteboardRealtimeChannel
+  learnerTrack?: LearnerTrack
 }
 
 type SaveState = 'loading' | 'saved' | 'saving' | 'error'
@@ -257,6 +259,7 @@ export default function MedicalWorkspace({
   canClear,
   participantRole,
   realtime,
+  learnerTrack = 'medical',
 }: MedicalWorkspaceProps) {
   const [activeModule, setActiveModule] = useState<MedicalModule>('board')
   const [workspace, setWorkspace] = useState<MedicalWorkspaceData>(() =>
@@ -286,25 +289,32 @@ export default function MedicalWorkspace({
       },
       () => {
         setSaveState('error')
-        setError(
-          'Не удалось синхронизировать медицинское рабочее пространство.',
-        )
+        setError('Не удалось синхронизировать учебное рабочее пространство.')
       },
     )
   }, [bookingId])
 
-  useEffect(
-    () =>
-      subscribeToMedicalAssets(
-        bookingId,
-        (next) => {
-          setAssets(next)
-          setSelectedAssetId((current) => current || next[0]?.id || '')
-        },
-        () => setError('Не удалось загрузить список медицинских файлов.'),
-      ),
-    [bookingId],
-  )
+  useEffect(() => {
+    if (learnerTrack === 'school') {
+      setAssets([])
+      setSelectedAssetId('')
+      return
+    }
+    return subscribeToMedicalAssets(
+      bookingId,
+      (next) => {
+        setAssets(next)
+        setSelectedAssetId((current) => current || next[0]?.id || '')
+      },
+      () => setError('Не удалось загрузить список медицинских файлов.'),
+    )
+  }, [bookingId, learnerTrack])
+
+  useEffect(() => {
+    if (learnerTrack === 'school' && activeModule !== 'board') {
+      setActiveModule('board')
+    }
+  }, [activeModule, learnerTrack])
 
   const selectedAsset = assets.find((asset) => asset.id === selectedAssetId)
 
@@ -452,12 +462,14 @@ export default function MedicalWorkspace({
         : saveState === 'error'
           ? 'Требуется повторное сохранение'
           : 'Данные занятия сохранены'
+  const availableModuleItems =
+    learnerTrack === 'school' ? moduleItems.slice(0, 1) : moduleItems
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
       <div className="shrink-0 rounded-2xl border border-white/10 bg-slate-900/95 p-2 shadow-xl">
         <div className="flex snap-x snap-mandatory items-center gap-2 overflow-x-auto overscroll-x-contain pb-1">
-          {moduleItems.map((item) => {
+          {availableModuleItems.map((item) => {
             const Icon = item.icon
             return (
               <button

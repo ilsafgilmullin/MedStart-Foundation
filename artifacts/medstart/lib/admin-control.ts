@@ -1,9 +1,11 @@
 import { auth } from './firebase'
 import type { BookingStatus } from './domain'
+import type { LearnerTrack, SchoolExam } from './education'
 import type { UserRole, UserStatus } from './user-profile'
 
 export type AdminActorRole = 'owner' | 'admin'
-export type AdminOverviewTab = 'overview' | 'moderation' | 'users' | 'bookings' | 'audit' | 'system'
+export type AdminOverviewTab =
+  'overview' | 'moderation' | 'users' | 'bookings' | 'audit' | 'system'
 
 export interface AdminUserRecord {
   uid: string
@@ -17,6 +19,9 @@ export interface AdminUserRecord {
   status: UserStatus
   statusBeforeBlock: UserStatus | ''
   specialization: string
+  subjects: string[]
+  tutorAudiences: LearnerTrack[]
+  examTypes: SchoolExam[]
   institution: string
   city: string
   isPublic: boolean

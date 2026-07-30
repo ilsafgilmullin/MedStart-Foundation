@@ -3,6 +3,7 @@ import { join } from 'node:path'
 
 const root = process.cwd()
 const sourceRoot = join(root, 'artifacts', 'medstart')
+const thirdPartyVendorRoot = join(sourceRoot, 'public', 'vendor')
 const textExtensions = new Set(['.ts', '.tsx', '.js', '.mjs', '.json', '.yml', '.yaml', '.rules'])
 const forbiddenPatterns = [
   ['TODO', /\bTODO\b/],
@@ -19,6 +20,7 @@ async function collectFiles(directory) {
   for (const entry of entries) {
     if (entry.name === 'node_modules' || entry.name === '.next') continue
     const path = join(directory, entry.name)
+    if (entry.isDirectory() && path === thirdPartyVendorRoot) continue
     if (entry.isDirectory()) files.push(...(await collectFiles(path)))
     else files.push(path)
   }

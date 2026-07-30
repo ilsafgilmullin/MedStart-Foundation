@@ -7,6 +7,12 @@ import {
 } from '@/lib/server/firebase-admin'
 import { firebaseIdentityRequest } from '@/lib/server/firebase-identity'
 import {
+  isSchoolGradeCompatible,
+  subjectsForExam,
+  type LearnerTrack,
+  type SchoolExam,
+} from '@/lib/education'
+import {
   cleanText,
   clientAddress,
   isValidEmail,
@@ -32,10 +38,16 @@ interface RegistrationBody {
   lastName?: unknown
   email?: unknown
   password?: unknown
+  learnerTrack?: unknown
   fieldOfStudy?: unknown
   studyYear?: unknown
+  schoolGrade?: unknown
+  schoolExam?: unknown
+  schoolConsentConfirmed?: unknown
   specialization?: unknown
   subjects?: unknown
+  tutorAudiences?: unknown
+  examTypes?: unknown
   institution?: unknown
   experience?: unknown
   bio?: unknown
@@ -63,6 +75,34 @@ function normalizeFormats(value: unknown): LessonFormat[] {
     (item): item is LessonFormat => item === 'online' || item === 'in_person',
   )
   return formats.length ? [...new Set(formats)].slice(0, 2) : ['online']
+}
+
+function normalizeLearnerTrack(value: unknown): LearnerTrack {
+  return value === 'school' ? 'school' : 'medical'
+}
+
+function normalizeSchoolExam(value: unknown): SchoolExam | null {
+  return value === 'oge' || value === 'ege' ? value : null
+}
+
+function normalizeTutorAudiences(value: unknown): LearnerTrack[] {
+  if (value === undefined) return ['medical']
+  if (!Array.isArray(value)) return []
+  const audiences = value.filter(
+    (item): item is LearnerTrack => item === 'medical' || item === 'school',
+  )
+  return [...new Set(audiences)].slice(0, 2)
+}
+
+function normalizeExamTypes(value: unknown): SchoolExam[] {
+  if (!Array.isArray(value)) return []
+  return [
+    ...new Set(
+      value.filter(
+        (item): item is SchoolExam => item === 'oge' || item === 'ege',
+      ),
+    ),
+  ].slice(0, 2)
 }
 
 export async function POST(request: Request) {
@@ -104,6 +144,13 @@ export async function POST(request: Request) {
   }
 
   const specialization = cleanText(body.specialization, 180)
+  const learnerTrack = normalizeLearnerTrack(body.learnerTrack)
+  const schoolGrade = cleanText(body.schoolGrade, 2)
+  const schoolExam = normalizeSchoolExam(body.schoolExam)
+  const subjects = normalizeSubjects(body.subjects)
+  const tutorAudiences = normalizeTutorAudiences(body.tutorAudiences)
+  const examTypes = normalizeExamTypes(body.examTypes)
+
   if (role === 'tutor' && !specialization) {
     return NextResponse.json(
       { ok: false, code: 'INVALID_REGISTRATION' },
@@ -111,16 +158,54 @@ export async function POST(request: Request) {
     )
   }
 
-  const limit = takeRateLimit(
-    `register:${clientAddress(request)}:${email}`,
-    5,
-  )
+  if (role === 'tutor' && tutorAudiences.length === 0) {
+    return NextResponse.json(
+      { ok: false, code: 'INVALID_REGISTRATION' },
+      { status: 400, headers: noStoreHeaders() },
+    )
+  }
+
+  if (role === 'student' && learnerTrack === 'school') {
+    const allowedSubjects = new Set(
+      schoolExam
+        ? subjectsForExam(schoolExam).map((subject) => subject.value)
+        : [],
+    )
+    const validSchoolProfile =
+      schoolExam &&
+      isSchoolGradeCompatible(schoolExam, schoolGrade) &&
+      body.schoolConsentConfirmed === true &&
+      subjects.length > 0 &&
+      subjects.every((subject) => allowedSubjects.has(subject))
+
+    if (!validSchoolProfile) {
+      return NextResponse.json(
+        { ok: false, code: 'INVALID_REGISTRATION' },
+        { status: 400, headers: noStoreHeaders() },
+      )
+    }
+  }
+
+  if (
+    role === 'tutor' &&
+    tutorAudiences.includes('school') &&
+    (examTypes.length === 0 || subjects.length === 0)
+  ) {
+    return NextResponse.json(
+      { ok: false, code: 'INVALID_REGISTRATION' },
+      { status: 400, headers: noStoreHeaders() },
+    )
+  }
+
+  const limit = takeRateLimit(`register:${clientAddress(request)}:${email}`, 5)
   if (!limit.allowed) {
     return NextResponse.json(
       { ok: false, code: 'TOO_MANY_REQUESTS' },
       {
         status: 429,
-        headers: noStoreHeaders({ 'retry-after': String(limit.retryAfterSeconds) }),
+        headers: noStoreHeaders({
+          'retry-after': String(limit.retryAfterSeconds),
+        }),
       },
     )
   }
@@ -150,6 +235,30 @@ export async function POST(request: Request) {
       30,
       Math.min(180, Math.round(Number(body.lessonDuration) || 60)),
     )
+    const educationProfile =
+      role === 'student'
+        ? {
+            learnerTrack,
+            fieldOfStudy:
+              learnerTrack === 'medical'
+                ? cleanText(body.fieldOfStudy, 120)
+                : '',
+            studyYear:
+              learnerTrack === 'medical' ? cleanText(body.studyYear, 20) : '',
+            subjects: learnerTrack === 'school' ? subjects : [],
+            ...(learnerTrack === 'school'
+              ? {
+                  schoolGrade,
+                  schoolExam,
+                  schoolConsentConfirmed: true,
+                }
+              : {}),
+          }
+        : {
+            tutorAudiences,
+            examTypes: tutorAudiences.includes('school') ? examTypes : [],
+            subjects,
+          }
 
     const profile = {
       uid: user.uid,
@@ -160,11 +269,8 @@ export async function POST(request: Request) {
       role,
       status: role === 'student' ? 'active' : 'pending',
       avatar: '',
-      fieldOfStudy: role === 'student' ? cleanText(body.fieldOfStudy, 120) : '',
-      studyYear: role === 'student' ? cleanText(body.studyYear, 20) : '',
       title: '',
       specialization: role === 'tutor' ? specialization : '',
-      subjects: role === 'tutor' ? normalizeSubjects(body.subjects) : [],
       institution: role === 'tutor' ? cleanText(body.institution, 240) : '',
       experience: role === 'tutor' ? cleanText(body.experience, 120) : '',
       bio: role === 'tutor' ? cleanText(body.bio, 4000) : '',
@@ -184,6 +290,7 @@ export async function POST(request: Request) {
         productNews: false,
       },
       onboardingCompleted: true,
+      ...educationProfile,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }

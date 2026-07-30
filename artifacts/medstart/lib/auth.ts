@@ -6,6 +6,7 @@ import {
 } from 'firebase/auth'
 import { auth } from './firebase'
 import { getUserProfile } from './firestore'
+import type { LearnerTrack, SchoolExam } from './education'
 import type { UserProfile } from './user-profile'
 
 export interface StudentRegistrationInput {
@@ -13,8 +14,13 @@ export interface StudentRegistrationInput {
   lastName: string
   email: string
   password: string
+  learnerTrack: LearnerTrack
   fieldOfStudy: string
   studyYear: string
+  schoolGrade: string
+  schoolExam: SchoolExam
+  subjects: string[]
+  schoolConsentConfirmed: boolean
 }
 
 export interface TutorRegistrationInput {
@@ -31,6 +37,8 @@ export interface TutorRegistrationInput {
   lessonPrice?: number
   lessonDuration?: number
   lessonFormats?: Array<'online' | 'in_person'>
+  tutorAudiences?: LearnerTrack[]
+  examTypes?: SchoolExam[]
 }
 
 export interface AuthSession {
@@ -113,7 +121,10 @@ async function secureSignOut() {
   }
 }
 
-async function authRequest(path: string, body: unknown): Promise<AuthApiResponse> {
+async function authRequest(
+  path: string,
+  body: unknown,
+): Promise<AuthApiResponse> {
   let response: Response
   try {
     response = await fetch(path, {

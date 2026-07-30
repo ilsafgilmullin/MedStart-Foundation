@@ -36,7 +36,10 @@ export function AuthShell({
         <aside className="relative hidden overflow-hidden bg-gradient-to-br from-cyan-950 via-teal-900 to-violet-950 p-10 text-white lg:flex lg:flex-col lg:justify-between">
           <div className="absolute inset-0 opacity-30 [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:28px_28px]" />
           <div className="relative">
-            <Link href={ROUTES.HOME} className="inline-flex items-center gap-3 text-xl font-bold">
+            <Link
+              href={ROUTES.HOME}
+              className="inline-flex items-center gap-3 text-xl font-bold"
+            >
               <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white/15 backdrop-blur">
                 <HeartPulse className="h-6 w-6" />
               </span>
@@ -45,13 +48,14 @@ export function AuthShell({
             <div className="mt-16 max-w-sm">
               <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100">
                 <Sparkles className="h-3.5 w-3.5" />
-                Медицинское обучение
+                ОГЭ, ЕГЭ и медицинское обучение
               </p>
               <h2 className="mt-6 text-4xl font-bold leading-tight">
                 Учитесь и преподавайте в защищённой среде.
               </h2>
               <p className="mt-5 text-base leading-7 text-cyan-50/75">
-                Личный кабинет, проверенные репетиторы, расписание, материалы и профессиональные онлайн-занятия в одном сервисе.
+                Личный кабинет, проверенные репетиторы, расписание, материалы и
+                индивидуальные онлайн-занятия в одном сервисе.
               </p>
             </div>
           </div>
@@ -92,7 +96,11 @@ export function AuthShell({
               <AuthHealthBanner />
               {children}
             </div>
-            {footer && <div className="mt-7 border-t border-slate-200 pt-6">{footer}</div>}
+            {footer && (
+              <div className="mt-7 border-t border-slate-200 pt-6">
+                {footer}
+              </div>
+            )}
           </div>
         </section>
       </div>

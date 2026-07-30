@@ -38,6 +38,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { SCHOOL_EXAM_LABELS, learnerTrackFor } from '@/lib/education'
 import {
   createKnowledgeSubmission,
   createKnowledgeSubmissionId,
@@ -924,6 +925,8 @@ export default function KnowledgePage() {
   const { user, profile, role } = useAuth()
   const isTutor = role === 'tutor'
   const isModerator = role === 'admin' || role === 'owner'
+  const isSchoolLearner =
+    role === 'student' && learnerTrackFor(profile) === 'school'
   const [activeTab, setActiveTab] = useState<PageTab>('catalog')
   const [published, setPublished] = useState<KnowledgeSubmission[]>([])
   const [own, setOwn] = useState<KnowledgeSubmission[]>([])
@@ -1000,8 +1003,13 @@ export default function KnowledgePage() {
   }, [isModerator])
 
   const catalog = useMemo<CatalogItem[]>(
-    () => [...OFFICIAL_KNOWLEDGE_RESOURCES, ...published],
-    [published],
+    () =>
+      isSchoolLearner
+        ? OFFICIAL_KNOWLEDGE_RESOURCES.filter((item) =>
+            item.tags.some((tag) => tag === 'ОГЭ' || tag === 'ЕГЭ'),
+          )
+        : [...OFFICIAL_KNOWLEDGE_RESOURCES, ...published],
+    [isSchoolLearner, published],
   )
 
   const recommendedCatalog = useMemo(() => {
@@ -1010,6 +1018,7 @@ export default function KnowledgePage() {
       ...(profile?.subjects || []),
       profile?.fieldOfStudy || '',
       profile?.studyYear || '',
+      profile?.schoolExam ? SCHOOL_EXAM_LABELS[profile.schoolExam] : '',
     ]
       .map(normalized)
       .filter((value) => value.length >= 3)
@@ -1017,22 +1026,37 @@ export default function KnowledgePage() {
     return catalog
       .map((item, index) => {
         const haystack = itemSearchText(item)
-        const matches = interests.filter((interest) => haystack.includes(interest))
-        const featuredBonus = item.origin === 'official' && item.featured ? 2 : 0
+        const matches = interests.filter((interest) =>
+          haystack.includes(interest),
+        )
+        const featuredBonus =
+          item.origin === 'official' && item.featured ? 2 : 0
         const officialBonus = item.origin === 'official' ? 1 : 0
         return {
           item,
-          score: matches.length * 5 + featuredBonus + officialBonus - index / 1000,
+          score:
+            matches.length * 5 + featuredBonus + officialBonus - index / 1000,
         }
       })
       .sort((left, right) => right.score - left.score)
       .slice(0, 3)
       .map(({ item }) => item)
-  }, [catalog, profile?.fieldOfStudy, profile?.studyYear, profile?.subjects, role])
+  }, [
+    catalog,
+    profile?.fieldOfStudy,
+    profile?.schoolExam,
+    profile?.studyYear,
+    profile?.subjects,
+    role,
+  ])
 
-  const ownPublishedCount = own.filter((item) => item.status === 'published').length
+  const ownPublishedCount = own.filter(
+    (item) => item.status === 'published',
+  ).length
   const ownPendingCount = own.filter((item) => item.status === 'pending').length
-  const ownRejectedCount = own.filter((item) => item.status === 'rejected').length
+  const ownRejectedCount = own.filter(
+    (item) => item.status === 'rejected',
+  ).length
 
   const filteredCatalog = useMemo(() => {
     const search = normalized(queryText)
@@ -1199,15 +1223,17 @@ export default function KnowledgePage() {
           <div>
             <span className="inline-flex items-center gap-2 rounded-full bg-white/12 px-3 py-1.5 text-sm font-semibold ring-1 ring-white/20">
               <BookOpenCheck className="h-4 w-4" />
-              Достоверные медицинские материалы
+              {isSchoolLearner
+                ? 'Официальные материалы ФИПИ'
+                : 'Достоверные медицинские материалы'}
             </span>
             <h1 className="mt-5 max-w-3xl text-3xl font-bold sm:text-4xl">
               Учебная материальная база
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-teal-50/80 sm:text-base">
-              Книги, инструкции, клинические рекомендации и материалы для
-              аккредитации — в одном месте, с понятным источником и уровнем
-              доверия.
+              {isSchoolLearner
+                ? 'Демоверсии, спецификации и кодификаторы ОГЭ и ЕГЭ — с прямой ссылкой на актуальную редакцию у ФИПИ.'
+                : 'Книги, инструкции, клинические рекомендации и материалы для аккредитации — в одном месте, с понятным источником и уровнем доверия.'}
             </p>
           </div>
           {isTutor && (
@@ -1229,12 +1255,22 @@ export default function KnowledgePage() {
           <Stat
             icon={<ShieldCheck className="h-5 w-5" />}
             label="Официальных ресурсов"
-            value={OFFICIAL_KNOWLEDGE_RESOURCES.length}
+            value={
+              isSchoolLearner
+                ? catalog.length
+                : OFFICIAL_KNOWLEDGE_RESOURCES.length
+            }
           />
           <Stat
             icon={<BadgeCheck className="h-5 w-5" />}
-            label="Проверено от репетиторов"
-            value={published.length}
+            label={isSchoolLearner ? 'Ваш экзамен' : 'Проверено от репетиторов'}
+            value={
+              isSchoolLearner
+                ? profile?.schoolExam
+                  ? SCHOOL_EXAM_LABELS[profile.schoolExam]
+                  : 'ОГЭ / ЕГЭ'
+                : published.length
+            }
           />
           <Stat
             icon={<Heart className="h-5 w-5" />}
@@ -1250,9 +1286,9 @@ export default function KnowledgePage() {
           <div>
             <p className="font-bold">Как читать отметки</p>
             <p className="mt-1 text-sm leading-6">
-              «Официальный источник» — государственная или международная
-              организация. «Проверено MedStart» — медицинский материал
-              репетитора, прошедший нашу модерацию, но не официальный документ.
+              {isSchoolLearner
+                ? '«Официальный источник» ведёт непосредственно на ФИПИ. MedStart хранит ссылку и описание, а не неофициальную копию экзаменационного материала.'
+                : '«Официальный источник» — государственная или международная организация. «Проверено MedStart» — медицинский материал репетитора, прошедший нашу модерацию, но не официальный документ.'}
             </p>
           </div>
         </div>
@@ -1261,9 +1297,9 @@ export default function KnowledgePage() {
           <div>
             <p className="font-bold">Проверяйте редакцию</p>
             <p className="mt-1 text-sm leading-6">
-              Для клинического решения открывайте актуальную версию на странице
-              первоисточника. Учебная база не заменяет клинические рекомендации,
-              локальные протоколы и решение врача.
+              {isSchoolLearner
+                ? 'Перед подготовкой проверяйте год и редакцию на странице ФИПИ: структура и требования экзамена могут обновляться.'
+                : 'Для клинического решения открывайте актуальную версию на странице первоисточника. Учебная база не заменяет клинические рекомендации, локальные протоколы и решение врача.'}
             </p>
           </div>
         </div>
@@ -1281,11 +1317,15 @@ export default function KnowledgePage() {
                 С чего продолжить подготовку
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                Рекомендации учитывают предметы, направление и курс, указанные
-                в профиле. Сохраняйте полезное в избранное, чтобы быстро вернуться.
+                {isSchoolLearner
+                  ? 'Рекомендации учитывают выбранный экзамен и предметы. Сохраняйте материалы ФИПИ в избранное, чтобы быстро к ним вернуться.'
+                  : 'Рекомендации учитывают предметы, направление и курс, указанные в профиле. Сохраняйте полезное в избранное, чтобы быстро вернуться.'}
               </p>
             </div>
-            <a href="/dashboard/profile" className="ms-btn ms-btn-secondary ms-btn-sm">
+            <a
+              href="/dashboard/profile"
+              className="ms-btn ms-btn-secondary ms-btn-sm"
+            >
               <Target className="h-4 w-4" />
               Уточнить цели
             </a>
@@ -1313,39 +1353,79 @@ export default function KnowledgePage() {
                 <LibraryBig className="h-4 w-4" />
                 Вклад преподавателя
               </span>
-              <h2 className="mt-4 text-2xl font-black text-slate-950">Ваши материалы в учебной базе</h2>
+              <h2 className="mt-4 text-2xl font-black text-slate-950">
+                Ваши материалы в учебной базе
+              </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                Публикуйте только медицинские источники, на которые у вас есть право. Каждый материал проходит проверку тематики, актуальности и безопасности.
+                Публикуйте только медицинские источники, на которые у вас есть
+                право. Каждый материал проходит проверку тематики, актуальности
+                и безопасности.
               </p>
             </div>
-            <button type="button" onClick={() => { setFormOpen(true); setMessage('') }} className="ms-btn ms-btn-primary shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setFormOpen(true)
+                setMessage('')
+              }}
+              className="ms-btn ms-btn-primary shrink-0"
+            >
               <Plus className="h-5 w-5" />
               Предложить материал
             </button>
           </div>
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
             <div className="rounded-2xl bg-white p-4 ring-1 ring-teal-100">
-              <div className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="h-5 w-5" /><span className="font-bold">Опубликовано</span></div>
-              <p className="mt-2 text-3xl font-black text-slate-950">{ownPublishedCount}</p>
+              <div className="flex items-center gap-2 text-emerald-700">
+                <CheckCircle2 className="h-5 w-5" />
+                <span className="font-bold">Опубликовано</span>
+              </div>
+              <p className="mt-2 text-3xl font-black text-slate-950">
+                {ownPublishedCount}
+              </p>
             </div>
             <div className="rounded-2xl bg-white p-4 ring-1 ring-teal-100">
-              <div className="flex items-center gap-2 text-amber-700"><Clock3 className="h-5 w-5" /><span className="font-bold">На проверке</span></div>
-              <p className="mt-2 text-3xl font-black text-slate-950">{ownPendingCount}</p>
+              <div className="flex items-center gap-2 text-amber-700">
+                <Clock3 className="h-5 w-5" />
+                <span className="font-bold">На проверке</span>
+              </div>
+              <p className="mt-2 text-3xl font-black text-slate-950">
+                {ownPendingCount}
+              </p>
             </div>
             <div className="rounded-2xl bg-white p-4 ring-1 ring-teal-100">
-              <div className="flex items-center gap-2 text-red-700"><XCircle className="h-5 w-5" /><span className="font-bold">Нужна доработка</span></div>
-              <p className="mt-2 text-3xl font-black text-slate-950">{ownRejectedCount}</p>
+              <div className="flex items-center gap-2 text-red-700">
+                <XCircle className="h-5 w-5" />
+                <span className="font-bold">Нужна доработка</span>
+              </div>
+              <p className="mt-2 text-3xl font-black text-slate-950">
+                {ownRejectedCount}
+              </p>
             </div>
           </div>
           <div className="mt-5 grid gap-3 md:grid-cols-3">
             {[
-              ['Укажите первоисточник', 'Ссылка должна вести на автора, издателя или официальную организацию.'],
-              ['Не загружайте данные пациентов', 'Удалите ФИО, номера историй болезни, снимки с идентификаторами.'],
-              ['Проверьте право публикации', 'Авторский материал или документ с разрешённым распространением.'],
+              [
+                'Укажите первоисточник',
+                'Ссылка должна вести на автора, издателя или официальную организацию.',
+              ],
+              [
+                'Не загружайте данные пациентов',
+                'Удалите ФИО, номера историй болезни, снимки с идентификаторами.',
+              ],
+              [
+                'Проверьте право публикации',
+                'Авторский материал или документ с разрешённым распространением.',
+              ],
             ].map(([title, description]) => (
-              <div key={title} className="rounded-2xl border border-teal-100 bg-white/80 p-4">
+              <div
+                key={title}
+                className="rounded-2xl border border-teal-100 bg-white/80 p-4"
+              >
                 <p className="font-black text-slate-900">{title}</p>
-                <p className="mt-1 text-sm leading-5 text-slate-500">{description}</p>
+                <p className="mt-1 text-sm leading-5 text-slate-500">
+                  {description}
+                </p>
               </div>
             ))}
           </div>
@@ -1617,7 +1697,7 @@ function Stat({
 }: {
   icon: ReactNode
   label: string
-  value: number
+  value: number | string
 }) {
   return (
     <div className="flex items-center gap-3 rounded-2xl bg-white/10 p-4 ring-1 ring-white/15 backdrop-blur">

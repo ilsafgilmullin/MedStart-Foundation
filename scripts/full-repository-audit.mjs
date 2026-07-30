@@ -79,7 +79,9 @@ for (const file of files) {
 
 for (const [path, source] of contents) {
   const isAuditDefinition = generatedOrAuditFiles.has(path)
-  const isApplicationSource = path.startsWith('artifacts/medstart/')
+  const isApplicationSource =
+    path.startsWith('artifacts/medstart/') &&
+    !path.startsWith('artifacts/medstart/public/vendor/')
 
   if (!isAuditDefinition) {
     findAll(source, /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g, (_, line) => {

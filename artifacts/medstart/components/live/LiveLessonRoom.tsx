@@ -103,6 +103,19 @@ function Workspace({
   const connection = connectionLabel(state, quality)
   const counterpart =
     participantRole === 'tutor' ? booking.studentName : booking.tutorName
+  const schoolLesson = booking.learnerTrack === 'school'
+  const mobileTabs = [
+    {
+      view: 'board' as const,
+      label: schoolLesson ? 'Доска' : 'Меддоска',
+      icon: LayoutDashboard,
+    },
+    ...(schoolLesson
+      ? []
+      : [{ view: 'anatomy' as const, label: '3D', icon: Activity }]),
+    { view: 'video' as const, label: 'Видео', icon: UsersRound },
+    { view: 'chat' as const, label: 'Чат', icon: MessageCircle },
+  ]
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30_000)
@@ -136,8 +149,10 @@ function Workspace({
               <h1 className="truncate text-sm font-bold sm:text-base">
                 {booking.subject}
               </h1>
-              <span className="hidden rounded-full bg-violet-500/20 px-2 py-1 text-[10px] font-semibold text-violet-200 lg:inline">
-                MedStart Medical Live
+              <span className="hidden rounded-full bg-violet-500/20 px-2 py-1 text-[10px] font-semibold text-violet-200 sm:inline">
+                {schoolLesson
+                  ? 'MedStart School Live'
+                  : 'MedStart Medical Live'}
               </span>
             </div>
             <p className="mt-0.5 flex min-w-0 items-center gap-2 text-[11px] text-slate-400">
@@ -172,15 +187,12 @@ function Workspace({
           </button>
         </div>
 
-        <nav className="mt-3 grid grid-cols-4 gap-1 rounded-xl bg-white/5 p-1 md:hidden">
-          {(
-            [
-              ['board', 'Доска', LayoutDashboard],
-              ['anatomy', '3D', Activity],
-              ['video', 'Видео', UsersRound],
-              ['chat', 'Чат', MessageCircle],
-            ] as const
-          ).map(([view, label, Icon]) => (
+        <nav
+          className={`mt-3 grid gap-1 rounded-xl bg-white/5 p-1 md:hidden ${
+            schoolLesson ? 'grid-cols-3' : 'grid-cols-4'
+          }`}
+        >
+          {mobileTabs.map(({ view, label, icon: Icon }) => (
             <button
               key={view}
               type="button"
@@ -213,12 +225,17 @@ function Workspace({
             canClear={participantRole === 'tutor'}
             participantRole={participantRole}
             realtime={realtime}
+            learnerTrack={booking.learnerTrack}
           />
         </div>
 
         {sideOpen && (
           <aside className="hidden min-h-0 min-w-0 flex-col overflow-hidden rounded-[26px] border border-white/10 bg-slate-900/80 p-2 md:flex xl:rounded-3xl xl:p-3">
-            <div className="grid shrink-0 grid-cols-3 gap-1 rounded-xl bg-white/5 p-1">
+            <div
+              className={`grid shrink-0 gap-1 rounded-xl bg-white/5 p-1 ${
+                schoolLesson ? 'grid-cols-2' : 'grid-cols-3'
+              }`}
+            >
               <button
                 type="button"
                 onClick={() => setSideView('video')}
@@ -237,22 +254,24 @@ function Workspace({
                 <MessageCircle className="h-4 w-4" />
                 Чат
               </button>
-              <button
-                type="button"
-                onClick={() => setSideView('anatomy')}
-                aria-pressed={sideView === 'anatomy'}
-                className="ms-choice ms-choice-dark w-full text-xs"
-              >
-                <Activity className="h-4 w-4" />
-                3D
-              </button>
+              {!schoolLesson && (
+                <button
+                  type="button"
+                  onClick={() => setSideView('anatomy')}
+                  aria-pressed={sideView === 'anatomy'}
+                  className="ms-choice ms-choice-dark w-full text-xs"
+                >
+                  <Activity className="h-4 w-4" />
+                  3D
+                </button>
+              )}
             </div>
             <div className="mt-2 flex min-h-0 min-w-0 flex-1 overflow-hidden">
               {sideView === 'video' ? (
                 <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
                   <VideoStage />
                 </div>
-              ) : sideView === 'anatomy' ? (
+              ) : sideView === 'anatomy' && !schoolLesson ? (
                 <AnatomyViewer compact />
               ) : (
                 <LessonChat booking={booking} userUid={userUid} />
@@ -261,7 +280,7 @@ function Workspace({
           </aside>
         )}
 
-        {mobileView === 'anatomy' && (
+        {!schoolLesson && mobileView === 'anatomy' && (
           <div className="min-h-0 min-w-0 overflow-hidden md:hidden">
             <AnatomyViewer />
           </div>

@@ -26,9 +26,12 @@ function toIso(value: unknown) {
   if (value instanceof Date) return value.toISOString()
   if (typeof value === 'object') {
     const timestamp = value as TimestampLike
-    if (typeof timestamp.toDate === 'function') return timestamp.toDate().toISOString()
-    if (typeof timestamp.toMillis === 'function') return new Date(timestamp.toMillis()).toISOString()
-    if (typeof timestamp.seconds === 'number') return new Date(timestamp.seconds * 1_000).toISOString()
+    if (typeof timestamp.toDate === 'function')
+      return timestamp.toDate().toISOString()
+    if (typeof timestamp.toMillis === 'function')
+      return new Date(timestamp.toMillis()).toISOString()
+    if (typeof timestamp.seconds === 'number')
+      return new Date(timestamp.seconds * 1_000).toISOString()
   }
   return ''
 }
@@ -66,7 +69,11 @@ export async function GET(request: Request) {
       db.collection('materials').get(),
       db.collection('knowledgeSubmissions').get(),
       db.collection('conversations').get(),
-      db.collection('adminAuditLogs').orderBy('createdAt', 'desc').limit(100).get(),
+      db
+        .collection('adminAuditLogs')
+        .orderBy('createdAt', 'desc')
+        .limit(100)
+        .get(),
       listAllAuthUsers(),
     ])
 
@@ -89,11 +96,31 @@ export async function GET(request: Request) {
           displayName: String(data.displayName || data.email || 'Пользователь'),
           email: String(data.email || authUser?.email || ''),
           avatar: String(data.avatar || ''),
-          role: item.id === PRIMARY_OWNER_UID ? 'owner' : String(data.role || 'student'),
+          role:
+            item.id === PRIMARY_OWNER_UID
+              ? 'owner'
+              : String(data.role || 'student'),
           profileRole: String(data.role || 'student'),
           status: String(data.status || 'pending'),
           statusBeforeBlock: String(data.statusBeforeBlock || ''),
           specialization: String(data.specialization || ''),
+          subjects: Array.isArray(data.subjects)
+            ? data.subjects.filter(
+                (item): item is string => typeof item === 'string',
+              )
+            : [],
+          tutorAudiences: Array.isArray(data.tutorAudiences)
+            ? data.tutorAudiences.filter(
+                (item): item is 'medical' | 'school' =>
+                  item === 'medical' || item === 'school',
+              )
+            : ['medical'],
+          examTypes: Array.isArray(data.examTypes)
+            ? data.examTypes.filter(
+                (item): item is 'oge' | 'ege' =>
+                  item === 'oge' || item === 'ege',
+              )
+            : [],
           institution: String(data.institution || ''),
           city: String(data.city || ''),
           isPublic: Boolean(data.isPublic),
@@ -110,7 +137,9 @@ export async function GET(request: Request) {
           },
         }
       })
-      .sort((left, right) => left.displayName.localeCompare(right.displayName, 'ru'))
+      .sort((left, right) =>
+        left.displayName.localeCompare(right.displayName, 'ru'),
+      )
 
     const bookings = bookingsSnapshot.docs
       .map((item) => {
@@ -148,7 +177,9 @@ export async function GET(request: Request) {
         targetUid: String(data.targetUid || ''),
         targetType: String(data.targetType || ''),
         metadata:
-          data.metadata && typeof data.metadata === 'object' ? data.metadata : {},
+          data.metadata && typeof data.metadata === 'object'
+            ? data.metadata
+            : {},
         createdAt: toIso(data.createdAt),
       }
     })
@@ -162,7 +193,9 @@ export async function GET(request: Request) {
     ).length
 
     const ownerAuth = authByUid.has(PRIMARY_OWNER_UID)
-    const ownerProfile = usersSnapshot.docs.some((item) => item.id === PRIMARY_OWNER_UID)
+    const ownerProfile = usersSnapshot.docs.some(
+      (item) => item.id === PRIMARY_OWNER_UID,
+    )
 
     return NextResponse.json(
       {
@@ -179,23 +212,36 @@ export async function GET(request: Request) {
         stats: {
           totalUsers: users.length,
           activeStudents: users.filter(
-            (item) => item.profileRole === 'student' && item.status === 'active' && item.uid !== PRIMARY_OWNER_UID,
+            (item) =>
+              item.profileRole === 'student' &&
+              item.status === 'active' &&
+              item.uid !== PRIMARY_OWNER_UID,
           ).length,
           activeTutors: users.filter(
-            (item) => item.profileRole === 'tutor' && item.status === 'active' && item.isPublic,
+            (item) =>
+              item.profileRole === 'tutor' &&
+              item.status === 'active' &&
+              item.isPublic,
           ).length,
           pendingTutors: pendingTutors.length,
           rejectedTutors: users.filter(
-            (item) => item.profileRole === 'tutor' && item.status === 'rejected',
+            (item) =>
+              item.profileRole === 'tutor' && item.status === 'rejected',
           ).length,
-          blockedUsers: users.filter((item) => item.status === 'blocked').length,
-          archivedUsers: users.filter((item) => item.status === 'deleted').length,
+          blockedUsers: users.filter((item) => item.status === 'blocked')
+            .length,
+          archivedUsers: users.filter((item) => item.status === 'deleted')
+            .length,
           admins: users.filter((item) => item.profileRole === 'admin').length,
           totalBookings: bookingsSnapshot.size,
           activeBookings,
-          completedBookings: bookings.filter((item) => item.status === 'completed').length,
+          completedBookings: bookings.filter(
+            (item) => item.status === 'completed',
+          ).length,
           totalMaterials: materialsSnapshot.size,
-          pendingKnowledge: knowledge.filter((item) => item.status === 'pending').length,
+          pendingKnowledge: knowledge.filter(
+            (item) => item.status === 'pending',
+          ).length,
           conversations: conversationsSnapshot.size,
         },
         users,

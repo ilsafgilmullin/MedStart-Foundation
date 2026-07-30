@@ -75,7 +75,7 @@ export default function BookingCard({
           )}
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-              {tutorView ? 'Студент' : 'Репетитор'}
+              {tutorView ? 'Ученик' : 'Репетитор'}
             </p>
             <h2 className="truncate text-lg font-bold text-slate-900">
               {counterpart}
@@ -125,7 +125,7 @@ export default function BookingCard({
       {!compact && booking.studentMessage && tutorView && (
         <div className="mt-4 rounded-2xl border border-violet-100 bg-violet-50 p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-violet-500">
-            Сообщение студента
+            Сообщение ученика
           </p>
           <p className="mt-1 text-sm leading-6 text-violet-900">
             {booking.studentMessage}

@@ -6,7 +6,7 @@ import { AuthProvider } from '@/providers/AuthProvider'
 export const metadata: Metadata = {
   title: { default: 'MedStart', template: '%s · MedStart' },
   description:
-    'Медицинские репетиторы, профессиональные онлайн-занятия и совместная умная доска.',
+    'Подготовка к ОГЭ и ЕГЭ, медицинские репетиторы, индивидуальные онлайн-занятия и совместная учебная доска.',
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_APP_URL ?? 'https://medstart.app',
   ),

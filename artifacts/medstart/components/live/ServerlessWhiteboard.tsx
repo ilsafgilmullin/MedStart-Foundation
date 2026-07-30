@@ -649,7 +649,7 @@ export default function ServerlessWhiteboard({
     if (
       !canClear ||
       !window.confirm(
-        'Очистить все аннотации у обоих участников? Медицинский фон останется.',
+        'Очистить все аннотации у обоих участников? Фон доски останется.',
       )
     ) {
       return
@@ -708,7 +708,7 @@ export default function ServerlessWhiteboard({
             </div>
             <div className="min-w-0">
               <h2 className="truncate text-sm font-bold text-slate-900">
-                Умная медицинская доска
+                Умная учебная доска
               </h2>
               <p className="text-[11px] text-slate-500">
                 {elements.length} аннотаций ·{' '}
@@ -730,14 +730,14 @@ export default function ServerlessWhiteboard({
           <div className="mt-3 flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-violet-800">
             <ImageIcon className="h-4 w-4 shrink-0" />
             <span className="min-w-0 flex-1 truncate">
-              Фон: {backgroundLabel || 'медицинский материал'}
+              Фон: {backgroundLabel || 'учебный материал'}
             </span>
             {onClearBackground && (
               <button
                 type="button"
                 onClick={onClearBackground}
                 className="ms-icon-btn ms-icon-btn-neutral ms-icon-btn-sm"
-                aria-label="Снять медицинский фон"
+                aria-label="Снять фон доски"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -858,14 +858,14 @@ export default function ServerlessWhiteboard({
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-950/5 p-3">
             <img
               src={backgroundImageUrl}
-              alt={backgroundLabel || 'Медицинский фон доски'}
+              alt={backgroundLabel || 'Учебный фон доски'}
               className="h-full w-full select-none object-contain"
             />
           </div>
         )}
         <canvas
           ref={canvasRef}
-          aria-label="Совместная медицинская доска MedStart"
+          aria-label="Совместная учебная доска MedStart"
           onPointerDown={pointerDown}
           onPointerMove={pointerMove}
           onPointerUp={pointerUp}
@@ -885,8 +885,7 @@ export default function ServerlessWhiteboard({
                   Доска готова к работе
                 </p>
                 <p className="mt-1 max-w-xs text-sm text-slate-500">
-                  Рисуйте вместе или наложите снимок и анатомическую модель из
-                  медицинских инструментов.
+                  Рисуйте вместе, решайте задачи и сохраняйте важные заметки.
                 </p>
               </div>
             </div>

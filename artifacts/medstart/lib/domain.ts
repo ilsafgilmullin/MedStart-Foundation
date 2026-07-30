@@ -1,4 +1,5 @@
 import type { LessonFormat } from './user-profile'
+import type { LearnerTrack, SchoolExam } from './education'
 
 export type BookingStatus =
   'pending' | 'accepted' | 'declined' | 'cancelled' | 'completed'
@@ -11,6 +12,9 @@ export interface Booking {
   tutorUid: string
   tutorName: string
   tutorAvatar: string
+  learnerTrack?: LearnerTrack
+  schoolExam?: SchoolExam
+  schoolGrade?: string
   subject: string
   goal: string
   requestedDate: string
@@ -67,28 +71,13 @@ export interface Conversation {
 }
 
 export type ChatMessageKind =
-  | 'text'
-  | 'voice'
-  | 'video_note'
-  | 'file'
-  | 'medical_note'
+  'text' | 'voice' | 'video_note' | 'file' | 'medical_note'
 
 export type MedicalMessageTag =
-  | ''
-  | 'clinical_case'
-  | 'homework'
-  | 'ecg'
-  | 'lab'
-  | 'important'
-  | 'medication'
+  '' | 'clinical_case' | 'homework' | 'ecg' | 'lab' | 'important' | 'medication'
 
 export type MedicalReactionCode =
-  | 'heart'
-  | 'brain'
-  | 'stethoscope'
-  | 'dna'
-  | 'pill'
-  | 'check'
+  'heart' | 'brain' | 'stethoscope' | 'dna' | 'pill' | 'check'
 
 export interface ChatMessage {
   id: string

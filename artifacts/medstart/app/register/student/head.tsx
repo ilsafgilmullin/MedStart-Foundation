@@ -1,3 +1,3 @@
 export default function Head() {
-  return <title>Регистрация студента · MedStart</title>
+  return <title>Регистрация ученика · MedStart</title>
 }

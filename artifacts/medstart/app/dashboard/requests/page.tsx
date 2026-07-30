@@ -18,11 +18,7 @@ import {
 import BookingCard from '@/components/dashboard/BookingCard'
 import { useAuth } from '@/hooks/useAuth'
 import { changeBookingStatus, subscribeToBookingsForUser } from '@/lib/bookings'
-import {
-  bookingDateTime,
-  timestampToMillis,
-  type Booking,
-} from '@/lib/domain'
+import { bookingDateTime, timestampToMillis, type Booking } from '@/lib/domain'
 
 type Decision = 'accepted' | 'declined'
 type SortMode = 'oldest' | 'newest' | 'date'
@@ -102,13 +98,15 @@ export default function TutorRequestsPage() {
     [bookings],
   )
   const subjects = useMemo(
-    () => [...new Set(pending.map((item) => item.subject).filter(Boolean))].sort(),
+    () =>
+      [...new Set(pending.map((item) => item.subject).filter(Boolean))].sort(),
     [pending],
   )
   const conflictIds = useMemo(() => {
     const result = new Set<string>()
     for (const request of pending) {
-      if (accepted.some((lesson) => overlaps(request, lesson))) result.add(request.id)
+      if (accepted.some((lesson) => overlaps(request, lesson)))
+        result.add(request.id)
     }
     return result
   }, [accepted, pending])
@@ -116,7 +114,10 @@ export default function TutorRequestsPage() {
   const visible = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('ru-RU')
     const filtered = pending.filter((item) => {
-      const text = `${item.studentName} ${item.subject} ${item.goal} ${item.studentMessage}`.toLocaleLowerCase('ru-RU')
+      const text =
+        `${item.studentName} ${item.subject} ${item.goal} ${item.studentMessage}`.toLocaleLowerCase(
+          'ru-RU',
+        )
       return (
         (!normalized || text.includes(normalized)) &&
         (subject === 'all' || item.subject === subject)
@@ -155,7 +156,7 @@ export default function TutorRequestsPage() {
   async function submitDecision() {
     if (!user || !selected) return
     if (decision === 'declined' && !response.trim()) {
-      setError('Укажите причину отклонения — студент увидит этот ответ.')
+      setError('Укажите причину отклонения — ученик увидит этот ответ.')
       return
     }
     setBusyId(selected.id)
@@ -171,7 +172,7 @@ export default function TutorRequestsPage() {
       setMessage(
         decision === 'accepted'
           ? `Занятие с ${selected.studentName} подтверждено.`
-          : `Студенту ${selected.studentName} отправлен ответ.`,
+          : `Ученику ${selected.studentName} отправлен ответ.`,
       )
       setSelected(null)
       setResponse('')
@@ -204,16 +205,18 @@ export default function TutorRequestsPage() {
               Центр заявок
             </span>
             <h1 className="mt-4 text-3xl font-black sm:text-4xl">
-              Заявки студентов
+              Заявки учеников
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-teal-50/80 sm:text-base">
-              Оцените цель занятия, проверьте время и отправьте студенту
+              Оцените цель занятия, проверьте время и отправьте ученику
               профессиональный ответ без перехода в другие разделы.
             </p>
           </div>
           <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
             <p className="text-sm font-bold text-white">Нужен ответ</p>
-            <p className="mt-1 text-3xl font-black text-cyan-100">{pending.length}</p>
+            <p className="mt-1 text-3xl font-black text-cyan-100">
+              {pending.length}
+            </p>
             <p className="mt-1 text-xs text-teal-50/70">
               Конфликтов по времени: {conflictIds.size}
             </p>
@@ -224,17 +227,34 @@ export default function TutorRequestsPage() {
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
           ['Новые заявки', pending.length, Inbox, 'text-amber-700 bg-amber-50'],
-          ['Студенты', uniqueStudents, UserRound, 'text-sky-700 bg-sky-50'],
-          ['Потенциальная сумма', `${requestValue.toLocaleString('ru-RU')} ₽`, Banknote, 'text-violet-700 bg-violet-50'],
-          ['Пересечения', conflictIds.size, CalendarClock, 'text-red-700 bg-red-50'],
+          ['Ученики', uniqueStudents, UserRound, 'text-sky-700 bg-sky-50'],
+          [
+            'Потенциальная сумма',
+            `${requestValue.toLocaleString('ru-RU')} ₽`,
+            Banknote,
+            'text-violet-700 bg-violet-50',
+          ],
+          [
+            'Пересечения',
+            conflictIds.size,
+            CalendarClock,
+            'text-red-700 bg-red-50',
+          ],
         ].map(([title, value, Icon, tone]) => {
           const IconComponent = Icon as typeof Inbox
           return (
-            <article key={String(title)} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <article
+              key={String(title)}
+              className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium text-slate-500">{String(title)}</p>
-                  <p className="mt-2 text-3xl font-black text-slate-950">{String(value)}</p>
+                  <p className="text-sm font-medium text-slate-500">
+                    {String(title)}
+                  </p>
+                  <p className="mt-2 text-3xl font-black text-slate-950">
+                    {String(value)}
+                  </p>
                 </div>
                 <span className={`rounded-2xl p-3 ${String(tone)}`}>
                   <IconComponent className="h-5 w-5" />
@@ -259,20 +279,30 @@ export default function TutorRequestsPage() {
       )}
 
       {selected && (
-        <section id="request-decision" className="rounded-[28px] border border-teal-200 bg-gradient-to-br from-teal-50 to-white p-5 shadow-sm sm:p-7">
+        <section
+          id="request-decision"
+          className="rounded-[28px] border border-teal-200 bg-gradient-to-br from-teal-50 to-white p-5 shadow-sm sm:p-7"
+        >
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-sm font-black uppercase tracking-[0.12em] text-teal-700">
-                Ответ студенту
+                Ответ ученику
               </p>
               <h2 className="mt-2 text-2xl font-black text-slate-950">
-                {decision === 'accepted' ? 'Подтвердить занятие' : 'Отклонить заявку'}
+                {decision === 'accepted'
+                  ? 'Подтвердить занятие'
+                  : 'Отклонить заявку'}
               </h2>
               <p className="mt-2 text-sm text-slate-600">
                 {selected.studentName} · {selected.subject}
               </p>
             </div>
-            <button type="button" onClick={() => setSelected(null)} className="ms-icon-btn ms-icon-btn-neutral" aria-label="Закрыть">
+            <button
+              type="button"
+              onClick={() => setSelected(null)}
+              className="ms-icon-btn ms-icon-btn-neutral"
+              aria-label="Закрыть"
+            >
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -281,14 +311,21 @@ export default function TutorRequestsPage() {
             <div className="mt-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800">
               <Clock3 className="mt-0.5 h-5 w-5 shrink-0" />
               <p className="text-sm font-medium">
-                На это время уже есть подтверждённое занятие. Проверьте расписание перед принятием.
+                На это время уже есть подтверждённое занятие. Проверьте
+                расписание перед принятием.
               </p>
             </div>
           )}
 
           <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
             {responseTemplates[decision].map((template, index) => (
-              <button key={template} type="button" onClick={() => setResponse(template)} aria-pressed={response === template} className="ms-choice ms-choice-pill shrink-0">
+              <button
+                key={template}
+                type="button"
+                onClick={() => setResponse(template)}
+                aria-pressed={response === template}
+                className="ms-choice ms-choice-pill shrink-0"
+              >
                 Шаблон {index + 1}
               </button>
             ))}
@@ -300,24 +337,38 @@ export default function TutorRequestsPage() {
               onChange={(event) => setResponse(event.target.value)}
               maxLength={1000}
               className="min-h-32 w-full resize-y rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
-              placeholder="Напишите короткий и понятный ответ студенту."
+              placeholder="Напишите короткий и понятный ответ ученику."
             />
             <span className="block text-right text-xs font-medium text-slate-400">
               {response.length}/1000
             </span>
           </label>
           <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <button type="button" onClick={() => setSelected(null)} className="ms-btn ms-btn-secondary">
+            <button
+              type="button"
+              onClick={() => setSelected(null)}
+              className="ms-btn ms-btn-secondary"
+            >
               Отмена
             </button>
             <button
               type="button"
               onClick={() => void submitDecision()}
               disabled={busyId === selected.id}
-              className={decision === 'accepted' ? 'ms-btn ms-btn-primary' : 'ms-btn ms-btn-danger'}
+              className={
+                decision === 'accepted'
+                  ? 'ms-btn ms-btn-primary'
+                  : 'ms-btn ms-btn-danger'
+              }
             >
-              {busyId === selected.id ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-              {decision === 'accepted' ? 'Подтвердить занятие' : 'Отправить отказ'}
+              {busyId === selected.id ? (
+                <LoaderCircle className="h-5 w-5 animate-spin" />
+              ) : (
+                <Send className="h-5 w-5" />
+              )}
+              {decision === 'accepted'
+                ? 'Подтвердить занятие'
+                : 'Отправить отказ'}
             </button>
           </div>
         </section>
@@ -330,18 +381,30 @@ export default function TutorRequestsPage() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Студент, предмет, цель занятия"
+              placeholder="Ученик, предмет, цель занятия"
               className="w-full rounded-2xl border border-slate-200 py-3 pl-12 pr-4 outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
             />
           </label>
           <label className="relative">
             <Filter className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <select value={subject} onChange={(event) => setSubject(event.target.value)} className="w-full appearance-none rounded-2xl border border-slate-200 py-3 pl-11 pr-4 font-medium outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100">
+            <select
+              value={subject}
+              onChange={(event) => setSubject(event.target.value)}
+              className="w-full appearance-none rounded-2xl border border-slate-200 py-3 pl-11 pr-4 font-medium outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+            >
               <option value="all">Все предметы</option>
-              {subjects.map((item) => <option key={item} value={item}>{item}</option>)}
+              {subjects.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
             </select>
           </label>
-          <select value={sort} onChange={(event) => setSort(event.target.value as SortMode)} className="rounded-2xl border border-slate-200 px-4 py-3 font-medium outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100">
+          <select
+            value={sort}
+            onChange={(event) => setSort(event.target.value as SortMode)}
+            className="rounded-2xl border border-slate-200 px-4 py-3 font-medium outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+          >
             <option value="oldest">Сначала старые</option>
             <option value="newest">Сначала новые</option>
             <option value="date">По дате занятия</option>
@@ -383,15 +446,24 @@ export default function TutorRequestsPage() {
         <div className="rounded-[28px] border border-dashed border-teal-300 bg-teal-50 p-10 text-center">
           <Inbox className="mx-auto h-11 w-11 text-teal-700" />
           <h2 className="mt-4 text-xl font-black text-slate-950">
-            {pending.length ? 'По выбранным фильтрам ничего нет' : 'Новых заявок нет'}
+            {pending.length
+              ? 'По выбранным фильтрам ничего нет'
+              : 'Новых заявок нет'}
           </h2>
           <p className="mt-2 text-slate-500">
             {pending.length
               ? 'Измените запрос или сбросьте фильтры.'
-              : 'Новые заявки появятся здесь сразу после записи студента.'}
+              : 'Новые заявки появятся здесь сразу после записи ученика.'}
           </p>
           {pending.length > 0 && (
-            <button type="button" onClick={() => { setQuery(''); setSubject('all') }} className="mt-5 ms-btn ms-btn-secondary">
+            <button
+              type="button"
+              onClick={() => {
+                setQuery('')
+                setSubject('all')
+              }}
+              className="mt-5 ms-btn ms-btn-secondary"
+            >
               Сбросить фильтры
             </button>
           )}

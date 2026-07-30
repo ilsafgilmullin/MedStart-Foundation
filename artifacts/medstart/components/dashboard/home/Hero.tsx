@@ -9,6 +9,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { SCHOOL_EXAM_LABELS, learnerTrackFor } from '@/lib/education'
 import { getProfileCompletion } from '@/lib/profile-completion'
 
 export default function Hero() {
@@ -17,6 +18,8 @@ export default function Hero() {
   const tutorPending = role === 'tutor' && profile?.status === 'pending'
   const tutorRejected = role === 'tutor' && profile?.status === 'rejected'
   const isModerator = role === 'admin' || role === 'owner'
+  const isSchoolStudent =
+    role === 'student' && learnerTrackFor(profile) === 'school'
   const completion = getProfileCompletion(profile)
 
   const description = isModerator
@@ -26,8 +29,14 @@ export default function Hero() {
       : tutorRejected
         ? `Анкета требует доработки${profile?.moderationNote ? `: ${profile.moderationNote}` : '.'}`
         : role === 'tutor'
-          ? 'Управляйте занятиями, расписанием и материалами студентов из одного рабочего пространства.'
-          : 'Соберите персональный маршрут: выберите преподавателя, подготовьте занятие и сохраняйте материалы в одном кабинете.'
+          ? 'Управляйте занятиями, расписанием и материалами учеников из одного рабочего пространства.'
+          : isSchoolStudent
+            ? `Готовьтесь к ${
+                profile?.schoolExam
+                  ? SCHOOL_EXAM_LABELS[profile.schoolExam]
+                  : 'ОГЭ или ЕГЭ'
+              }: выбирайте преподавателя по предмету, планируйте занятия и сохраняйте материалы.`
+            : 'Соберите персональный маршрут: выберите преподавателя, подготовьте занятие и сохраняйте материалы в одном кабинете.'
 
   return (
     <section className="relative overflow-hidden rounded-[32px] bg-gradient-to-br from-slate-950 via-teal-950 to-teal-800 p-6 text-white shadow-xl sm:p-8 lg:p-10">
@@ -91,7 +100,9 @@ export default function Hero() {
             <div className="flex items-center justify-between gap-3">
               <span className="inline-flex items-center gap-2 text-sm font-bold text-white">
                 <Sparkles className="h-4 w-4 text-cyan-200" />
-                {role === 'tutor' ? 'Профиль преподавателя' : 'Профиль обучения'}
+                {role === 'tutor'
+                  ? 'Профиль преподавателя'
+                  : 'Профиль обучения'}
               </span>
               <span className="text-sm font-black text-cyan-100">
                 {completion.percent}%
@@ -112,7 +123,9 @@ export default function Hero() {
                   : `Добавьте: ${completion.missing.slice(0, 2).join(' и ').toLowerCase()}.`
                 : completion.percent >= 80
                   ? 'Профиль заполнен — рекомендации будут точнее.'
-                  : 'Добавьте вуз, курс и сложные дисциплины для персональных рекомендаций.'}
+                  : isSchoolStudent
+                    ? 'Добавьте класс, экзамен и предметы для персональных рекомендаций.'
+                    : 'Добавьте вуз, курс и сложные дисциплины для персональных рекомендаций.'}
             </p>
             <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-bold text-white">
               {role === 'tutor' ? 'Улучшить анкету' : 'Дополнить профиль'}

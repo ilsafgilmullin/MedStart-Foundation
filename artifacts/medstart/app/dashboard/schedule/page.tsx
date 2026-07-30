@@ -18,8 +18,7 @@ import {
   Save,
   Search,
   UsersRound,
-}
- from 'lucide-react'
+} from 'lucide-react'
 import BookingCard from '@/components/dashboard/BookingCard'
 import { useAuth } from '@/hooks/useAuth'
 import {
@@ -72,7 +71,7 @@ function downloadCalendarEvent(booking: Booking) {
     `DTSTART:${calendarDate(start)}`,
     `DTEND:${calendarDate(end)}`,
     `SUMMARY:${escapeCalendarText(`MedStart: ${booking.subject}`)}`,
-    `DESCRIPTION:${escapeCalendarText(`Предмет: ${booking.subject}. Студент: ${booking.studentName}. Преподаватель: ${booking.tutorName}. ${booking.goal || ''}`)}`, 
+    `DESCRIPTION:${escapeCalendarText(`Предмет: ${booking.subject}. Ученик: ${booking.studentName}. Преподаватель: ${booking.tutorName}. ${booking.goal || ''}`)}`,
     'END:VEVENT',
     'END:VCALENDAR',
   ].join('\r\n')
@@ -251,7 +250,7 @@ export default function SchedulePage() {
     if (status === 'accepted') {
       response =
         window.prompt(
-          'Короткий ответ студенту (можно оставить пустым):',
+          'Короткий ответ ученику (можно оставить пустым):',
           'Заявка принята. До встречи на занятии!',
         ) ?? ''
     }
@@ -369,23 +368,65 @@ export default function SchedulePage() {
 
       {role === 'student' && (
         <section className="grid gap-4 sm:grid-cols-3">
-          <SummaryCard title="Подтверждено" value={upcomingCount} note="Будущие занятия" icon={CalendarCheck2} tone="teal" />
-          <SummaryCard title="Ожидают ответа" value={pendingCount} note="Отправленные заявки" icon={Hourglass} tone="amber" />
-          <SummaryCard title="Завершено" value={completedCount} note="История обучения" icon={CircleCheckBig} tone="violet" />
+          <SummaryCard
+            title="Подтверждено"
+            value={upcomingCount}
+            note="Будущие занятия"
+            icon={CalendarCheck2}
+            tone="teal"
+          />
+          <SummaryCard
+            title="Ожидают ответа"
+            value={pendingCount}
+            note="Отправленные заявки"
+            icon={Hourglass}
+            tone="amber"
+          />
+          <SummaryCard
+            title="Завершено"
+            value={completedCount}
+            note="История обучения"
+            icon={CircleCheckBig}
+            tone="violet"
+          />
         </section>
       )}
 
       {role === 'tutor' && (
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard title="Предстоящие" value={upcomingCount} note={`На 7 дней: ${weekCount}`} icon={CalendarCheck2} tone="teal" />
-          <SummaryCard title="Новые заявки" value={pendingCount} note="Требуют решения" icon={Hourglass} tone="amber" />
-          <SummaryCard title="Студенты" value={activeStudents} note={`Завершено: ${completedCount}`} icon={UsersRound} tone="violet" />
+          <SummaryCard
+            title="Предстоящие"
+            value={upcomingCount}
+            note={`На 7 дней: ${weekCount}`}
+            icon={CalendarCheck2}
+            tone="teal"
+          />
+          <SummaryCard
+            title="Новые заявки"
+            value={pendingCount}
+            note="Требуют решения"
+            icon={Hourglass}
+            tone="amber"
+          />
+          <SummaryCard
+            title="Ученики"
+            value={activeStudents}
+            note={`Завершено: ${completedCount}`}
+            icon={UsersRound}
+            tone="violet"
+          />
           <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-slate-500">Сумма проведённых</p>
-                <p className="mt-2 text-3xl font-black text-slate-950">{completedValue.toLocaleString('ru-RU')} ₽</p>
-                <p className="mt-1 text-xs text-slate-400">По стоимости занятий</p>
+                <p className="text-sm font-medium text-slate-500">
+                  Сумма проведённых
+                </p>
+                <p className="mt-2 text-3xl font-black text-slate-950">
+                  {completedValue.toLocaleString('ru-RU')} ₽
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  По стоимости занятий
+                </p>
               </div>
               <div className="rounded-2xl bg-sky-50 p-3 text-sky-700 ring-1 ring-sky-100">
                 <Banknote className="h-5 w-5" />
@@ -410,10 +451,20 @@ export default function SchedulePage() {
 
       {role === 'tutor' && (
         <div className="inline-flex rounded-2xl bg-slate-100 p-1">
-          <button type="button" onClick={() => setTab('lessons')} aria-pressed={tab === 'lessons'} className="ms-choice ms-choice-block">
+          <button
+            type="button"
+            onClick={() => setTab('lessons')}
+            aria-pressed={tab === 'lessons'}
+            className="ms-choice ms-choice-block"
+          >
             Занятия
           </button>
-          <button type="button" onClick={() => setTab('availability')} aria-pressed={tab === 'availability'} className="ms-choice ms-choice-block">
+          <button
+            type="button"
+            onClick={() => setTab('availability')}
+            aria-pressed={tab === 'availability'}
+            className="ms-choice ms-choice-block"
+          >
             Рабочие часы
           </button>
         </div>
@@ -426,8 +477,12 @@ export default function SchedulePage() {
               <Clock3 className="h-6 w-6" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-slate-950">Обычная доступность</h2>
-              <p className="text-sm text-slate-500">Она отображается студентам в вашем профиле.</p>
+              <h2 className="text-xl font-black text-slate-950">
+                Обычная доступность
+              </h2>
+              <p className="text-sm text-slate-500">
+                Она отображается ученикам в вашем профиле.
+              </p>
             </div>
           </div>
 
@@ -435,16 +490,28 @@ export default function SchedulePage() {
             <div className="mt-6 space-y-3">
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-2xl bg-teal-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.1em] text-teal-700">Рабочих дней</p>
-                  <p className="mt-1 text-2xl font-black text-slate-950">{enabledDays}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.1em] text-teal-700">
+                    Рабочих дней
+                  </p>
+                  <p className="mt-1 text-2xl font-black text-slate-950">
+                    {enabledDays}
+                  </p>
                 </div>
                 <div className="rounded-2xl bg-sky-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.1em] text-sky-700">Часов в неделю</p>
-                  <p className="mt-1 text-2xl font-black text-slate-950">{weeklyHours.toFixed(1)}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.1em] text-sky-700">
+                    Часов в неделю
+                  </p>
+                  <p className="mt-1 text-2xl font-black text-slate-950">
+                    {weeklyHours.toFixed(1)}
+                  </p>
                 </div>
                 <div className="rounded-2xl bg-violet-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.1em] text-violet-700">Часовой пояс</p>
-                  <p className="mt-1 truncate text-sm font-black text-slate-950">{availability.timezone}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.1em] text-violet-700">
+                    Часовой пояс
+                  </p>
+                  <p className="mt-1 truncate text-sm font-black text-slate-950">
+                    {availability.timezone}
+                  </p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
@@ -452,23 +519,65 @@ export default function SchedulePage() {
                   <CopyCheck className="h-4 w-4 text-teal-700" />
                   Быстрый шаблон:
                 </span>
-                <button type="button" onClick={() => applyAvailabilityTemplate('weekdays')} className="ms-btn ms-btn-secondary ms-btn-sm">Будни 09–18</button>
-                <button type="button" onClick={() => applyAvailabilityTemplate('evenings')} className="ms-btn ms-btn-secondary ms-btn-sm">Вечера 17–21</button>
-                <button type="button" onClick={() => applyAvailabilityTemplate('clear')} className="ms-btn ms-btn-soft ms-btn-sm">Очистить</button>
+                <button
+                  type="button"
+                  onClick={() => applyAvailabilityTemplate('weekdays')}
+                  className="ms-btn ms-btn-secondary ms-btn-sm"
+                >
+                  Будни 09–18
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyAvailabilityTemplate('evenings')}
+                  className="ms-btn ms-btn-secondary ms-btn-sm"
+                >
+                  Вечера 17–21
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyAvailabilityTemplate('clear')}
+                  className="ms-btn ms-btn-soft ms-btn-sm"
+                >
+                  Очистить
+                </button>
               </div>
               {WEEKDAYS.map((day) => {
                 const value = availability.days[day.key]
                 return (
-                  <div key={day.key} className="grid items-center gap-3 rounded-2xl border border-slate-100 p-4 sm:grid-cols-[160px_1fr]">
+                  <div
+                    key={day.key}
+                    className="grid items-center gap-3 rounded-2xl border border-slate-100 p-4 sm:grid-cols-[160px_1fr]"
+                  >
                     <label className="flex cursor-pointer items-center gap-3 font-semibold text-slate-700">
-                      <input type="checkbox" checked={value.enabled} onChange={(event) => updateDay(day.key, { enabled: event.target.checked })} className="h-5 w-5 accent-teal-700" />
+                      <input
+                        type="checkbox"
+                        checked={value.enabled}
+                        onChange={(event) =>
+                          updateDay(day.key, { enabled: event.target.checked })
+                        }
+                        className="h-5 w-5 accent-teal-700"
+                      />
                       {day.label}
                     </label>
                     {value.enabled ? (
                       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                        <input type="time" value={value.start} onChange={(event) => updateDay(day.key, { start: event.target.value })} className="min-w-0 rounded-xl border border-slate-200 px-3 py-2" />
+                        <input
+                          type="time"
+                          value={value.start}
+                          onChange={(event) =>
+                            updateDay(day.key, { start: event.target.value })
+                          }
+                          className="min-w-0 rounded-xl border border-slate-200 px-3 py-2"
+                        />
                         <span className="text-slate-400">—</span>
-                        <input type="time" value={value.end} onChange={(event) => updateDay(day.key, { end: event.target.value })} className="min-w-0 rounded-xl border border-slate-200 px-3 py-2" />
+                        <input
+                          type="time"
+                          value={value.end}
+                          onChange={(event) =>
+                            updateDay(day.key, { end: event.target.value })
+                          }
+                          className="min-w-0 rounded-xl border border-slate-200 px-3 py-2"
+                        />
                       </div>
                     ) : (
                       <span className="text-sm text-slate-400">Выходной</span>
@@ -476,8 +585,17 @@ export default function SchedulePage() {
                   </div>
                 )
               })}
-              <button type="button" onClick={() => void saveHours()} disabled={savingHours} className="mt-3 ms-btn ms-btn-primary ms-btn-lg ms-btn-block sm:w-auto">
-                {savingHours ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+              <button
+                type="button"
+                onClick={() => void saveHours()}
+                disabled={savingHours}
+                className="mt-3 ms-btn ms-btn-primary ms-btn-lg ms-btn-block sm:w-auto"
+              >
+                {savingHours ? (
+                  <LoaderCircle className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Save className="h-5 w-5" />
+                )}
                 Сохранить часы
               </button>
             </div>
@@ -494,23 +612,41 @@ export default function SchedulePage() {
             <section className="overflow-hidden rounded-[28px] bg-gradient-to-br from-slate-950 via-teal-950 to-teal-800 p-6 text-white shadow-lg">
               <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
                 <div>
-                  <p className="text-sm font-bold text-cyan-100">Ближайшее подтверждённое занятие</p>
-                  <h2 className="mt-2 text-2xl font-black sm:text-3xl">{nextLesson.subject}</h2>
-                  <p className="mt-2 text-teal-50/85">{formatBookingDate(nextLesson)} · {nextLesson.durationMinutes} минут</p>
+                  <p className="text-sm font-bold text-cyan-100">
+                    Ближайшее подтверждённое занятие
+                  </p>
+                  <h2 className="mt-2 text-2xl font-black sm:text-3xl">
+                    {nextLesson.subject}
+                  </h2>
+                  <p className="mt-2 text-teal-50/85">
+                    {formatBookingDate(nextLesson)} ·{' '}
+                    {nextLesson.durationMinutes} минут
+                  </p>
                   <p className="mt-3 text-sm text-teal-50/75">
-                    {role === 'tutor' ? `Студент: ${nextLesson.studentName}` : `Преподаватель: ${nextLesson.tutorName}`}
+                    {role === 'tutor'
+                      ? `Ученик: ${nextLesson.studentName}`
+                      : `Преподаватель: ${nextLesson.tutorName}`}
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  <button type="button" onClick={() => downloadCalendarEvent(nextLesson)} className="ms-btn ms-btn-on-dark">
-                    <CalendarPlus className="h-4 w-4" />
-                    В календарь
+                  <button
+                    type="button"
+                    onClick={() => downloadCalendarEvent(nextLesson)}
+                    className="ms-btn ms-btn-on-dark"
+                  >
+                    <CalendarPlus className="h-4 w-4" />В календарь
                   </button>
                   <Link
-                    href={nextLesson.format === 'online' ? ROUTES.LESSON(nextLesson.id) : `/dashboard/messages?conversation=${nextLesson.conversationId}`}
+                    href={
+                      nextLesson.format === 'online'
+                        ? ROUTES.LESSON(nextLesson.id)
+                        : `/dashboard/messages?conversation=${nextLesson.conversationId}`
+                    }
                     className="ms-btn ms-btn-white"
                   >
-                    {nextLesson.format === 'online' ? 'Войти в занятие' : 'Открыть диалог'}
+                    {nextLesson.format === 'online'
+                      ? 'Войти в занятие'
+                      : 'Открыть диалог'}
                   </Link>
                 </div>
               </div>
@@ -519,19 +655,34 @@ export default function SchedulePage() {
 
           {(role === 'student' || role === 'tutor') && (
             <div className="flex gap-2 overflow-x-auto pb-1">
-              <button type="button" onClick={() => setFilter('upcoming')} aria-pressed={filter === 'upcoming'} className="ms-choice ms-choice-pill shrink-0">
+              <button
+                type="button"
+                onClick={() => setFilter('upcoming')}
+                aria-pressed={filter === 'upcoming'}
+                className="ms-choice ms-choice-pill shrink-0"
+              >
                 <CalendarDays className="h-4 w-4" />
                 {role === 'tutor' ? 'Подтверждённые' : 'Предстоящие'}
                 {upcomingCount > 0 && <span>{upcomingCount}</span>}
               </button>
               {role === 'student' && (
-                <button type="button" onClick={() => setFilter('pending')} aria-pressed={filter === 'pending'} className="ms-choice ms-choice-pill shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setFilter('pending')}
+                  aria-pressed={filter === 'pending'}
+                  className="ms-choice ms-choice-pill shrink-0"
+                >
                   <Hourglass className="h-4 w-4" />
                   Ожидают ответа
                   {pendingCount > 0 && <span>{pendingCount}</span>}
                 </button>
               )}
-              <button type="button" onClick={() => setFilter('history')} aria-pressed={filter === 'history'} className="ms-choice ms-choice-pill shrink-0">
+              <button
+                type="button"
+                onClick={() => setFilter('history')}
+                aria-pressed={filter === 'history'}
+                className="ms-choice ms-choice-pill shrink-0"
+              >
                 <History className="h-4 w-4" />
                 История
               </button>
@@ -550,7 +701,11 @@ export default function SchedulePage() {
                   booking={booking}
                   role={role ?? 'student'}
                   busy={busyId === booking.id}
-                  onAction={role === 'student' || role === 'tutor' ? (status) => void act(booking, status) : undefined}
+                  onAction={
+                    role === 'student' || role === 'tutor'
+                      ? (status) => void act(booking, status)
+                      : undefined
+                  }
                 />
               ))}
             </div>
@@ -572,7 +727,10 @@ export default function SchedulePage() {
                     : 'Выберите преподавателя и предложите удобное время.'}
               </p>
               {role === 'student' && filter !== 'history' && (
-                <Link href="/dashboard/tutors" className="mt-5 ms-btn ms-btn-primary">
+                <Link
+                  href="/dashboard/tutors"
+                  className="mt-5 ms-btn ms-btn-primary"
+                >
                   Найти преподавателя
                 </Link>
               )}

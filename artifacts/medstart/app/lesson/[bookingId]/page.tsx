@@ -48,7 +48,7 @@ const DemoLessonRoom = dynamic(
   () => import('@/components/live/DemoLessonRoom'),
   {
     ssr: false,
-    loading: () => <RoomLoader label="Открываем медицинскую доску…" />,
+    loading: () => <RoomLoader label="Открываем учебную доску…" />,
   },
 )
 
@@ -154,7 +154,9 @@ export default function LessonPage() {
     if (!user || !booking) return false
     if (mode !== 'workspace' && liveStatus?.videoEnabled === false) {
       setError(
-        'Собственный видеосервер MedStart пока не активирован. Откройте медицинскую доску без звонка.',
+        `Собственный видеосервер MedStart пока не активирован. Откройте ${
+          booking.learnerTrack === 'school' ? 'учебную' : 'медицинскую'
+        } доску без звонка.`,
       )
       return false
     }
@@ -351,6 +353,7 @@ export default function LessonPage() {
     user?.uid === booking.tutorUid ? booking.studentName : booking.tutorName
   const videoEnabled = liveStatus?.videoEnabled === true
   const checkingVideo = liveStatus === null
+  const schoolLesson = booking.learnerTrack === 'school'
 
   return (
     <main className="min-h-dvh bg-slate-950 p-4 text-white sm:p-6">
@@ -415,8 +418,9 @@ export default function LessonPage() {
               <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
                 <MonitorUp className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" />
                 <p>
-                  Медицинская доска, снимки, клинические шаблоны и чат работают
-                  без платного видеосервера.
+                  {schoolLesson
+                    ? 'Совместная доска, заметки и чат работают без платного видеосервера.'
+                    : 'Медицинская доска, снимки, клинические шаблоны и чат работают без платного видеосервера.'}
                 </p>
               </div>
               <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -435,8 +439,12 @@ export default function LessonPage() {
                     : videoEnabled
                       ? 'Собственный видеосервер настроен. Перед входом MedStart проверит камеру и микрофон.'
                       : liveStatus?.reason === 'unreachable'
-                        ? 'Видеосервер настроен, но сейчас не отвечает. Медицинская доска и чат остаются доступными.'
-                        : 'Видеосервер пока не активирован. Медицинская доска и чат остаются доступными.'}
+                        ? `Видеосервер настроен, но сейчас не отвечает. ${
+                            schoolLesson ? 'Учебная' : 'Медицинская'
+                          } доска и чат остаются доступными.`
+                        : `Видеосервер пока не активирован. ${
+                            schoolLesson ? 'Учебная' : 'Медицинская'
+                          } доска и чат остаются доступными.`}
                 </p>
               </div>
             </div>
@@ -505,7 +513,9 @@ export default function LessonPage() {
                 )}
                 {joining === 'workspace'
                   ? 'Открываем доску…'
-                  : 'Открыть доску без звонка'}
+                  : schoolLesson
+                    ? 'Открыть учебную доску'
+                    : 'Открыть медицинскую доску без звонка'}
               </button>
 
               {!videoEnabled && (
@@ -527,7 +537,11 @@ export default function LessonPage() {
             </div>
 
             <p className="mt-5 text-center text-xs leading-5 text-slate-500">
-              Камера и микрофон включаются только после вашего разрешения.
+              {videoEnabled
+                ? 'Камера и микрофон включаются только после вашего разрешения.'
+                : schoolLesson
+                  ? 'Доска, чат и материалы занятия доступны уже сейчас.'
+                  : 'Доска, чат и медицинские инструменты доступны уже сейчас.'}
             </p>
           </div>
         </section>
