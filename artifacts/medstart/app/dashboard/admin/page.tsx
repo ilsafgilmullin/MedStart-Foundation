@@ -50,13 +50,14 @@ import {
   type AdminUserRecord,
 } from '@/lib/admin-control'
 import type { BookingStatus } from '@/lib/domain'
+import { LEARNER_TRACK_LABELS, SCHOOL_EXAM_LABELS } from '@/lib/education'
 import type { UserRole, UserStatus } from '@/lib/user-profile'
 
 const roleLabels: Record<AdminUserRecord['role'], string> = {
   owner: 'Владелец',
   admin: 'Администратор',
   tutor: 'Репетитор',
-  student: 'Студент',
+  student: 'Ученик',
 }
 
 const statusLabels: Record<UserStatus, string> = {
@@ -139,7 +140,9 @@ function StatCard({
           <p className="mt-3 text-3xl font-black text-slate-950">{value}</p>
           <p className="mt-2 text-xs leading-5 text-slate-400">{note}</p>
         </div>
-        <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${accent}`}>
+        <span
+          className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${accent}`}
+        >
           <Icon className="h-6 w-6" />
         </span>
       </div>
@@ -190,8 +193,12 @@ function ConfirmDialog({
                 <ShieldCheck className="h-6 w-6" />
               )}
             </span>
-            <h2 className="mt-4 text-2xl font-black text-slate-950">{state.title}</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{state.description}</p>
+            <h2 className="mt-4 text-2xl font-black text-slate-950">
+              {state.title}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              {state.description}
+            </p>
           </div>
           <button
             type="button"
@@ -231,7 +238,11 @@ function ConfirmDialog({
             disabled={busy || !allowed}
             className={`ms-btn ${state.tone === 'danger' ? 'ms-btn-danger' : 'ms-btn-primary'}`}
           >
-            {busy ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
+            {busy ? (
+              <LoaderCircle className="h-5 w-5 animate-spin" />
+            ) : (
+              <Check className="h-5 w-5" />
+            )}
             {state.confirmLabel}
           </button>
         </div>
@@ -268,27 +279,38 @@ export default function AdminPage() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [userSearch, setUserSearch] = useState('')
-  const [roleFilter, setRoleFilter] = useState<'all' | AdminUserRecord['role']>('all')
+  const [roleFilter, setRoleFilter] = useState<'all' | AdminUserRecord['role']>(
+    'all',
+  )
   const [statusFilter, setStatusFilter] = useState<'all' | UserStatus>('all')
-  const [bookingFilter, setBookingFilter] = useState<'all' | BookingStatus>('all')
+  const [bookingFilter, setBookingFilter] = useState<'all' | BookingStatus>(
+    'all',
+  )
   const [rejectingUid, setRejectingUid] = useState('')
   const [rejectionNote, setRejectionNote] = useState('')
 
-  const loadOverview = useCallback(async (silent = false) => {
-    if (!allowed) {
-      setLoading(false)
-      return
-    }
-    if (!silent) setLoading(true)
-    setError('')
-    try {
-      setOverview(await fetchAdminControlOverview())
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Не удалось загрузить центр управления.')
-    } finally {
-      if (!silent) setLoading(false)
-    }
-  }, [allowed])
+  const loadOverview = useCallback(
+    async (silent = false) => {
+      if (!allowed) {
+        setLoading(false)
+        return
+      }
+      if (!silent) setLoading(true)
+      setError('')
+      try {
+        setOverview(await fetchAdminControlOverview())
+      } catch (loadError) {
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : 'Не удалось загрузить центр управления.',
+        )
+      } finally {
+        if (!silent) setLoading(false)
+      }
+    },
+    [allowed],
+  )
 
   useEffect(() => {
     void loadOverview()
@@ -299,7 +321,16 @@ export default function AdminPage() {
     return (overview?.users || []).filter((user) => {
       const matchesQuery =
         !query ||
-        [user.displayName, user.email, user.specialization, user.institution, user.city, user.uid]
+        [
+          user.displayName,
+          user.email,
+          user.specialization,
+          user.institution,
+          user.city,
+          user.uid,
+          ...user.subjects,
+          ...user.examTypes.map((exam) => SCHOOL_EXAM_LABELS[exam]),
+        ]
           .join(' ')
           .toLocaleLowerCase('ru-RU')
           .includes(query)
@@ -314,7 +345,8 @@ export default function AdminPage() {
   const bookings = useMemo(
     () =>
       (overview?.bookings || []).filter(
-        (booking) => bookingFilter === 'all' || booking.status === bookingFilter,
+        (booking) =>
+          bookingFilter === 'all' || booking.status === bookingFilter,
       ),
     [bookingFilter, overview?.bookings],
   )
@@ -327,7 +359,8 @@ export default function AdminPage() {
           <div>
             <h1 className="text-xl font-black">Доступ запрещён</h1>
             <p className="mt-2 text-sm leading-6">
-              Центр управления доступен только владельцу MedStart и назначенным администраторам.
+              Центр управления доступен только владельцу MedStart и назначенным
+              администраторам.
             </p>
           </div>
         </div>
@@ -347,7 +380,11 @@ export default function AdminPage() {
       setRejectionNote('')
       await loadOverview(true)
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : 'Операция не выполнена.')
+      setError(
+        actionError instanceof Error
+          ? actionError.message
+          : 'Операция не выполнена.',
+      )
     } finally {
       setBusy(false)
     }
@@ -373,8 +410,18 @@ export default function AdminPage() {
       icon: FileCheck2,
       count: overview?.stats.pendingTutors,
     },
-    { id: 'users', name: 'Пользователи', icon: UsersRound, count: overview?.stats.totalUsers },
-    { id: 'bookings', name: 'Занятия', icon: CalendarDays, count: overview?.stats.activeBookings },
+    {
+      id: 'users',
+      name: 'Пользователи',
+      icon: UsersRound,
+      count: overview?.stats.totalUsers,
+    },
+    {
+      id: 'bookings',
+      name: 'Занятия',
+      icon: CalendarDays,
+      count: overview?.stats.activeBookings,
+    },
     { id: 'audit', name: 'Журнал действий', icon: ScrollText, ownerOnly: true },
     { id: 'system', name: 'Система', icon: Server },
   ]
@@ -386,13 +433,16 @@ export default function AdminPage() {
           <div>
             <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.14em] ring-1 ring-white/15">
               <ShieldCheck className="h-4 w-4 text-cyan-200" />
-              {overview?.actor.role === 'owner' ? 'Контур владельца' : 'Панель администратора'}
+              {overview?.actor.role === 'owner'
+                ? 'Контур владельца'
+                : 'Панель администратора'}
             </span>
             <h1 className="mt-5 max-w-3xl text-3xl font-black sm:text-4xl">
               Центр управления MedStart
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-teal-50/80 sm:text-base">
-              Пользователи, репетиторы, занятия, материалы, безопасность и история вмешательств — в одном защищённом рабочем пространстве.
+              Пользователи, репетиторы, занятия, материалы, безопасность и
+              история вмешательств — в одном защищённом рабочем пространстве.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <span className="inline-flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-2 text-sm font-bold ring-1 ring-white/15">
@@ -480,7 +530,11 @@ export default function AdminPage() {
                   description: `Профиль «${user.displayName}» станет активным и появится в каталоге студентов.`,
                   confirmLabel: 'Одобрить и опубликовать',
                   tone: 'primary',
-                  input: { action: 'moderate_tutor', targetUid: user.uid, decision: 'approve' },
+                  input: {
+                    action: 'moderate_tutor',
+                    targetUid: user.uid,
+                    decision: 'approve',
+                  },
                 })
               }
               onReject={(user) =>
@@ -552,7 +606,7 @@ function OverviewPanel({
         <StatCard
           title="Пользователи"
           value={stats.totalUsers}
-          note={`${stats.activeStudents} студентов · ${stats.activeTutors} репетиторов`}
+          note={`${stats.activeStudents} учеников · ${stats.activeTutors} репетиторов`}
           icon={UsersRound}
           accent="bg-sky-100 text-sky-800"
         />
@@ -587,9 +641,12 @@ function OverviewPanel({
                 <Activity className="h-4 w-4" />
                 Операционный центр
               </span>
-              <h2 className="mt-4 text-2xl font-black text-slate-950">Что требует внимания сейчас</h2>
+              <h2 className="mt-4 text-2xl font-black text-slate-950">
+                Что требует внимания сейчас
+              </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                Быстрый переход к задачам, которые влияют на доступ пользователей и работу платформы.
+                Быстрый переход к задачам, которые влияют на доступ
+                пользователей и работу платформы.
               </p>
             </div>
           </div>
@@ -629,8 +686,12 @@ function OverviewPanel({
                     <Icon className="h-5 w-5" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block font-black text-slate-950">{item.title}</span>
-                    <span className="mt-1 block text-sm text-slate-500">{item.note}</span>
+                    <span className="block font-black text-slate-950">
+                      {item.title}
+                    </span>
+                    <span className="mt-1 block text-sm text-slate-500">
+                      {item.note}
+                    </span>
                   </span>
                   <ChevronRight className="h-5 w-5 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-teal-700" />
                 </>
@@ -640,7 +701,12 @@ function OverviewPanel({
                   {content}
                 </Link>
               ) : (
-                <button key={item.title} type="button" onClick={() => onTab(item.tab!)} className={`ms-row-action ${className}`}>
+                <button
+                  key={item.title}
+                  type="button"
+                  onClick={() => onTab(item.tab!)}
+                  className={`ms-row-action ${className}`}
+                >
                   {content}
                 </button>
               )
@@ -663,8 +729,13 @@ function OverviewPanel({
               ['Профиль владельца', overview.system.ownerProfile],
               ['Защита владельца', overview.system.ownerProtected],
             ].map(([label, ready]) => (
-              <div key={String(label)} className="flex items-center justify-between gap-3 rounded-2xl bg-white/7 px-4 py-3">
-                <span className="font-bold text-slate-200">{String(label)}</span>
+              <div
+                key={String(label)}
+                className="flex items-center justify-between gap-3 rounded-2xl bg-white/7 px-4 py-3"
+              >
+                <span className="font-bold text-slate-200">
+                  {String(label)}
+                </span>
                 {ready ? (
                   <CheckCircle2 className="h-5 w-5 text-emerald-300" />
                 ) : (
@@ -702,9 +773,12 @@ function ModerationPanel({
     <section className="space-y-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-2xl font-black text-slate-950">Модерация репетиторов</h2>
+          <h2 className="text-2xl font-black text-slate-950">
+            Модерация репетиторов
+          </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-            Проверяйте специализацию, учреждение, опыт, описание подхода и подтверждение квалификации до публикации профиля.
+            Проверяйте специализацию, учреждение, опыт, описание подхода и
+            подтверждение квалификации до публикации профиля.
           </p>
         </div>
         <Link href="/dashboard/knowledge" className="ms-btn ms-btn-secondary">
@@ -716,48 +790,108 @@ function ModerationPanel({
       {users.length === 0 ? (
         <div className="rounded-[30px] border border-dashed border-emerald-300 bg-emerald-50 p-10 text-center">
           <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-700" />
-          <h3 className="mt-4 text-xl font-black text-slate-950">Очередь пуста</h3>
-          <p className="mt-2 text-sm text-slate-600">Новые анкеты появятся здесь автоматически.</p>
+          <h3 className="mt-4 text-xl font-black text-slate-950">
+            Очередь пуста
+          </h3>
+          <p className="mt-2 text-sm text-slate-600">
+            Новые анкеты появятся здесь автоматически.
+          </p>
         </div>
       ) : (
         <div className="grid gap-5 xl:grid-cols-2">
           {users.map((user) => {
             const rejecting = rejectingUid === user.uid
             return (
-              <article key={user.uid} className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <article
+                key={user.uid}
+                className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+              >
                 <div className="flex items-start gap-4">
                   <UserAvatar user={user} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-xl font-black text-slate-950">{user.displayName}</h3>
+                      <h3 className="text-xl font-black text-slate-950">
+                        {user.displayName}
+                      </h3>
                       <PresenceBadge uid={user.uid} compact />
-                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-800">На проверке</span>
+                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-800">
+                        На проверке
+                      </span>
                     </div>
-                    <p className="mt-1 break-all text-sm text-slate-500">{user.email}</p>
+                    <p className="mt-1 break-all text-sm text-slate-500">
+                      {user.email}
+                    </p>
                   </div>
                 </div>
 
                 <dl className="mt-6 grid gap-4 rounded-2xl bg-slate-50 p-4 sm:grid-cols-2">
                   <div>
-                    <dt className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Специализация</dt>
-                    <dd className="mt-1 font-bold text-slate-800">{user.specialization || 'Не указана'}</dd>
+                    <dt className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                      Специализация
+                    </dt>
+                    <dd className="mt-1 font-bold text-slate-800">
+                      {user.specialization || 'Не указана'}
+                    </dd>
                   </div>
                   <div>
-                    <dt className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Учреждение</dt>
-                    <dd className="mt-1 font-bold text-slate-800">{user.institution || 'Не указано'}</dd>
+                    <dt className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                      Учреждение
+                    </dt>
+                    <dd className="mt-1 font-bold text-slate-800">
+                      {user.institution || 'Не указано'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                      Ученики
+                    </dt>
+                    <dd className="mt-1 font-bold text-slate-800">
+                      {user.tutorAudiences
+                        .map((audience) => LEARNER_TRACK_LABELS[audience])
+                        .join(', ')}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                      Экзамены
+                    </dt>
+                    <dd className="mt-1 font-bold text-slate-800">
+                      {user.examTypes.length
+                        ? user.examTypes
+                            .map((exam) => SCHOOL_EXAM_LABELS[exam])
+                            .join(', ')
+                        : 'Не применимо'}
+                    </dd>
                   </div>
                   <div className="sm:col-span-2">
-                    <dt className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Подтверждение квалификации</dt>
-                    <dd className="mt-1 break-words font-bold text-slate-800">{user.qualificationReference || 'Не загружено'}</dd>
+                    <dt className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                      Предметы
+                    </dt>
+                    <dd className="mt-1 font-bold text-slate-800">
+                      {user.subjects.join(', ') || 'Не указаны'}
+                    </dd>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <dt className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                      Подтверждение квалификации
+                    </dt>
+                    <dd className="mt-1 break-words font-bold text-slate-800">
+                      {user.qualificationReference || 'Не загружено'}
+                    </dd>
                   </div>
                 </dl>
 
                 <div className="mt-5 flex flex-wrap gap-2 text-xs font-bold">
-                  <span className={`rounded-full px-3 py-1.5 ${user.auth.emailVerified ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
-                    {user.auth.emailVerified ? 'Почта подтверждена' : 'Почта не подтверждена'}
+                  <span
+                    className={`rounded-full px-3 py-1.5 ${user.auth.emailVerified ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}
+                  >
+                    {user.auth.emailVerified
+                      ? 'Почта подтверждена'
+                      : 'Почта не подтверждена'}
                   </span>
                   <span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-700">
-                    Создан: {formatDate(user.auth.createdAt || user.createdAt, false)}
+                    Создан:{' '}
+                    {formatDate(user.auth.createdAt || user.createdAt, false)}
                   </span>
                 </div>
 
@@ -799,7 +933,12 @@ function ModerationPanel({
                   </div>
                 ) : (
                   <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                    <button type="button" onClick={() => onApprove(user)} disabled={busy} className="ms-btn ms-btn-primary">
+                    <button
+                      type="button"
+                      onClick={() => onApprove(user)}
+                      disabled={busy}
+                      className="ms-btn ms-btn-primary"
+                    >
                       <Check className="h-5 w-5" />
                       Одобрить
                     </button>
@@ -850,9 +989,12 @@ function UsersPanel({
   return (
     <section className="space-y-5">
       <div>
-        <h2 className="text-2xl font-black text-slate-950">Пользователи и доступ</h2>
+        <h2 className="text-2xl font-black text-slate-950">
+          Пользователи и доступ
+        </h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-          Управляйте доступом, ролями, подтверждением почты и активными сессиями. Владелец защищён от любых изменений.
+          Управляйте доступом, ролями, подтверждением почты и активными
+          сессиями. Владелец защищён от любых изменений.
         </p>
       </div>
 
@@ -871,17 +1013,31 @@ function UsersPanel({
               className="w-full bg-transparent text-sm outline-none"
             />
           </label>
-          <select value={roleFilter} onChange={(event) => onRoleFilter(event.target.value as typeof roleFilter)} className={inputClass}>
+          <select
+            value={roleFilter}
+            onChange={(event) =>
+              onRoleFilter(event.target.value as typeof roleFilter)
+            }
+            className={inputClass}
+          >
             <option value="all">Все роли</option>
             <option value="owner">Владелец</option>
             <option value="admin">Администраторы</option>
             <option value="tutor">Репетиторы</option>
-            <option value="student">Студенты</option>
+            <option value="student">Ученики</option>
           </select>
-          <select value={statusFilter} onChange={(event) => onStatusFilter(event.target.value as typeof statusFilter)} className={inputClass}>
+          <select
+            value={statusFilter}
+            onChange={(event) =>
+              onStatusFilter(event.target.value as typeof statusFilter)
+            }
+            className={inputClass}
+          >
             <option value="all">Все статусы</option>
             {Object.entries(statusLabels).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
+              <option key={value} value={value}>
+                {label}
+              </option>
             ))}
           </select>
         </div>
@@ -894,41 +1050,72 @@ function UsersPanel({
           </div>
         ) : (
           users.map((user) => (
-            <article key={user.uid} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+            <article
+              key={user.uid}
+              className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"
+            >
               <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                 <div className="flex min-w-0 items-start gap-4">
                   <UserAvatar user={user} />
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="truncate text-lg font-black text-slate-950">{user.displayName}</h3>
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-black ${statusTone[user.status]}`}>
+                      <h3 className="truncate text-lg font-black text-slate-950">
+                        {user.displayName}
+                      </h3>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-black ${statusTone[user.status]}`}
+                      >
                         {statusLabels[user.status]}
                       </span>
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-black ${user.role === 'owner' ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-black ${user.role === 'owner' ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-700'}`}
+                      >
                         {roleLabels[user.role]}
                       </span>
                     </div>
-                    <p className="mt-1 break-all text-sm text-slate-500">{user.email}</p>
-                    <p className="mt-2 break-all text-xs text-slate-400">UID: {user.uid}</p>
+                    <p className="mt-1 break-all text-sm text-slate-500">
+                      {user.email}
+                    </p>
+                    <p className="mt-2 break-all text-xs text-slate-400">
+                      UID: {user.uid}
+                    </p>
                   </div>
                 </div>
 
                 <div className="grid gap-2 sm:grid-cols-3 xl:min-w-[430px]">
                   <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                    <p className="text-xs font-black uppercase tracking-[0.1em] text-slate-400">Почта</p>
-                    <p className={`mt-1 text-sm font-black ${user.auth.emailVerified ? 'text-emerald-700' : 'text-red-700'}`}>
-                      {user.auth.emailVerified ? 'Подтверждена' : 'Не подтверждена'}
+                    <p className="text-xs font-black uppercase tracking-[0.1em] text-slate-400">
+                      Почта
+                    </p>
+                    <p
+                      className={`mt-1 text-sm font-black ${user.auth.emailVerified ? 'text-emerald-700' : 'text-red-700'}`}
+                    >
+                      {user.auth.emailVerified
+                        ? 'Подтверждена'
+                        : 'Не подтверждена'}
                     </p>
                   </div>
                   <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                    <p className="text-xs font-black uppercase tracking-[0.1em] text-slate-400">Firebase Auth</p>
-                    <p className={`mt-1 text-sm font-black ${!user.auth.exists || user.auth.disabled ? 'text-red-700' : 'text-emerald-700'}`}>
-                      {!user.auth.exists ? 'Нет аккаунта' : user.auth.disabled ? 'Отключён' : 'Активен'}
+                    <p className="text-xs font-black uppercase tracking-[0.1em] text-slate-400">
+                      Firebase Auth
+                    </p>
+                    <p
+                      className={`mt-1 text-sm font-black ${!user.auth.exists || user.auth.disabled ? 'text-red-700' : 'text-emerald-700'}`}
+                    >
+                      {!user.auth.exists
+                        ? 'Нет аккаунта'
+                        : user.auth.disabled
+                          ? 'Отключён'
+                          : 'Активен'}
                     </p>
                   </div>
                   <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                    <p className="text-xs font-black uppercase tracking-[0.1em] text-slate-400">Последний вход</p>
-                    <p className="mt-1 text-sm font-black text-slate-800">{formatDate(user.auth.lastSignInAt)}</p>
+                    <p className="text-xs font-black uppercase tracking-[0.1em] text-slate-400">
+                      Последний вход
+                    </p>
+                    <p className="mt-1 text-sm font-black text-slate-800">
+                      {formatDate(user.auth.lastSignInAt)}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -937,7 +1124,8 @@ function UsersPanel({
                 <div className="mt-5 flex items-start gap-3 rounded-2xl border border-teal-200 bg-teal-50 p-4 text-teal-900">
                   <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0" />
                   <p className="text-sm font-bold">
-                    Основной владелец MedStart. Роль, доступ, Auth и профиль защищены сервером и правилами Firebase.
+                    Основной владелец MedStart. Роль, доступ, Auth и профиль
+                    защищены сервером и правилами Firebase.
                   </p>
                 </div>
               ) : (
@@ -946,21 +1134,45 @@ function UsersPanel({
                     type="button"
                     onClick={() =>
                       onAsk({
-                        title: user.status === 'blocked' ? 'Восстановить доступ?' : 'Заблокировать пользователя?',
+                        title:
+                          user.status === 'blocked'
+                            ? 'Восстановить доступ?'
+                            : 'Заблокировать пользователя?',
                         description:
                           user.status === 'blocked'
                             ? `Firebase Authentication будет включён, а профиль «${user.displayName}» восстановлен в предыдущем статусе.`
                             : `Пользователь «${user.displayName}» будет отключён в Firebase Authentication, а все активные сессии — отозваны.`,
-                        confirmLabel: user.status === 'blocked' ? 'Восстановить доступ' : 'Заблокировать',
+                        confirmLabel:
+                          user.status === 'blocked'
+                            ? 'Восстановить доступ'
+                            : 'Заблокировать',
                         tone: user.status === 'blocked' ? 'primary' : 'danger',
-                        input: { action: 'set_blocked', targetUid: user.uid, blocked: user.status !== 'blocked' },
+                        input: {
+                          action: 'set_blocked',
+                          targetUid: user.uid,
+                          blocked: user.status !== 'blocked',
+                        },
                       })
                     }
-                    disabled={user.status === 'deleted' || (!overview.capabilities.ownerControl && user.profileRole === 'admin')}
-                    className={user.status === 'blocked' ? 'ms-btn ms-btn-secondary ms-btn-sm' : 'ms-btn ms-btn-danger-outline ms-btn-sm'}
+                    disabled={
+                      user.status === 'deleted' ||
+                      (!overview.capabilities.ownerControl &&
+                        user.profileRole === 'admin')
+                    }
+                    className={
+                      user.status === 'blocked'
+                        ? 'ms-btn ms-btn-secondary ms-btn-sm'
+                        : 'ms-btn ms-btn-danger-outline ms-btn-sm'
+                    }
                   >
-                    {user.status === 'blocked' ? <RotateCcw className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
-                    {user.status === 'blocked' ? 'Восстановить' : 'Заблокировать'}
+                    {user.status === 'blocked' ? (
+                      <RotateCcw className="h-4 w-4" />
+                    ) : (
+                      <Ban className="h-4 w-4" />
+                    )}
+                    {user.status === 'blocked'
+                      ? 'Восстановить'
+                      : 'Заблокировать'}
                   </button>
 
                   <button
@@ -971,10 +1183,17 @@ function UsersPanel({
                         description: `Пользователь «${user.displayName}» будет вынужден войти в MedStart повторно на всех устройствах.`,
                         confirmLabel: 'Отозвать сессии',
                         tone: 'danger',
-                        input: { action: 'revoke_sessions', targetUid: user.uid },
+                        input: {
+                          action: 'revoke_sessions',
+                          targetUid: user.uid,
+                        },
                       })
                     }
-                    disabled={!user.auth.exists || (!overview.capabilities.ownerControl && user.profileRole === 'admin')}
+                    disabled={
+                      !user.auth.exists ||
+                      (!overview.capabilities.ownerControl &&
+                        user.profileRole === 'admin')
+                    }
                     className="ms-btn ms-btn-secondary ms-btn-sm"
                   >
                     <KeyRound className="h-4 w-4" />
@@ -989,41 +1208,55 @@ function UsersPanel({
                         description: `Firebase отправит письмо на ${user.email}. Пароль не будет виден администрации.`,
                         confirmLabel: 'Отправить письмо',
                         tone: 'primary',
-                        input: { action: 'send_password_reset', targetUid: user.uid },
+                        input: {
+                          action: 'send_password_reset',
+                          targetUid: user.uid,
+                        },
                       })
                     }
-                    disabled={!user.auth.exists || !user.email || (!overview.capabilities.ownerControl && user.profileRole === 'admin')}
+                    disabled={
+                      !user.auth.exists ||
+                      !user.email ||
+                      (!overview.capabilities.ownerControl &&
+                        user.profileRole === 'admin')
+                    }
                     className="ms-btn ms-btn-secondary ms-btn-sm"
                   >
                     <KeyRound className="h-4 w-4" />
                     Сброс пароля
                   </button>
 
-                  {overview.capabilities.verifyEmails && !user.auth.emailVerified && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onAsk({
-                          title: 'Подтвердить почту вручную?',
-                          description: `Используйте это только после проверки, что адрес ${user.email} действительно принадлежит пользователю.`,
-                          confirmLabel: 'Подтвердить почту',
-                          tone: 'primary',
-                          input: { action: 'verify_email', targetUid: user.uid },
-                        })
-                      }
-                      className="ms-btn ms-btn-secondary ms-btn-sm"
-                    >
-                      <MailCheck className="h-4 w-4" />
-                      Подтвердить почту
-                    </button>
-                  )}
+                  {overview.capabilities.verifyEmails &&
+                    !user.auth.emailVerified && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onAsk({
+                            title: 'Подтвердить почту вручную?',
+                            description: `Используйте это только после проверки, что адрес ${user.email} действительно принадлежит пользователю.`,
+                            confirmLabel: 'Подтвердить почту',
+                            tone: 'primary',
+                            input: {
+                              action: 'verify_email',
+                              targetUid: user.uid,
+                            },
+                          })
+                        }
+                        className="ms-btn ms-btn-secondary ms-btn-sm"
+                      >
+                        <MailCheck className="h-4 w-4" />
+                        Подтвердить почту
+                      </button>
+                    )}
 
-                  {overview.capabilities.manageRoles && user.status !== 'blocked' && user.status !== 'deleted' && (
-                    <RoleControl user={user} onAsk={onAsk} />
-                  )}
+                  {overview.capabilities.manageRoles &&
+                    user.status !== 'blocked' &&
+                    user.status !== 'deleted' && (
+                      <RoleControl user={user} onAsk={onAsk} />
+                    )}
 
-                  {overview.capabilities.archiveUsers && (
-                    user.status === 'deleted' ? (
+                  {overview.capabilities.archiveUsers &&
+                    (user.status === 'deleted' ? (
                       <button
                         type="button"
                         onClick={() =>
@@ -1032,7 +1265,10 @@ function UsersPanel({
                             description: `Firebase Authentication будет включён. Репетитор после восстановления снова пройдёт модерацию.`,
                             confirmLabel: 'Восстановить аккаунт',
                             tone: 'primary',
-                            input: { action: 'restore_user', targetUid: user.uid },
+                            input: {
+                              action: 'restore_user',
+                              targetUid: user.uid,
+                            },
                           })
                         }
                         className="ms-btn ms-btn-secondary ms-btn-sm"
@@ -1050,16 +1286,17 @@ function UsersPanel({
                             confirmLabel: 'Архивировать',
                             tone: 'danger',
                             requireWord: 'АРХИВ',
-                            input: { action: 'archive_user', targetUid: user.uid },
+                            input: {
+                              action: 'archive_user',
+                              targetUid: user.uid,
+                            },
                           })
                         }
                         className="ms-btn ms-btn-danger-outline ms-btn-sm"
                       >
-                        <Archive className="h-4 w-4" />
-                        В архив
+                        <Archive className="h-4 w-4" />В архив
                       </button>
-                    )
-                  )}
+                    ))}
                 </div>
               )}
             </article>
@@ -1070,7 +1307,13 @@ function UsersPanel({
   )
 }
 
-function RoleControl({ user, onAsk }: { user: AdminUserRecord; onAsk: (state: ConfirmState) => void }) {
+function RoleControl({
+  user,
+  onAsk,
+}: {
+  user: AdminUserRecord
+  onAsk: (state: ConfirmState) => void
+}) {
   const [nextRole, setNextRole] = useState<UserRole>(user.profileRole)
 
   useEffect(() => {
@@ -1085,7 +1328,7 @@ function RoleControl({ user, onAsk }: { user: AdminUserRecord; onAsk: (state: Co
         className="rounded-xl bg-transparent px-2 py-1.5 text-sm font-black text-slate-700 outline-none"
         aria-label={`Новая роль для ${user.displayName}`}
       >
-        <option value="student">Студент</option>
+        <option value="student">Ученик</option>
         <option value="tutor">Репетитор</option>
         <option value="admin">Администратор</option>
       </select>
@@ -1097,7 +1340,7 @@ function RoleControl({ user, onAsk }: { user: AdminUserRecord; onAsk: (state: Co
             description:
               nextRole === 'tutor'
                 ? `Пользователь «${user.displayName}» станет репетитором и будет отправлен на обязательную модерацию.`
-                : `Роль пользователя «${user.displayName}» будет изменена на «${nextRole === 'admin' ? 'Администратор' : 'Студент'}».`,
+                : `Роль пользователя «${user.displayName}» будет изменена на «${nextRole === 'admin' ? 'Администратор' : 'Ученик'}».`,
             confirmLabel: 'Изменить роль',
             tone: 'primary',
             input: { action: 'set_role', targetUid: user.uid, role: nextRole },
@@ -1130,15 +1373,25 @@ function BookingsPanel({
     <section className="space-y-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-2xl font-black text-slate-950">Контроль занятий</h2>
+          <h2 className="text-2xl font-black text-slate-950">
+            Контроль занятий
+          </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-            Просматривайте последние записи. Изменение статуса доступно только владельцу и должно использоваться для разрешения спорных или аварийных ситуаций.
+            Просматривайте последние записи. Изменение статуса доступно только
+            владельцу и должно использоваться для разрешения спорных или
+            аварийных ситуаций.
           </p>
         </div>
-        <select value={filter} onChange={(event) => onFilter(event.target.value as typeof filter)} className={`${inputClass} sm:w-64`}>
+        <select
+          value={filter}
+          onChange={(event) => onFilter(event.target.value as typeof filter)}
+          className={`${inputClass} sm:w-64`}
+        >
           <option value="all">Все статусы</option>
           {Object.entries(bookingStatusLabels).map(([value, label]) => (
-            <option key={value} value={value}>{label}</option>
+            <option key={value} value={value}>
+              {label}
+            </option>
           ))}
         </select>
       </div>
@@ -1150,21 +1403,34 @@ function BookingsPanel({
           </div>
         ) : (
           bookings.map((booking) => (
-            <article key={booking.id} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+            <article
+              key={booking.id}
+              className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"
+            >
               <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-lg font-black text-slate-950">{booking.subject || 'Медицинское занятие'}</h3>
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-black ${bookingTone[booking.status]}`}>
+                    <h3 className="text-lg font-black text-slate-950">
+                      {booking.subject || 'Медицинское занятие'}
+                    </h3>
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-black ${bookingTone[booking.status]}`}
+                    >
                       {bookingStatusLabels[booking.status]}
                     </span>
                   </div>
                   <p className="mt-2 text-sm text-slate-600">
-                    <span className="font-black">{booking.studentName}</span> → <span className="font-black">{booking.tutorName}</span>
+                    <span className="font-black">{booking.studentName}</span> →{' '}
+                    <span className="font-black">{booking.tutorName}</span>
                   </p>
                   <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-500">
-                    <span>{booking.requestedDate || 'Дата не указана'} · {booking.requestedTime || '—'}</span>
-                    <span>{booking.format === 'in_person' ? 'Очно' : 'Онлайн'}</span>
+                    <span>
+                      {booking.requestedDate || 'Дата не указана'} ·{' '}
+                      {booking.requestedTime || '—'}
+                    </span>
+                    <span>
+                      {booking.format === 'in_person' ? 'Очно' : 'Онлайн'}
+                    </span>
                     <span>{money(booking.price)}</span>
                     <span>ID: {booking.id}</span>
                   </div>
@@ -1172,7 +1438,14 @@ function BookingsPanel({
 
                 {ownerControl ? (
                   <div className="flex flex-wrap gap-2">
-                    {(['pending', 'accepted', 'completed', 'cancelled'] as BookingStatus[])
+                    {(
+                      [
+                        'pending',
+                        'accepted',
+                        'completed',
+                        'cancelled',
+                      ] as BookingStatus[]
+                    )
                       .filter((status) => status !== booking.status)
                       .map((status) => (
                         <button
@@ -1183,11 +1456,20 @@ function BookingsPanel({
                               title: 'Изменить статус занятия?',
                               description: `Статус занятия «${booking.subject || booking.id}» будет изменён: «${bookingStatusLabels[booking.status]}» → «${bookingStatusLabels[status]}».`,
                               confirmLabel: bookingStatusLabels[status],
-                              tone: status === 'cancelled' ? 'danger' : 'primary',
-                              input: { action: 'set_booking_status', bookingId: booking.id, status },
+                              tone:
+                                status === 'cancelled' ? 'danger' : 'primary',
+                              input: {
+                                action: 'set_booking_status',
+                                bookingId: booking.id,
+                                status,
+                              },
                             })
                           }
-                          className={status === 'cancelled' ? 'ms-btn ms-btn-danger-outline ms-btn-sm' : 'ms-btn ms-btn-secondary ms-btn-sm'}
+                          className={
+                            status === 'cancelled'
+                              ? 'ms-btn ms-btn-danger-outline ms-btn-sm'
+                              : 'ms-btn ms-btn-secondary ms-btn-sm'
+                          }
                         >
                           {bookingStatusLabels[status]}
                         </button>
@@ -1225,9 +1507,12 @@ function AuditPanel({ audit }: { audit: AdminAuditRecord[] }) {
   return (
     <section className="space-y-5">
       <div>
-        <h2 className="text-2xl font-black text-slate-950">Журнал административных действий</h2>
+        <h2 className="text-2xl font-black text-slate-950">
+          Журнал административных действий
+        </h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-          Неизменяемая история критических операций: кто, когда и над каким объектом выполнил действие.
+          Неизменяемая история критических операций: кто, когда и над каким
+          объектом выполнил действие.
         </p>
       </div>
 
@@ -1238,7 +1523,10 @@ function AuditPanel({ audit }: { audit: AdminAuditRecord[] }) {
       ) : (
         <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
           {audit.map((item, index) => (
-            <article key={item.id} className={`p-5 ${index ? 'border-t border-slate-100' : ''}`}>
+            <article
+              key={item.id}
+              className={`p-5 ${index ? 'border-t border-slate-100' : ''}`}
+            >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -1246,18 +1534,26 @@ function AuditPanel({ audit }: { audit: AdminAuditRecord[] }) {
                       {actionLabels[item.action] || item.action}
                     </span>
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-600">
-                      {item.actorRole === 'owner' ? 'Владелец' : 'Администратор'}
+                      {item.actorRole === 'owner'
+                        ? 'Владелец'
+                        : 'Администратор'}
                     </span>
                   </div>
-                  <p className="mt-3 font-black text-slate-950">{item.summary}</p>
+                  <p className="mt-3 font-black text-slate-950">
+                    {item.summary}
+                  </p>
                   <p className="mt-2 text-sm text-slate-500">
                     {item.actorName} · {item.actorEmail || item.actorUid}
                   </p>
                   {item.targetUid && (
-                    <p className="mt-1 break-all text-xs text-slate-400">Объект: {item.targetType || 'record'} · {item.targetUid}</p>
+                    <p className="mt-1 break-all text-xs text-slate-400">
+                      Объект: {item.targetType || 'record'} · {item.targetUid}
+                    </p>
                   )}
                 </div>
-                <time className="shrink-0 text-sm font-bold text-slate-500">{formatDate(item.createdAt)}</time>
+                <time className="shrink-0 text-sm font-bold text-slate-500">
+                  {formatDate(item.createdAt)}
+                </time>
               </div>
             </article>
           ))}
@@ -1298,9 +1594,12 @@ function SystemPanel({ overview }: { overview: AdminOverviewResponse }) {
   return (
     <section className="space-y-6">
       <div>
-        <h2 className="text-2xl font-black text-slate-950">Состояние системы</h2>
+        <h2 className="text-2xl font-black text-slate-950">
+          Состояние системы
+        </h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-          Безопасная диагностика административного контура без отображения секретов, ключей или персональных токенов.
+          Безопасная диагностика административного контура без отображения
+          секретов, ключей или персональных токенов.
         </p>
       </div>
 
@@ -1308,15 +1607,26 @@ function SystemPanel({ overview }: { overview: AdminOverviewResponse }) {
         {checks.map((check) => {
           const Icon = check.icon
           return (
-            <article key={check.title} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+            <article
+              key={check.title}
+              className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"
+            >
               <div className="flex items-start justify-between gap-4">
-                <span className={`grid h-11 w-11 place-items-center rounded-2xl ${check.ready ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                <span
+                  className={`grid h-11 w-11 place-items-center rounded-2xl ${check.ready ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}
+                >
                   <Icon className="h-5 w-5" />
                 </span>
-                {check.ready ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : <XCircle className="h-5 w-5 text-red-600" />}
+                {check.ready ? (
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                ) : (
+                  <XCircle className="h-5 w-5 text-red-600" />
+                )}
               </div>
               <h3 className="mt-5 font-black text-slate-950">{check.title}</h3>
-              <p className="mt-2 break-all text-sm text-slate-500">{check.note}</p>
+              <p className="mt-2 break-all text-sm text-slate-500">
+                {check.note}
+              </p>
             </article>
           )
         })}
@@ -1328,9 +1638,14 @@ function SystemPanel({ overview }: { overview: AdminOverviewResponse }) {
             <LockKeyhole className="h-6 w-6" />
           </span>
           <div>
-            <h3 className="text-xl font-black text-slate-950">Защита основного владельца</h3>
+            <h3 className="text-xl font-black text-slate-950">
+              Защита основного владельца
+            </h3>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              UID владельца закреплён в клиентском access-control, серверных административных маршрутах и Firestore Rules. Его нельзя заблокировать, архивировать, понизить или заменить через интерфейс.
+              UID владельца закреплён в клиентском access-control, серверных
+              административных маршрутах и Firestore Rules. Его нельзя
+              заблокировать, архивировать, понизить или заменить через
+              интерфейс.
             </p>
             <p className="mt-3 text-sm font-black text-teal-800">
               Последняя диагностика: {formatDate(overview.system.generatedAt)}
@@ -1340,20 +1655,37 @@ function SystemPanel({ overview }: { overview: AdminOverviewResponse }) {
       </article>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Link href="/api/health/auth" className="group rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm transition hover:border-teal-200">
+        <Link
+          href="/api/health/auth"
+          className="group rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm transition hover:border-teal-200"
+        >
           <Activity className="h-6 w-6 text-teal-700" />
-          <h3 className="mt-4 font-black text-slate-950">Проверка авторизации</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-500">Состояние Firebase Admin и владельца.</p>
+          <h3 className="mt-4 font-black text-slate-950">
+            Проверка авторизации
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Состояние Firebase Admin и владельца.
+          </p>
         </Link>
-        <Link href="/dashboard/knowledge" className="group rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm transition hover:border-teal-200">
+        <Link
+          href="/dashboard/knowledge"
+          className="group rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm transition hover:border-teal-200"
+        >
           <BookOpenCheck className="h-6 w-6 text-teal-700" />
           <h3 className="mt-4 font-black text-slate-950">Учебная база</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-500">Материалы и очередь модерации.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Материалы и очередь модерации.
+          </p>
         </Link>
-        <Link href="/dashboard/settings" className="group rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm transition hover:border-teal-200">
+        <Link
+          href="/dashboard/settings"
+          className="group rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm transition hover:border-teal-200"
+        >
           <SlidersHorizontal className="h-6 w-6 text-teal-700" />
           <h3 className="mt-4 font-black text-slate-950">Настройки аккаунта</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-500">Безопасность и параметры владельца.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Безопасность и параметры владельца.
+          </p>
         </Link>
       </div>
     </section>

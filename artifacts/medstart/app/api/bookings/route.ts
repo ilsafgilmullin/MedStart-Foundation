@@ -217,7 +217,9 @@ function validateTutorAvailability(
     requestedStart < start ||
     requestedStart + durationMinutes > end
   ) {
-    throw new Error('Выбранное время находится вне рабочего расписания репетитора.')
+    throw new Error(
+      'Выбранное время находится вне рабочего расписания репетитора.',
+    )
   }
 }
 
@@ -255,14 +257,19 @@ function stringProfileField(profile: UnknownRecord, field: string) {
 }
 
 function activeBooking(data: UnknownRecord) {
-  return typeof data.status === 'string' && ACTIVE_BOOKING_STATUSES.has(data.status)
+  return (
+    typeof data.status === 'string' && ACTIVE_BOOKING_STATUSES.has(data.status)
+  )
 }
 
 export async function POST(request: NextRequest) {
   try {
     const token = authorizationToken(request)
     if (!token) {
-      return NextResponse.json({ error: 'Требуется авторизация.' }, { status: 401 })
+      return NextResponse.json(
+        { error: 'Требуется авторизация.' },
+        { status: 401 },
+      )
     }
 
     const decoded = await getFirebaseAdminAuth().verifyIdToken(token, true)
@@ -324,8 +331,10 @@ export async function POST(request: NextRequest) {
         transaction.get(studentBookingsQuery),
       ])
 
-      if (!studentSnapshot.exists) throw new Error('Профиль студента не найден.')
-      if (!tutorSnapshot.exists) throw new Error('Профиль репетитора не найден.')
+      if (!studentSnapshot.exists)
+        throw new Error('Профиль студента не найден.')
+      if (!tutorSnapshot.exists)
+        throw new Error('Профиль репетитора не найден.')
 
       const student = studentSnapshot.data() as UnknownRecord
       const tutor = tutorSnapshot.data() as UnknownRecord
@@ -338,6 +347,39 @@ export async function POST(request: NextRequest) {
         tutor.isPublic !== true
       ) {
         throw new Error('Этот репетитор пока недоступен для записи.')
+      }
+
+      const learnerTrack =
+        student.learnerTrack === 'school' ? 'school' : 'medical'
+      const tutorAudiences = Array.isArray(tutor.tutorAudiences)
+        ? tutor.tutorAudiences.filter(
+            (item): item is 'medical' | 'school' =>
+              item === 'medical' || item === 'school',
+          )
+        : ['medical']
+      if (!tutorAudiences.includes(learnerTrack)) {
+        throw new Error(
+          learnerTrack === 'school'
+            ? 'Этот преподаватель не проводит занятия со школьниками.'
+            : 'Этот преподаватель не проводит занятия со студентами медвузов.',
+        )
+      }
+      const schoolExam =
+        learnerTrack === 'school' &&
+        (student.schoolExam === 'oge' || student.schoolExam === 'ege')
+          ? student.schoolExam
+          : ''
+      if (learnerTrack === 'school') {
+        const tutorExamTypes = Array.isArray(tutor.examTypes)
+          ? tutor.examTypes.filter(
+              (item): item is 'oge' | 'ege' => item === 'oge' || item === 'ege',
+            )
+          : []
+        if (!schoolExam || !tutorExamTypes.includes(schoolExam)) {
+          throw new Error(
+            'Этот преподаватель не готовит к выбранному в профиле экзамену.',
+          )
+        }
       }
 
       const lessonFormats = Array.isArray(tutor.lessonFormats)
@@ -355,7 +397,9 @@ export async function POST(request: NextRequest) {
       )
       const price = numericProfileField(tutor, 'lessonPrice', 0)
       if (durationMinutes < 30 || durationMinutes > 180) {
-        throw new Error('У репетитора указана некорректная длительность занятия.')
+        throw new Error(
+          'У репетитора указана некорректная длительность занятия.',
+        )
       }
       if (price < 0 || price > 10_000_000) {
         throw new Error('У репетитора указана некорректная стоимость занятия.')
@@ -381,16 +425,21 @@ export async function POST(request: NextRequest) {
             : 60,
         )
         const existingEndMs = existingStartMs + existingDuration * 60_000
-        if (requestedStartMs < existingEndMs && requestedEndMs > existingStartMs) {
+        if (
+          requestedStartMs < existingEndMs &&
+          requestedEndMs > existingStartMs
+        ) {
           throw new Error('Это время уже занято другой заявкой или занятием.')
         }
       }
 
-      const activeStudentBookings = studentBookingsSnapshot.docs.filter((item) =>
-        activeBooking(item.data() as UnknownRecord),
+      const activeStudentBookings = studentBookingsSnapshot.docs.filter(
+        (item) => activeBooking(item.data() as UnknownRecord),
       ).length
       if (activeStudentBookings >= MAX_ACTIVE_STUDENT_BOOKINGS) {
-        throw new Error('Слишком много активных заявок. Завершите или отмените часть из них.')
+        throw new Error(
+          'Слишком много активных заявок. Завершите или отмените часть из них.',
+        )
       }
 
       const studentName = stringProfileField(student, 'displayName')
@@ -410,6 +459,13 @@ export async function POST(request: NextRequest) {
         tutorUid: input.tutorUid,
         tutorName,
         tutorAvatar: stringProfileField(tutor, 'avatar'),
+        learnerTrack,
+        ...(learnerTrack === 'school'
+          ? {
+              schoolExam,
+              schoolGrade: stringProfileField(student, 'schoolGrade'),
+            }
+          : {}),
         subject: input.subject,
         goal: input.goal,
         requestedDate: input.requestedDate,
@@ -438,15 +494,20 @@ export async function POST(request: NextRequest) {
         updatedAt: timestamp,
       }
       if (conversationSnapshot.exists) {
-        const existingConversation = conversationSnapshot.data() as UnknownRecord
-        const existingParticipants = Array.isArray(existingConversation.participantUids)
+        const existingConversation =
+          conversationSnapshot.data() as UnknownRecord
+        const existingParticipants = Array.isArray(
+          existingConversation.participantUids,
+        )
           ? existingConversation.participantUids
           : []
         if (
           existingParticipants.length !== 2 ||
           !participantUids.every((uid) => existingParticipants.includes(uid))
         ) {
-          throw new Error('Существующий диалог имеет некорректный состав участников.')
+          throw new Error(
+            'Существующий диалог имеет некорректный состав участников.',
+          )
         }
         transaction.update(conversationRef, conversationUpdate)
       } else {

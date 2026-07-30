@@ -4,7 +4,13 @@ import {
   initializeTestEnvironment,
 } from '@firebase/rules-unit-testing'
 import { readFile } from 'node:fs/promises'
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
+import {
+  doc,
+  getDoc,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+} from 'firebase/firestore'
 
 const projectId = process.env.GCLOUD_PROJECT || 'demo-medstart'
 const firestoreRules = await readFile('firestore.secure.rules', 'utf8')
@@ -73,18 +79,47 @@ async function run() {
   // Profile creation is server-only. Neither verified nor unverified clients may
   // bypass the MedStart registration API and create their own active profile.
   await assertFails(
-    setDoc(doc(unverified.firestore(), 'users', uid), studentProfile(uid, email)),
+    setDoc(
+      doc(unverified.firestore(), 'users', uid),
+      studentProfile(uid, email),
+    ),
   )
   await assertFails(
     setDoc(doc(verified.firestore(), 'users', uid), studentProfile(uid, email)),
   )
 
   await environment.withSecurityRulesDisabled(async (context) => {
-    await setDoc(doc(context.firestore(), 'users', uid), studentProfile(uid, email))
+    await setDoc(
+      doc(context.firestore(), 'users', uid),
+      studentProfile(uid, email),
+    )
   })
 
   await assertFails(getDoc(doc(unverified.firestore(), 'users', uid)))
   await assertSucceeds(getDoc(doc(verified.firestore(), 'users', uid)))
+  await assertSucceeds(
+    updateDoc(doc(verified.firestore(), 'users', uid), {
+      learnerTrack: 'school',
+      schoolGrade: '9',
+      schoolExam: 'oge',
+      schoolConsentConfirmed: true,
+      subjects: ['Русский язык', 'Математика'],
+      updatedAt: serverTimestamp(),
+    }),
+  )
+  await assertFails(
+    updateDoc(doc(verified.firestore(), 'users', uid), {
+      schoolGrade: '10',
+      schoolExam: 'oge',
+      updatedAt: serverTimestamp(),
+    }),
+  )
+  await assertFails(
+    updateDoc(doc(verified.firestore(), 'users', uid), {
+      schoolConsentConfirmed: false,
+      updatedAt: serverTimestamp(),
+    }),
+  )
 
   const mismatchedUid = 'auth-email-mismatch'
   const mismatched = environment.authenticatedContext(mismatchedUid, {
@@ -136,8 +171,12 @@ async function run() {
     })
   })
 
-  await assertSucceeds(getDoc(doc(owner.firestore(), 'adminAuditLogs', 'seed-audit')))
-  await assertFails(getDoc(doc(admin.firestore(), 'adminAuditLogs', 'seed-audit')))
+  await assertSucceeds(
+    getDoc(doc(owner.firestore(), 'adminAuditLogs', 'seed-audit')),
+  )
+  await assertFails(
+    getDoc(doc(admin.firestore(), 'adminAuditLogs', 'seed-audit')),
+  )
   await assertFails(
     setDoc(doc(owner.firestore(), 'adminAuditLogs', 'client-created'), {
       actorUid: ownerUid,
@@ -146,7 +185,9 @@ async function run() {
     }),
   )
 
-  console.log('Authentication and server-only registration Firebase rules suite passed.')
+  console.log(
+    'Authentication and server-only registration Firebase rules suite passed.',
+  )
 }
 
 try {

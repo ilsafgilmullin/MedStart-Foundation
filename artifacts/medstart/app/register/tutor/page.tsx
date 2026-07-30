@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { BadgeCheck, LoaderCircle } from 'lucide-react'
+import { BadgeCheck, GraduationCap, LoaderCircle, School } from 'lucide-react'
 import {
   AuthShell,
   authInputClass,
@@ -12,32 +12,54 @@ import { PasswordRequirements } from '@/components/auth/PasswordRequirements'
 import { useHydrated } from '@/hooks/useHydrated'
 import { useTutorRegistration } from '@/hooks/useTutorRegistration'
 import { ROUTES } from '@/lib/constants'
+import {
+  SCHOOL_EXAM_LABELS,
+  subjectsForExam,
+  type LearnerTrack,
+  type SchoolExam,
+} from '@/lib/education'
 
 export default function RegisterTutorPage() {
   const form = useTutorRegistration()
   const hydrated = useHydrated()
   const disabled = form.loading || !hydrated
+  const suggestedSchoolSubjects = [
+    ...new Map(
+      form.examTypes
+        .flatMap((exam) => subjectsForExam(exam))
+        .map((subject) => [subject.value, subject]),
+    ).values(),
+  ]
 
   return (
     <AuthShell
       wide
       eyebrow="Анкета репетитора"
       title="Преподавайте в MedStart"
-      description="Заполните профессиональный профиль. После подтверждения почты анкета поступит на модерацию и появится в каталоге только после одобрения."
+      description="Заполните профессиональный профиль для занятий со школьниками, студентами медвузов или обеими группами. После подтверждения почты анкета поступит на модерацию."
       footer={
         <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-          <Link href={ROUTES.LOGIN} className="font-semibold text-teal-700 hover:text-teal-900">
+          <Link
+            href={ROUTES.LOGIN}
+            className="font-semibold text-teal-700 hover:text-teal-900"
+          >
             Уже есть аккаунт
           </Link>
-          <Link href={ROUTES.REGISTER.STUDENT} className="font-semibold text-teal-700 hover:text-teal-900">
-            Зарегистрироваться как студент
+          <Link
+            href={ROUTES.REGISTER.STUDENT}
+            className="font-semibold text-teal-700 hover:text-teal-900"
+          >
+            Зарегистрироваться как ученик
           </Link>
         </div>
       }
     >
       <div className="mb-6 flex items-start gap-3 rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm leading-6 text-violet-950">
         <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-violet-700" />
-        <p>Статус нового профиля — «На проверке». Публикация, стоимость и сведения о квалификации проверяются модератором.</p>
+        <p>
+          Статус нового профиля — «На проверке». Модератор проверит
+          квалификацию, направления подготовки и сведения для каталога.
+        </p>
       </div>
 
       <form onSubmit={form.handleSubmit} className="space-y-7" noValidate>
@@ -87,14 +109,84 @@ export default function RegisterTutorPage() {
         </section>
 
         <section className="space-y-5 border-t border-slate-200 pt-7">
-          <h2 className="text-lg font-bold text-slate-900">Профессиональный профиль</h2>
+          <h2 className="text-lg font-bold text-slate-900">
+            Профессиональный профиль
+          </h2>
+          <fieldset>
+            <legend className="text-sm font-semibold text-slate-700">
+              С кем вы проводите занятия *
+            </legend>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {[
+                {
+                  value: 'school' as LearnerTrack,
+                  label: 'Школьники',
+                  hint: 'ОГЭ и ЕГЭ',
+                  icon: School,
+                },
+                {
+                  value: 'medical' as LearnerTrack,
+                  label: 'Студенты медвузов',
+                  hint: 'Медицинские дисциплины',
+                  icon: GraduationCap,
+                },
+              ].map((item) => {
+                const Icon = item.icon
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    disabled={disabled}
+                    aria-pressed={form.tutorAudiences.includes(item.value)}
+                    onClick={() => form.toggleAudience(item.value)}
+                    className="ms-choice ms-choice-block min-h-20 justify-start text-left"
+                  >
+                    <Icon className="h-5 w-5 shrink-0" />
+                    <span>
+                      <span className="block font-bold">{item.label}</span>
+                      <span className="mt-1 block text-xs font-medium opacity-75">
+                        {item.hint}
+                      </span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </fieldset>
+
+          {form.tutorAudiences.includes('school') && (
+            <fieldset className="rounded-3xl border border-sky-200 bg-sky-50/60 p-4 sm:p-5">
+              <legend className="px-1 text-sm font-semibold text-slate-700">
+                К каким экзаменам готовите *
+              </legend>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {(
+                  Object.entries(SCHOOL_EXAM_LABELS) as Array<
+                    [SchoolExam, string]
+                  >
+                ).map(([exam, label]) => (
+                  <button
+                    key={exam}
+                    type="button"
+                    disabled={disabled}
+                    aria-pressed={form.examTypes.includes(exam)}
+                    onClick={() => form.toggleExamType(exam)}
+                    className="ms-choice ms-choice-block justify-start"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          )}
+
           <label className="block space-y-2 text-sm font-semibold text-slate-700">
             Специализация *
             <input
               required
               disabled={disabled}
               className={authInputClass}
-              placeholder="Например: анатомия и физиология"
+              placeholder="Например: химия ОГЭ/ЕГЭ или анатомия и физиология"
               value={form.specialization}
               onChange={(event) => form.setSpecialization(event.target.value)}
             />
@@ -109,8 +201,32 @@ export default function RegisterTutorPage() {
               value={form.subjects}
               onChange={(event) => form.setSubjects(event.target.value)}
             />
-            <span className="block text-xs font-normal text-slate-400">Перечислите через запятую.</span>
+            <span className="block text-xs font-normal text-slate-400">
+              Перечислите через запятую.
+            </span>
           </label>
+
+          {form.tutorAudiences.includes('school') &&
+            suggestedSchoolSubjects.length > 0 && (
+              <div>
+                <p className="text-sm font-semibold text-slate-700">
+                  Быстро добавить школьные предметы
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {suggestedSchoolSubjects.map((subject) => (
+                    <button
+                      key={subject.value}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => form.addSuggestedSubject(subject.value)}
+                      className="ms-choice ms-choice-pill"
+                    >
+                      {subject.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="space-y-2 text-sm font-semibold text-slate-700">
@@ -175,7 +291,9 @@ export default function RegisterTutorPage() {
           </div>
 
           <div>
-            <p className="text-sm font-semibold text-slate-700">Формат занятий *</p>
+            <p className="text-sm font-semibold text-slate-700">
+              Формат занятий *
+            </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
@@ -211,7 +329,9 @@ export default function RegisterTutorPage() {
         </section>
 
         <section className="space-y-5 border-t border-slate-200 pt-7">
-          <h2 className="text-lg font-bold text-slate-900">Безопасность аккаунта</h2>
+          <h2 className="text-lg font-bold text-slate-900">
+            Безопасность аккаунта
+          </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <PasswordField
               label="Пароль *"

@@ -82,16 +82,33 @@ service cloud.firestore {
         && data.displayName.size() <= 160
         && data.avatar is string
         && data.avatar.size() <= 2000
+        && (!(data.keys().hasAny(['learnerTrack']))
+          || data.learnerTrack in ['medical', 'school'])
         && (!(data.keys().hasAny(['fieldOfStudy']))
           || (data.fieldOfStudy is string && data.fieldOfStudy.size() <= 120))
         && (!(data.keys().hasAny(['studyYear']))
           || (data.studyYear is string && data.studyYear.size() <= 20))
+        && (!(data.keys().hasAny(['schoolGrade']))
+          || data.schoolGrade in ['8', '9', '10', '11'])
+        && (!(data.keys().hasAny(['schoolExam']))
+          || data.schoolExam in ['oge', 'ege'])
+        && (!(data.keys().hasAny(['schoolConsentConfirmed']))
+          || data.schoolConsentConfirmed is bool)
         && (!(data.keys().hasAny(['title']))
           || (data.title is string && data.title.size() <= 160))
         && (!(data.keys().hasAny(['specialization']))
           || (data.specialization is string && data.specialization.size() <= 180))
         && (!(data.keys().hasAny(['subjects']))
           || (data.subjects is list && data.subjects.size() <= 30))
+        && (!(data.keys().hasAny(['tutorAudiences']))
+          || (data.tutorAudiences is list
+            && data.tutorAudiences.size() > 0
+            && data.tutorAudiences.size() <= 2
+            && data.tutorAudiences.hasOnly(['medical', 'school'])))
+        && (!(data.keys().hasAny(['examTypes']))
+          || (data.examTypes is list
+            && data.examTypes.size() <= 2
+            && data.examTypes.hasOnly(['oge', 'ege'])))
         && (!(data.keys().hasAny(['institution']))
           || (data.institution is string && data.institution.size() <= 240))
         && (!(data.keys().hasAny(['experience']))
@@ -119,6 +136,27 @@ service cloud.firestore {
             && data.timezone.size() <= 80))
         && (!(data.keys().hasAny(['notificationPreferences']))
           || validNotificationPreferences(data.notificationPreferences))
+        && (!(data.keys().hasAny(['learnerTrack']))
+          || data.learnerTrack != 'school'
+          || (
+            data.schoolConsentConfirmed == true
+            && data.subjects is list
+            && data.subjects.size() > 0
+            && (
+              (data.schoolExam == 'oge'
+                && data.schoolGrade in ['8', '9'])
+              || (data.schoolExam == 'ege'
+                && data.schoolGrade in ['10', '11'])
+            )
+          ))
+        && (!(data.keys().hasAny(['tutorAudiences']))
+          || !data.tutorAudiences.hasAny(['school'])
+          || (
+            data.examTypes is list
+            && data.examTypes.size() > 0
+            && data.subjects is list
+            && data.subjects.size() > 0
+          ))
         && data.onboardingCompleted is bool
         && data.updatedAt is timestamp;
     }
@@ -126,8 +164,10 @@ service cloud.firestore {
     function validNewProfile(userId) {
       return request.resource.data.keys().hasOnly([
           'uid', 'firstName', 'lastName', 'displayName', 'email', 'role',
-          'status', 'statusBeforeBlock', 'avatar', 'fieldOfStudy',
-          'studyYear', 'title', 'specialization', 'subjects',
+          'status', 'statusBeforeBlock', 'avatar', 'learnerTrack',
+          'fieldOfStudy', 'studyYear', 'schoolGrade', 'schoolExam',
+          'schoolConsentConfirmed', 'title', 'specialization', 'subjects',
+          'tutorAudiences', 'examTypes',
           'institution', 'experience', 'bio', 'city', 'lessonPrice',
           'lessonDuration', 'lessonFormats', 'timezone', 'rating',
           'reviewsCount', 'isPublic', 'notificationPreferences',
@@ -168,8 +208,10 @@ service cloud.firestore {
         && request.resource.data.isPublic == resource.data.isPublic
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'firstName', 'lastName', 'displayName', 'avatar',
-          'fieldOfStudy', 'studyYear', 'title', 'specialization',
-          'subjects', 'institution', 'experience', 'bio', 'city',
+          'learnerTrack', 'fieldOfStudy', 'studyYear', 'schoolGrade',
+          'schoolExam', 'schoolConsentConfirmed', 'title', 'specialization',
+          'subjects', 'tutorAudiences', 'examTypes', 'institution',
+          'experience', 'bio', 'city',
           'lessonPrice', 'lessonDuration', 'lessonFormats', 'timezone',
           'notificationPreferences', 'onboardingCompleted', 'updatedAt'
         ])

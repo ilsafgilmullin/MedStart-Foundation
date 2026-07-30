@@ -1,11 +1,6 @@
 'use client'
 
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   Activity,
   AlertTriangle,
@@ -53,6 +48,7 @@ import {
   type MedicalWorkspaceData,
   type PrivacyChecklist,
 } from '@/lib/medical-workspace'
+import type { LearnerTrack } from '@/lib/education'
 
 interface MedicalWorkspaceProps {
   bookingId: string
@@ -61,6 +57,7 @@ interface MedicalWorkspaceProps {
   tutorUid: string
   canClear: boolean
   participantRole: 'student' | 'tutor'
+  learnerTrack?: LearnerTrack
 }
 
 type SaveState = 'loading' | 'saved' | 'saving' | 'error'
@@ -71,13 +68,33 @@ const moduleItems: Array<{
   shortLabel: string
   icon: typeof LayoutDashboard
 }> = [
-  { id: 'board', label: 'Умная доска', shortLabel: 'Доска', icon: LayoutDashboard },
-  { id: 'imaging', label: 'Медицинские снимки', shortLabel: 'Снимки', icon: ImageIcon },
+  {
+    id: 'board',
+    label: 'Умная доска',
+    shortLabel: 'Доска',
+    icon: LayoutDashboard,
+  },
+  {
+    id: 'imaging',
+    label: 'Медицинские снимки',
+    shortLabel: 'Снимки',
+    icon: ImageIcon,
+  },
   { id: 'anatomy', label: '3D-анатомия', shortLabel: 'Анатомия', icon: Box },
-  { id: 'case', label: 'Клинический кейс', shortLabel: 'Кейс', icon: ClipboardList },
+  {
+    id: 'case',
+    label: 'Клинический кейс',
+    shortLabel: 'Кейс',
+    icon: ClipboardList,
+  },
   { id: 'labs', label: 'Лаборатория', shortLabel: 'Лаб.', icon: FlaskConical },
   { id: 'ecg', label: 'ЭКГ и ритмы', shortLabel: 'ЭКГ', icon: Activity },
-  { id: 'privacy', label: 'Безопасность', shortLabel: 'Защита', icon: ShieldCheck },
+  {
+    id: 'privacy',
+    label: 'Безопасность',
+    shortLabel: 'Защита',
+    icon: ShieldCheck,
+  },
 ]
 
 const modalityLabels: Record<ImagingModality, string> = {
@@ -104,7 +121,8 @@ const casePresets: Array<{
       differential:
         'ОКС, ТЭЛА, расслоение аорты, перикардит, пневмоторакс, некардиальная боль.',
       plan: 'ЭКГ в 12 отведениях, тропонин в динамике, мониторинг, оценка срочности помощи.',
-      teachingGoal: 'Разобрать опасные причины боли в груди и порядок первичной оценки.',
+      teachingGoal:
+        'Разобрать опасные причины боли в груди и порядок первичной оценки.',
     },
   },
   {
@@ -132,7 +150,8 @@ const casePresets: Array<{
       differential:
         'Аппендицит, холецистит, панкреатит, кишечная непроходимость, перфорация, урологическая и гинекологическая патология.',
       plan: 'ОАК, СРБ, биохимия, анализ мочи, УЗИ/КТ по клиническим показаниям.',
-      teachingGoal: 'Научиться отделять неотложную хирургическую патологию от других причин.',
+      teachingGoal:
+        'Научиться отделять неотложную хирургическую патологию от других причин.',
     },
   },
 ]
@@ -152,14 +171,22 @@ const anatomyLayers: Array<{ id: AnatomyLayer; label: string }> = [
   { id: 'vessels', label: 'Сосуды' },
 ]
 
-const anatomyViews: Array<{ id: AnatomyView; label: string; rotation: number }> = [
+const anatomyViews: Array<{
+  id: AnatomyView
+  label: string
+  rotation: number
+}> = [
   { id: 'front', label: 'Спереди', rotation: 0 },
   { id: 'left', label: 'Слева', rotation: -42 },
   { id: 'back', label: 'Сзади', rotation: -180 },
   { id: 'right', label: 'Справа', rotation: 42 },
 ]
 
-function anatomySvgMarkup(layer: AnatomyLayer, region: string, view: AnatomyView) {
+function anatomySvgMarkup(
+  layer: AnatomyLayer,
+  region: string,
+  view: AnatomyView,
+) {
   const highlight = '#8b5cf6'
   const muted = '#cbd5e1'
   const organ = layer === 'organs' ? '#fb7185' : '#d8b4fe'
@@ -184,18 +211,18 @@ function anatomySvgMarkup(layer: AnatomyLayer, region: string, view: AnatomyView
     <path d="M310 170 L355 300 L408 510" fill="none" stroke="${bone}" stroke-width="34" stroke-linecap="round"/>
     <path d="M205 705 L170 855" fill="none" stroke="${bone}" stroke-width="44" stroke-linecap="round"/>
     <path d="M295 705 L330 855" fill="none" stroke="${bone}" stroke-width="44" stroke-linecap="round"/>
-    <g opacity="${layer === 'skeleton' ? 1 : .45}">
+    <g opacity="${layer === 'skeleton' ? 1 : 0.45}">
       <path d="M250 170 L250 690" stroke="${bone}" stroke-width="16"/>
       ${Array.from({ length: 9 }, (_, index) => `<path d="M250 ${220 + index * 36} Q${index % 2 ? 150 : 350} ${235 + index * 36} 250 ${250 + index * 36}" fill="none" stroke="${bone}" stroke-width="10"/>`).join('')}
       <path d="M190 665 Q250 735 310 665" fill="none" stroke="${selected('pelvis', bone)}" stroke-width="20"/>
     </g>
-    <g opacity="${layer === 'organs' ? 1 : .5}">
+    <g opacity="${layer === 'organs' ? 1 : 0.5}">
       <ellipse cx="202" cy="330" rx="62" ry="118" fill="${selected('lungs', organ)}" opacity=".78"/>
       <ellipse cx="298" cy="330" rx="62" ry="118" fill="${selected('lungs', organ)}" opacity=".78"/>
       <path d="M248 340 C205 290 190 380 250 430 C310 380 295 290 252 340 Z" fill="${selected('heart', '#ef4444')}"/>
       <path d="M165 480 Q250 430 335 480 L315 590 Q250 635 185 590 Z" fill="${selected('abdomen', '#f59e0b')}" opacity=".74"/>
     </g>
-    <g opacity="${layer === 'vessels' ? 1 : .36}" fill="none" stroke-linecap="round">
+    <g opacity="${layer === 'vessels' ? 1 : 0.36}" fill="none" stroke-linecap="round">
       <path d="M250 178 L250 700" stroke="${vessel}" stroke-width="13"/>
       <path d="M250 260 C190 270 160 315 135 370" stroke="${vessel}" stroke-width="9"/>
       <path d="M250 260 C310 270 340 315 365 370" stroke="${vessel}" stroke-width="9"/>
@@ -207,7 +234,11 @@ function anatomySvgMarkup(layer: AnatomyLayer, region: string, view: AnatomyView
 </svg>`
 }
 
-function anatomyDataUri(layer: AnatomyLayer, region: string, view: AnatomyView) {
+function anatomyDataUri(
+  layer: AnatomyLayer,
+  region: string,
+  view: AnatomyView,
+) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
     anatomySvgMarkup(layer, region, view),
   )}`
@@ -246,7 +277,9 @@ function SectionShell({
           </div>
         </div>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5">{children}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5">
+        {children}
+      </div>
     </section>
   )
 }
@@ -311,6 +344,7 @@ export default function MedicalWorkspace({
   tutorUid,
   canClear,
   participantRole,
+  learnerTrack = 'medical',
 }: MedicalWorkspaceProps) {
   const [activeModule, setActiveModule] = useState<MedicalModule>('board')
   const [workspace, setWorkspace] = useState<MedicalWorkspaceData>(() =>
@@ -342,23 +376,26 @@ export default function MedicalWorkspace({
       },
       () => {
         setSaveState('error')
-        setError('Не удалось синхронизировать медицинское рабочее пространство.')
+        setError('Не удалось синхронизировать учебное рабочее пространство.')
       },
     )
   }, [bookingId])
 
-  useEffect(
-    () =>
-      subscribeToMedicalAssets(
-        bookingId,
-        (next) => {
-          setAssets(next)
-          setSelectedAssetId((current) => current || next[0]?.id || '')
-        },
-        () => setError('Не удалось загрузить список медицинских файлов.'),
-      ),
-    [bookingId],
-  )
+  useEffect(() => {
+    if (learnerTrack === 'school') {
+      setAssets([])
+      setSelectedAssetId('')
+      return
+    }
+    return subscribeToMedicalAssets(
+      bookingId,
+      (next) => {
+        setAssets(next)
+        setSelectedAssetId((current) => current || next[0]?.id || '')
+      },
+      () => setError('Не удалось загрузить список медицинских файлов.'),
+    )
+  }, [bookingId, learnerTrack])
 
   const selectedAsset = assets.find((asset) => asset.id === selectedAssetId)
 
@@ -418,7 +455,9 @@ export default function MedicalWorkspace({
     } catch (caught) {
       setSaveState('error')
       setError(
-        caught instanceof Error ? caught.message : 'Не удалось сохранить данные.',
+        caught instanceof Error
+          ? caught.message
+          : 'Не удалось сохранить данные.',
       )
     }
   }
@@ -437,7 +476,10 @@ export default function MedicalWorkspace({
     }))
   }
 
-  function updatePrivacy(field: keyof PrivacyChecklist, value: boolean | string) {
+  function updatePrivacy(
+    field: keyof PrivacyChecklist,
+    value: boolean | string,
+  ) {
     setWorkspace((current) => ({
       ...current,
       privacy: { ...current.privacy, [field]: value },
@@ -452,7 +494,6 @@ export default function MedicalWorkspace({
       ),
     }))
   }
-
 
   async function removeAsset(asset: MedicalAsset) {
     const allowed = participantRole === 'tutor' || asset.uploaderUid === userUid
@@ -489,7 +530,10 @@ export default function MedicalWorkspace({
       ].join('\n'),
     [workspace.clinicalCase, workspace.ecg, workspace.labs],
   )
-  const identifierFindings = useMemo(() => scanMedicalText(scanText), [scanText])
+  const identifierFindings = useMemo(
+    () => scanMedicalText(scanText),
+    [scanText],
+  )
 
   const statusLabel =
     saveState === 'loading'
@@ -499,12 +543,14 @@ export default function MedicalWorkspace({
         : saveState === 'error'
           ? 'Требуется повторное сохранение'
           : 'Данные занятия сохранены'
+  const availableModuleItems =
+    learnerTrack === 'school' ? moduleItems.slice(0, 1) : moduleItems
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
       <div className="shrink-0 rounded-2xl border border-white/10 bg-slate-900/95 p-2 shadow-xl">
         <div className="flex snap-x snap-mandatory items-center gap-2 overflow-x-auto overscroll-x-contain pb-1">
-          {moduleItems.map((item) => {
+          {availableModuleItems.map((item) => {
             const Icon = item.icon
             return (
               <button
@@ -604,10 +650,13 @@ export default function MedicalWorkspace({
                   <div className="flex items-start gap-3">
                     <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
                     <div>
-                      <p className="text-sm font-semibold">Загрузка временно отключена</p>
+                      <p className="text-sm font-semibold">
+                        Загрузка временно отключена
+                      </p>
                       <p className="mt-2 text-xs leading-5 text-amber-100/75">
-                        Новые снимки станут доступны после подключения серверного обезличивания,
-                        проверки метаданных и антивирусного сканирования. Ранее проверенные учебные
+                        Новые снимки станут доступны после подключения
+                        серверного обезличивания, проверки метаданных и
+                        антивирусного сканирования. Ранее проверенные учебные
                         материалы можно продолжать просматривать.
                       </p>
                     </div>
@@ -670,7 +719,9 @@ export default function MedicalWorkspace({
                     <div className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-slate-950 px-3 py-3">
                       <button
                         type="button"
-                        onClick={() => setZoom((value) => Math.max(50, value - 10))}
+                        onClick={() =>
+                          setZoom((value) => Math.max(50, value - 10))
+                        }
                         className="ms-icon-btn ms-icon-btn-on-dark ms-icon-btn-sm"
                         title="Уменьшить"
                       >
@@ -678,7 +729,9 @@ export default function MedicalWorkspace({
                       </button>
                       <button
                         type="button"
-                        onClick={() => setZoom((value) => Math.min(250, value + 10))}
+                        onClick={() =>
+                          setZoom((value) => Math.min(250, value + 10))
+                        }
                         className="ms-icon-btn ms-icon-btn-on-dark ms-icon-btn-sm"
                         title="Увеличить"
                       >
@@ -686,7 +739,9 @@ export default function MedicalWorkspace({
                       </button>
                       <button
                         type="button"
-                        onClick={() => setRotation((value) => (value + 90) % 360)}
+                        onClick={() =>
+                          setRotation((value) => (value + 90) % 360)
+                        }
                         className="ms-icon-btn ms-icon-btn-on-dark ms-icon-btn-sm"
                         title="Повернуть"
                       >
@@ -758,7 +813,9 @@ export default function MedicalWorkspace({
                           min="40"
                           max="180"
                           value={brightness}
-                          onChange={(event) => setBrightness(Number(event.target.value))}
+                          onChange={(event) =>
+                            setBrightness(Number(event.target.value))
+                          }
                           className="mt-1 block w-full accent-teal-500"
                         />
                       </label>
@@ -769,7 +826,9 @@ export default function MedicalWorkspace({
                           min="40"
                           max="220"
                           value={contrast}
-                          onChange={(event) => setContrast(Number(event.target.value))}
+                          onChange={(event) =>
+                            setContrast(Number(event.target.value))
+                          }
                           className="mt-1 block w-full accent-teal-500"
                         />
                       </label>
@@ -778,7 +837,9 @@ export default function MedicalWorkspace({
                       {selectedAsset.mimeType === 'application/dicom' ? (
                         <div className="max-w-md rounded-3xl border border-amber-300/20 bg-amber-500/10 p-6 text-center text-amber-100">
                           <FileWarning className="mx-auto h-10 w-10 text-amber-300" />
-                          <h3 className="mt-4 font-bold">DICOM сохранён защищённо</h3>
+                          <h3 className="mt-4 font-bold">
+                            DICOM сохранён защищённо
+                          </h3>
                           <p className="mt-2 text-sm leading-6 text-amber-100/75">
                             В этой версии доступно хранение DICOM и работа с
                             экспортированными кадрами. Полноценный покадровый
@@ -898,8 +959,8 @@ export default function MedicalWorkspace({
                   type="button"
                   onClick={() => {
                     const label =
-                      anatomyRegions.find((item) => item.id === anatomyRegion)?.label ??
-                      anatomyRegion
+                      anatomyRegions.find((item) => item.id === anatomyRegion)
+                        ?.label ?? anatomyRegion
                     updateClinicalCase(
                       'examination',
                       `${workspace.clinicalCase.examination}${workspace.clinicalCase.examination ? '\n' : ''}Анатомический ориентир: ${label}.`,
@@ -921,7 +982,11 @@ export default function MedicalWorkspace({
                   }}
                 >
                   <img
-                    src={anatomyDataUri(anatomyLayer, anatomyRegion, anatomyView)}
+                    src={anatomyDataUri(
+                      anatomyLayer,
+                      anatomyRegion,
+                      anatomyView,
+                    )}
                     alt="Интерактивная анатомическая модель"
                     className="h-full w-full object-contain"
                   />
@@ -995,7 +1060,9 @@ export default function MedicalWorkspace({
                 <Field
                   label="Учебная цель"
                   value={workspace.clinicalCase.teachingGoal}
-                  onChange={(value) => updateClinicalCase('teachingGoal', value)}
+                  onChange={(value) =>
+                    updateClinicalCase('teachingGoal', value)
+                  }
                   placeholder="Какой навык должен освоить студент к концу занятия?"
                   rows={2}
                 />
@@ -1095,7 +1162,9 @@ export default function MedicalWorkspace({
                         onClick={() =>
                           setWorkspace((current) => ({
                             ...current,
-                            labs: current.labs.filter((item) => item.id !== row.id),
+                            labs: current.labs.filter(
+                              (item) => item.id !== row.id,
+                            ),
                           }))
                         }
                         className="ms-icon-btn ms-icon-btn-danger ms-icon-btn-sm"
@@ -1151,14 +1220,39 @@ export default function MedicalWorkspace({
             icon={<Activity className="h-5 w-5" />}
           >
             <div className="overflow-hidden rounded-3xl border border-red-400/20 bg-[#fff7f7] p-3">
-              <svg viewBox="0 0 920 180" className="w-full" role="img" aria-label="Учебная ЭКГ-кривая">
+              <svg
+                viewBox="0 0 920 180"
+                className="w-full"
+                role="img"
+                aria-label="Учебная ЭКГ-кривая"
+              >
                 <defs>
-                  <pattern id="smallGrid" width="10" height="10" patternUnits="userSpaceOnUse">
-                    <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#fecaca" strokeWidth="0.6" />
+                  <pattern
+                    id="smallGrid"
+                    width="10"
+                    height="10"
+                    patternUnits="userSpaceOnUse"
+                  >
+                    <path
+                      d="M 10 0 L 0 0 0 10"
+                      fill="none"
+                      stroke="#fecaca"
+                      strokeWidth="0.6"
+                    />
                   </pattern>
-                  <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+                  <pattern
+                    id="grid"
+                    width="50"
+                    height="50"
+                    patternUnits="userSpaceOnUse"
+                  >
                     <rect width="50" height="50" fill="url(#smallGrid)" />
-                    <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#fca5a5" strokeWidth="1.2" />
+                    <path
+                      d="M 50 0 L 0 0 0 50"
+                      fill="none"
+                      stroke="#fca5a5"
+                      strokeWidth="1.2"
+                    />
                   </pattern>
                 </defs>
                 <rect width="920" height="180" fill="url(#grid)" />
@@ -1172,7 +1266,8 @@ export default function MedicalWorkspace({
               </svg>
             </div>
             <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs leading-5 text-amber-100">
-              Кривая генерируется как учебная иллюстрация и не является клинической ЭКГ, диагностикой или медицинским заключением.
+              Кривая генерируется как учебная иллюстрация и не является
+              клинической ЭКГ, диагностикой или медицинским заключением.
             </p>
             <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {(
@@ -1250,10 +1345,22 @@ export default function MedicalWorkspace({
               <div className="space-y-3">
                 {(
                   [
-                    ['deidentified', 'ФИО и другие прямые идентификаторы удалены'],
-                    ['identifiersRemoved', 'На изображениях удалены подписи, номера карт и даты рождения'],
-                    ['consentConfirmed', 'Есть законное основание для учебного использования'],
-                    ['educationalUseOnly', 'Материалы используются только в рамках занятия'],
+                    [
+                      'deidentified',
+                      'ФИО и другие прямые идентификаторы удалены',
+                    ],
+                    [
+                      'identifiersRemoved',
+                      'На изображениях удалены подписи, номера карт и даты рождения',
+                    ],
+                    [
+                      'consentConfirmed',
+                      'Есть законное основание для учебного использования',
+                    ],
+                    [
+                      'educationalUseOnly',
+                      'Материалы используются только в рамках занятия',
+                    ],
                   ] as Array<[keyof PrivacyChecklist, string]>
                 ).map(([field, label]) => (
                   <label
@@ -1263,13 +1370,16 @@ export default function MedicalWorkspace({
                     <input
                       type="checkbox"
                       checked={Boolean(workspace.privacy[field])}
-                      onChange={(event) => updatePrivacy(field, event.target.checked)}
+                      onChange={(event) =>
+                        updatePrivacy(field, event.target.checked)
+                      }
                       className="mt-1 h-5 w-5 accent-violet-600"
                     />
                     <span>
                       <strong className="text-sm">{label}</strong>
                       <span className="mt-1 block text-xs leading-5 text-slate-500">
-                        Подтверждение фиксируется в защищённом рабочем пространстве занятия.
+                        Подтверждение фиксируется в защищённом рабочем
+                        пространстве занятия.
                       </span>
                     </span>
                   </label>
@@ -1281,7 +1391,9 @@ export default function MedicalWorkspace({
                   <input
                     value={workspace.privacy.patientLabel}
                     maxLength={80}
-                    onChange={(event) => updatePrivacy('patientLabel', event.target.value)}
+                    onChange={(event) =>
+                      updatePrivacy('patientLabel', event.target.value)
+                    }
                     placeholder="Например: Учебный пациент A-01"
                     className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-3 text-sm outline-none focus:border-teal-400"
                   />
@@ -1305,9 +1417,12 @@ export default function MedicalWorkspace({
                 <div className="flex items-start gap-3">
                   <FileWarning className="h-6 w-6 shrink-0 text-amber-300" />
                   <div>
-                    <h3 className="font-bold">Автоматическая проверка текста</h3>
+                    <h3 className="font-bold">
+                      Автоматическая проверка текста
+                    </h3>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
-                      Поиск возможных телефонов, почты, дат, номеров документов и ФИО. Результат требует ручной проверки.
+                      Поиск возможных телефонов, почты, дат, номеров документов
+                      и ФИО. Результат требует ручной проверки.
                     </p>
                   </div>
                 </div>
@@ -1318,18 +1433,21 @@ export default function MedicalWorkspace({
                         key={`${finding.type}-${finding.match}-${index}`}
                         className="rounded-xl border border-amber-300/15 bg-amber-500/10 p-3 text-xs"
                       >
-                        <p className="font-semibold text-amber-200">{finding.label}</p>
-                        <p className="mt-1 break-all text-amber-100/70">{finding.match}</p>
+                        <p className="font-semibold text-amber-200">
+                          {finding.label}
+                        </p>
+                        <p className="mt-1 break-all text-amber-100/70">
+                          {finding.match}
+                        </p>
                       </div>
                     ))}
                     <button
                       type="button"
                       onClick={() => {
                         const clinicalCase = Object.fromEntries(
-                          Object.entries(workspace.clinicalCase).map(([key, value]) => [
-                            key,
-                            redactMedicalText(value),
-                          ]),
+                          Object.entries(workspace.clinicalCase).map(
+                            ([key, value]) => [key, redactMedicalText(value)],
+                          ),
                         ) as unknown as ClinicalCaseData
                         const labs = workspace.labs.map((row) => ({
                           ...row,
@@ -1338,7 +1456,9 @@ export default function MedicalWorkspace({
                         }))
                         const ecg = {
                           ...workspace.ecg,
-                          conclusion: redactMedicalText(workspace.ecg.conclusion),
+                          conclusion: redactMedicalText(
+                            workspace.ecg.conclusion,
+                          ),
                         }
                         setWorkspace((current) => ({
                           ...current,
@@ -1376,7 +1496,8 @@ export default function MedicalWorkspace({
                   </div>
                 )}
                 <div className="mt-5 rounded-2xl border border-red-400/15 bg-red-500/10 p-4 text-xs leading-5 text-red-100/80">
-                  MedStart не предназначен для хранения медицинской документации пациента. Загружайте только обезличенные учебные данные.
+                  MedStart не предназначен для хранения медицинской документации
+                  пациента. Загружайте только обезличенные учебные данные.
                 </div>
               </aside>
             </div>

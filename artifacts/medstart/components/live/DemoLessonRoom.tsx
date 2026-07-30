@@ -25,7 +25,7 @@ interface DemoLessonRoomProps {
 
 type MobileView = 'board' | 'video' | 'chat'
 
-function VideoUnavailable() {
+function VideoUnavailable({ schoolLesson }: { schoolLesson: boolean }) {
   return (
     <div className="flex h-full min-h-[240px] flex-col items-center justify-center rounded-2xl border border-dashed border-amber-300/30 bg-amber-400/5 p-6 text-center">
       <div className="rounded-2xl bg-amber-300/10 p-4 text-amber-200">
@@ -35,8 +35,9 @@ function VideoUnavailable() {
         Видеосервер подключим позже
       </h2>
       <p className="mt-2 max-w-sm text-sm leading-6 text-slate-400">
-        Медицинская доска, снимки, 3D-анатомия, клинические шаблоны,
-        лаборатория, ЭКГ и чат уже доступны без платного сервера.
+        {schoolLesson
+          ? 'Совместная доска, заметки и чат уже доступны без платного сервера.'
+          : 'Медицинская доска, снимки, 3D-анатомия, клинические шаблоны, лаборатория, ЭКГ и чат уже доступны без платного сервера.'}
       </p>
     </div>
   )
@@ -54,6 +55,7 @@ export default function DemoLessonRoom({
   const [now, setNow] = useState(sessionStartedAt)
   const counterpart =
     participantRole === 'tutor' ? booking.studentName : booking.tutorName
+  const schoolLesson = booking.learnerTrack === 'school'
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30_000)
@@ -91,7 +93,9 @@ export default function DemoLessonRoom({
                 {booking.subject}
               </h1>
               <span className="hidden rounded-full bg-violet-500/20 px-2 py-1 text-[10px] font-semibold text-violet-200 sm:inline">
-                MedStart Medical Workspace
+                {schoolLesson
+                  ? 'MedStart School Workspace'
+                  : 'MedStart Medical Workspace'}
               </span>
             </div>
             <p className="mt-0.5 flex items-center gap-2 truncate text-[11px] text-slate-400">
@@ -114,7 +118,7 @@ export default function DemoLessonRoom({
         <nav className="mt-3 grid grid-cols-3 gap-1 rounded-xl bg-white/5 p-1 lg:hidden">
           {(
             [
-              ['board', 'Меддоска', LayoutDashboard],
+              ['board', schoolLesson ? 'Доска' : 'Меддоска', LayoutDashboard],
               ['video', 'Видео', UsersRound],
               ['chat', 'Чат', MessageCircle],
             ] as const
@@ -144,19 +148,20 @@ export default function DemoLessonRoom({
             tutorUid={booking.tutorUid}
             canClear={participantRole === 'tutor'}
             participantRole={participantRole}
+            learnerTrack={booking.learnerTrack}
           />
         </div>
 
         <aside className="hidden min-h-0 flex-col gap-3 overflow-hidden rounded-3xl border border-white/10 bg-slate-900/80 p-3 lg:flex">
           <div className="max-h-[48%] min-h-[250px] overflow-hidden">
-            <VideoUnavailable />
+            <VideoUnavailable schoolLesson={schoolLesson} />
           </div>
           <LessonChat booking={booking} userUid={userUid} />
         </aside>
 
         {mobileView === 'video' && (
           <div className="min-h-0 overflow-y-auto rounded-3xl border border-white/10 bg-slate-900 p-3 lg:hidden">
-            <VideoUnavailable />
+            <VideoUnavailable schoolLesson={schoolLesson} />
           </div>
         )}
 
@@ -170,7 +175,8 @@ export default function DemoLessonRoom({
       <footer className="shrink-0 border-t border-white/10 bg-slate-950/95 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] text-center text-[11px] text-slate-500 backdrop-blur">
         <span className="inline-flex items-center gap-1.5">
           <MonitorUp className="h-3.5 w-3.5 text-violet-300" />
-          Учебный режим без видеосвязи. Совместные данные сохраняются в Firebase.
+          Учебный режим без видеосвязи. Совместные данные сохраняются в
+          Firebase.
         </span>
       </footer>
     </div>

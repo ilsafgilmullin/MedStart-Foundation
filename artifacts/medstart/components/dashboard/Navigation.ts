@@ -36,7 +36,7 @@ const tutor = [
   { name: 'Главная', href: '/dashboard', icon: Home },
   { name: 'Заявки', href: '/dashboard/requests', icon: Inbox },
   { name: 'Расписание', href: '/dashboard/schedule', icon: CalendarDays },
-  { name: 'Мои студенты', href: '/dashboard/students', icon: UsersRound },
+  { name: 'Мои ученики', href: '/dashboard/students', icon: UsersRound },
   { name: 'Сообщения', href: '/dashboard/messages', icon: MessageCircle },
   { name: 'Материалы', href: '/dashboard/materials', icon: FolderOpen },
   {

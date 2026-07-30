@@ -86,6 +86,7 @@ function Workspace({
   const connection = connectionLabel(state, quality)
   const counterpart =
     participantRole === 'tutor' ? booking.studentName : booking.tutorName
+  const schoolLesson = booking.learnerTrack === 'school'
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30_000)
@@ -120,7 +121,9 @@ function Workspace({
                 {booking.subject}
               </h1>
               <span className="hidden rounded-full bg-violet-500/20 px-2 py-1 text-[10px] font-semibold text-violet-200 sm:inline">
-                MedStart Medical Live
+                {schoolLesson
+                  ? 'MedStart School Live'
+                  : 'MedStart Medical Live'}
               </span>
             </div>
             <p className="mt-0.5 flex items-center gap-2 truncate text-[11px] text-slate-400">
@@ -143,7 +146,7 @@ function Workspace({
         <nav className="mt-3 grid grid-cols-3 gap-1 rounded-xl bg-white/5 p-1 lg:hidden">
           {(
             [
-              ['board', 'Меддоска', LayoutDashboard],
+              ['board', schoolLesson ? 'Доска' : 'Меддоска', LayoutDashboard],
               ['video', 'Видео', UsersRound],
               ['chat', 'Чат', MessageCircle],
             ] as const
@@ -173,6 +176,7 @@ function Workspace({
             tutorUid={booking.tutorUid}
             canClear={participantRole === 'tutor'}
             participantRole={participantRole}
+            learnerTrack={booking.learnerTrack}
           />
         </div>
 

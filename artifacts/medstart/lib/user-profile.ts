@@ -1,3 +1,5 @@
+import type { LearnerTrack, SchoolExam } from './education'
+
 export type UserRole = 'student' | 'tutor' | 'admin'
 export type EffectiveUserRole = UserRole | 'owner'
 export type UserStatus =
@@ -21,11 +23,17 @@ export interface UserProfile {
   status: UserStatus
   statusBeforeBlock?: UserStatus | ''
   avatar: string
+  learnerTrack?: LearnerTrack
   fieldOfStudy?: string
   studyYear?: string
+  schoolGrade?: string
+  schoolExam?: SchoolExam
+  schoolConsentConfirmed?: boolean
   title?: string
   specialization?: string
   subjects?: string[]
+  tutorAudiences?: LearnerTrack[]
+  examTypes?: SchoolExam[]
   institution?: string
   experience?: string
   bio?: string

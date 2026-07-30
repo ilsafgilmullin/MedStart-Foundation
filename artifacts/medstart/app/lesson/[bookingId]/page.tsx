@@ -7,7 +7,6 @@ import { useEffect, useState } from 'react'
 import {
   AlertTriangle,
   ArrowLeft,
-  AudioLines,
   CalendarDays,
   Clock3,
   LoaderCircle,
@@ -39,7 +38,7 @@ const DemoLessonRoom = dynamic(
   () => import('@/components/live/DemoLessonRoom'),
   {
     ssr: false,
-    loading: () => <RoomLoader label="Открываем медицинскую доску…" />,
+    loading: () => <RoomLoader label="Открываем учебную доску…" />,
   },
 )
 
@@ -126,8 +125,7 @@ export default function LessonPage() {
         signal: controller.signal,
       })
       const payload = (await response.json()) as
-        | LiveSessionCredentials
-        | { error?: string }
+        LiveSessionCredentials | { error?: string }
 
       if (!response.ok || !('participantToken' in payload)) {
         throw new Error(
@@ -237,6 +235,7 @@ export default function LessonPage() {
 
   const counterpart =
     user?.uid === booking.tutorUid ? booking.studentName : booking.tutorName
+  const schoolLesson = booking.learnerTrack === 'school'
 
   return (
     <main className="min-h-dvh bg-slate-950 p-4 text-white sm:p-6">
@@ -301,8 +300,9 @@ export default function LessonPage() {
               <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
                 <MonitorUp className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" />
                 <p>
-                  Медицинская доска, снимки, клинические шаблоны и чат работают
-                  без платного видеосервера.
+                  {schoolLesson
+                    ? 'Совместная доска, заметки и чат работают без платного видеосервера.'
+                    : 'Медицинская доска, снимки, клинические шаблоны и чат работают без платного видеосервера.'}
                 </p>
               </div>
               <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -333,7 +333,7 @@ export default function LessonPage() {
                 ) : (
                   <MonitorUp className="h-5 w-5" />
                 )}
-                Открыть медицинскую доску
+                Открыть учебную доску
               </button>
               <button
                 type="button"
@@ -346,7 +346,9 @@ export default function LessonPage() {
             </div>
 
             <p className="mt-5 text-center text-xs leading-5 text-slate-500">
-              Доска, чат и учебные медицинские инструменты доступны уже сейчас.
+              {schoolLesson
+                ? 'Доска, чат и материалы занятия доступны уже сейчас.'
+                : 'Доска, чат и учебные медицинские инструменты доступны уже сейчас.'}
             </p>
           </div>
         </section>

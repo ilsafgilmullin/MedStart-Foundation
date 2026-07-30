@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react'
 import { MedStartAuthError, registerTutor } from '@/lib/auth'
 import { ROUTES } from '@/lib/constants'
+import type { LearnerTrack, SchoolExam } from '@/lib/education'
 import { isStrongPassword } from '@/lib/password-policy'
 
 function messageFor(error: unknown) {
@@ -31,6 +32,10 @@ export function useTutorRegistration() {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
+  const [tutorAudiences, setTutorAudiences] = useState<LearnerTrack[]>([
+    'medical',
+  ])
+  const [examTypes, setExamTypes] = useState<SchoolExam[]>([])
   const [specialization, setSpecialization] = useState('')
   const [subjects, setSubjects] = useState('')
   const [institution, setInstitution] = useState('')
@@ -46,6 +51,41 @@ export function useTutorRegistration() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  function toggleAudience(audience: LearnerTrack) {
+    setTutorAudiences((current) =>
+      current.includes(audience)
+        ? current.filter((item) => item !== audience)
+        : [...current, audience],
+    )
+  }
+
+  function toggleExamType(exam: SchoolExam) {
+    setExamTypes((current) =>
+      current.includes(exam)
+        ? current.filter((item) => item !== exam)
+        : [...current, exam],
+    )
+  }
+
+  function addSuggestedSubject(subject: string) {
+    setSubjects((current) => {
+      const items = current
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+      if (
+        items.some(
+          (item) =>
+            item.toLocaleLowerCase('ru-RU') ===
+            subject.toLocaleLowerCase('ru-RU'),
+        )
+      ) {
+        return current
+      }
+      return [...items, subject].join(', ')
+    })
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (loading) return
@@ -59,6 +99,18 @@ export function useTutorRegistration() {
       !password
     ) {
       setError('Заполните обязательные поля.')
+      return
+    }
+    if (tutorAudiences.length === 0) {
+      setError('Выберите, с кем вы проводите занятия.')
+      return
+    }
+    if (tutorAudiences.includes('school') && examTypes.length === 0) {
+      setError('Укажите, готовите ли вы к ОГЭ, ЕГЭ или к обоим экзаменам.')
+      return
+    }
+    if (tutorAudiences.includes('school') && !subjects.trim()) {
+      setError('Укажите хотя бы один школьный предмет.')
       return
     }
     if (!isStrongPassword(password)) {
@@ -99,6 +151,8 @@ export function useTutorRegistration() {
           ...(online ? (['online'] as const) : []),
           ...(inPerson ? (['in_person'] as const) : []),
         ],
+        tutorAudiences,
+        examTypes: tutorAudiences.includes('school') ? examTypes : [],
         bio: bio.trim(),
         password,
       })
@@ -120,6 +174,11 @@ export function useTutorRegistration() {
     setLastName,
     email,
     setEmail,
+    tutorAudiences,
+    toggleAudience,
+    examTypes,
+    toggleExamType,
+    addSuggestedSubject,
     specialization,
     setSpecialization,
     subjects,

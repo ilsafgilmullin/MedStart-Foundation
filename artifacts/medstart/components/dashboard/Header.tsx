@@ -12,7 +12,7 @@ export default function Header({ onMenuClick }: { onMenuClick: () => void }) {
           <Menu className="h-6 w-6" />
         </button>
         <p className="hidden text-sm text-slate-500 sm:block">
-          Маркетплейс медицинских репетиторов
+          Индивидуальное обучение в MedStart
         </p>
         <UserDropdown />
       </div>
