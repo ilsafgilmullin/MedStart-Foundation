@@ -22,7 +22,68 @@ import { getBooking } from '@/lib/bookings'
 import { ROUTES } from '@/lib/constants'
 import { formatBookingDate, type Booking } from '@/lib/domain'
 
-type JoinMode = 'video' | 'audio'
+type JoinMode = 'video' | 'audio' | 'workspace'
+
+interface LiveStatus {
+  videoEnabled: boolean
+  mode: 'live' | 'workspace'
+  reason: 'ready' | 'disabled' | 'incomplete' | 'invalid-url'
+}
+
+function mediaAccessErrorMessage(error: unknown, mode: JoinMode) {
+  if (!(error instanceof DOMException)) {
+    return 'Не удалось проверить камеру и микрофон.'
+  }
+
+  if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
+    return mode === 'video'
+      ? 'Разрешите MedStart доступ к камере и микрофону в настройках браузера либо войдите только с голосом.'
+      : 'Разрешите MedStart доступ к микрофону в настройках браузера.'
+  }
+  if (error.name === 'NotFoundError' || error.name === 'OverconstrainedError') {
+    return mode === 'video'
+      ? 'Камера или микрофон не найдены. Подключите устройство либо войдите только с голосом.'
+      : 'Микрофон не найден. Проверьте подключение устройства.'
+  }
+  if (error.name === 'NotReadableError' || error.name === 'AbortError') {
+    return 'Камера или микрофон заняты другим приложением. Закройте его и повторите попытку.'
+  }
+
+  return 'Не удалось проверить камеру и микрофон. Проверьте разрешения браузера.'
+}
+
+async function verifyMediaAccess(mode: Exclude<JoinMode, 'workspace'>) {
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    throw new Error(
+      'Камера и микрофон доступны только по защищённому HTTPS-соединению.',
+    )
+  }
+
+  let stream: MediaStream | null = null
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
+      },
+      video:
+        mode === 'video'
+          ? {
+              facingMode: 'user',
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              frameRate: { ideal: 24, max: 30 },
+            }
+          : false,
+    })
+  } catch (error) {
+    throw new Error(mediaAccessErrorMessage(error, mode))
+  } finally {
+    stream?.getTracks().forEach((track) => track.stop())
+  }
+}
 
 function RoomLoader({ label }: { label: string }) {
   return (
@@ -62,9 +123,35 @@ export default function LessonPage() {
     null,
   )
   const [joinWithVideo, setJoinWithVideo] = useState(true)
+  const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null)
   const [error, setError] = useState('')
 
   const bookingId = typeof params.bookingId === 'string' ? params.bookingId : ''
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    void fetch('/api/livekit/status', {
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('status request failed')
+        return (await response.json()) as LiveStatus
+      })
+      .then(setLiveStatus)
+      .catch((caught) => {
+        if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
+          setLiveStatus({
+            videoEnabled: false,
+            mode: 'workspace',
+            reason: 'incomplete',
+          })
+        }
+      })
+
+    return () => controller.abort()
+  }, [])
 
   useEffect(() => {
     if (authLoading) return
@@ -108,13 +195,26 @@ export default function LessonPage() {
 
   async function join(mode: JoinMode) {
     if (!user || !booking) return
+    if (mode !== 'workspace' && liveStatus?.videoEnabled === false) {
+      setError(
+        'Собственный видеосервер MedStart пока не активирован. Откройте медицинскую доску без звонка.',
+      )
+      return
+    }
+
     setJoining(mode)
     setError('')
 
-    const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), 15_000)
+    let controller: AbortController | null = null
+    let timeout: number | null = null
 
     try {
+      if (mode !== 'workspace') {
+        await verifyMediaAccess(mode)
+      }
+
+      controller = new AbortController()
+      timeout = window.setTimeout(() => controller?.abort(), 15_000)
       const idToken = await user.getIdToken()
       const response = await fetch('/api/livekit/token', {
         method: 'POST',
@@ -122,12 +222,11 @@ export default function LessonPage() {
           Authorization: `Bearer ${idToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ bookingId: booking.id }),
+        body: JSON.stringify({ bookingId: booking.id, mode }),
         signal: controller.signal,
       })
       const payload = (await response.json()) as
-        | LiveSessionCredentials
-        | { error?: string }
+        LiveSessionCredentials | { error?: string }
 
       if (!response.ok || !('participantToken' in payload)) {
         throw new Error(
@@ -148,7 +247,7 @@ export default function LessonPage() {
             : 'Не удалось открыть комнату занятия.',
       )
     } finally {
-      window.clearTimeout(timeout)
+      if (timeout !== null) window.clearTimeout(timeout)
       setJoining(null)
     }
   }
@@ -237,6 +336,8 @@ export default function LessonPage() {
 
   const counterpart =
     user?.uid === booking.tutorUid ? booking.studentName : booking.tutorName
+  const videoEnabled = liveStatus?.videoEnabled === true
+  const checkingVideo = liveStatus === null
 
   return (
     <main className="min-h-dvh bg-slate-950 p-4 text-white sm:p-6">
@@ -306,10 +407,21 @@ export default function LessonPage() {
                 </p>
               </div>
               <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
-                <Wifi className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+                {checkingVideo ? (
+                  <LoaderCircle className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-violet-300" />
+                ) : (
+                  <Wifi
+                    className={`mt-0.5 h-5 w-5 shrink-0 ${
+                      videoEnabled ? 'text-emerald-300' : 'text-amber-300'
+                    }`}
+                  />
+                )}
                 <p>
-                  Видеосвязь включим отдельным переключателем после подключения
-                  собственного сервера.
+                  {checkingVideo
+                    ? 'Проверяем доступность собственного видеосервера…'
+                    : videoEnabled
+                      ? 'Собственный видеосервер настроен. Перед входом MedStart проверит камеру и микрофон.'
+                      : 'Видеосервер пока не активирован. Медицинская доска и чат остаются доступными.'}
                 </p>
               </div>
             </div>
@@ -322,31 +434,79 @@ export default function LessonPage() {
             )}
 
             <div className="mt-7 space-y-3">
+              {videoEnabled ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void join('video')}
+                    disabled={joining !== null}
+                    className="ms-btn ms-btn-primary ms-btn-lg ms-btn-block"
+                  >
+                    {joining === 'video' ? (
+                      <LoaderCircle className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Video className="h-5 w-5" />
+                    )}
+                    {joining === 'video'
+                      ? 'Проверяем камеру…'
+                      : 'Войти с видео'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void join('audio')}
+                    disabled={joining !== null}
+                    className="ms-btn ms-btn-on-dark ms-btn-lg ms-btn-block"
+                  >
+                    {joining === 'audio' ? (
+                      <LoaderCircle className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <AudioLines className="h-5 w-5" />
+                    )}
+                    {joining === 'audio'
+                      ? 'Проверяем микрофон…'
+                      : 'Войти только с голосом'}
+                  </button>
+                </>
+              ) : null}
+
               <button
                 type="button"
-                onClick={() => void join('audio')}
+                onClick={() => void join('workspace')}
                 disabled={joining !== null}
-                className="ms-btn ms-btn-primary ms-btn-lg ms-btn-block"
+                className={`ms-btn ms-btn-lg ms-btn-block ${
+                  videoEnabled ? 'ms-btn-on-dark' : 'ms-btn-primary'
+                }`}
               >
-                {joining !== null ? (
+                {joining === 'workspace' ? (
                   <LoaderCircle className="h-5 w-5 animate-spin" />
                 ) : (
                   <MonitorUp className="h-5 w-5" />
                 )}
-                Открыть медицинскую доску
+                {joining === 'workspace'
+                  ? 'Открываем доску…'
+                  : 'Открыть доску без звонка'}
               </button>
-              <button
-                type="button"
-                disabled
-                className="ms-btn ms-btn-on-dark ms-btn-lg ms-btn-block"
-              >
-                <Video className="h-5 w-5" />
-                Видео будет подключено позже
-              </button>
+
+              {!videoEnabled && (
+                <button
+                  type="button"
+                  disabled
+                  className="ms-btn ms-btn-on-dark ms-btn-lg ms-btn-block"
+                >
+                  {checkingVideo ? (
+                    <LoaderCircle className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Video className="h-5 w-5" />
+                  )}
+                  {checkingVideo
+                    ? 'Проверяем видеосвязь'
+                    : 'Видео и голос пока недоступны'}
+                </button>
+              )}
             </div>
 
             <p className="mt-5 text-center text-xs leading-5 text-slate-500">
-              Доска, чат и учебные медицинские инструменты доступны уже сейчас.
+              Камера и микрофон включаются только после вашего разрешения.
             </p>
           </div>
         </section>
