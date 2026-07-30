@@ -37,10 +37,11 @@ function VideoUnavailable() {
         <VideoOff className="h-7 w-7" />
       </div>
       <h2 className="mt-3 text-sm font-bold text-white sm:text-base">
-        Видеосервер подключим позже
+        Режим без звонка
       </h2>
       <p className="mt-2 max-w-sm text-xs leading-5 text-slate-400 sm:text-sm sm:leading-6">
-        Медицинская доска, снимки, анатомия, клинические шаблоны и чат уже работают без платного видеосервера.
+        Медицинская доска, снимки, анатомия, клинические шаблоны и чат работают
+        независимо от видеосервера.
       </p>
     </div>
   )
@@ -112,14 +113,16 @@ export default function DemoLessonRoom({
 
           <div className="flex shrink-0 items-center gap-2 rounded-full bg-amber-400/10 px-3 py-2 text-[10px] font-semibold text-amber-100 sm:text-xs">
             <span className="h-2 w-2 rounded-full bg-amber-300" />
-            <span className="hidden lg:inline">Без видеосервера</span>
+            <span className="hidden lg:inline">Без звонка</span>
             <ShieldCheck className="h-3.5 w-3.5 text-amber-200" />
           </div>
 
           <button
             type="button"
             onClick={() => setSideOpen((current) => !current)}
-            aria-label={sideOpen ? 'Скрыть боковую панель' : 'Показать боковую панель'}
+            aria-label={
+              sideOpen ? 'Скрыть боковую панель' : 'Показать боковую панель'
+            }
             className="ms-icon-btn ms-icon-btn-on-dark hidden md:inline-flex"
           >
             {sideOpen ? (
@@ -240,7 +243,7 @@ export default function DemoLessonRoom({
       <footer className="hidden shrink-0 border-t border-white/10 bg-slate-950/95 px-3 pb-[calc(0.45rem+env(safe-area-inset-bottom))] pt-2 text-center text-[11px] text-slate-500 backdrop-blur md:block">
         <span className="inline-flex items-center gap-1.5">
           <MonitorUp className="h-3.5 w-3.5 text-violet-300" />
-          Учебный режим без видеосвязи. Совместные данные сохраняются в Firebase.
+          Учебный режим без звонка. Совместные данные сохраняются автоматически.
         </span>
       </footer>
     </div>
