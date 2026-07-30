@@ -95,19 +95,19 @@ function isStrokeKind(kind: WhiteboardElementKind) {
   return kind === 'pen' || kind === 'marker' || kind === 'eraser'
 }
 
+function isUnitNumber(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= 1
+  )
+}
+
 function isBoardPoint(value: unknown): value is WhiteboardPoint {
   if (!value || typeof value !== 'object') return false
   const point = value as Partial<WhiteboardPoint>
-  return (
-    typeof point.x === 'number' &&
-    Number.isFinite(point.x) &&
-    point.x >= 0 &&
-    point.x <= 1 &&
-    typeof point.y === 'number' &&
-    Number.isFinite(point.y) &&
-    point.y >= 0 &&
-    point.y <= 1
-  )
+  return isUnitNumber(point.x) && isUnitNumber(point.y)
 }
 
 function isBoardElement(value: unknown): value is WhiteboardElement {
@@ -128,21 +128,24 @@ function isBoardElement(value: unknown): value is WhiteboardElement {
       'text',
     ].includes(item.kind) &&
     typeof item.authorUid === 'string' &&
+    item.authorUid.length > 0 &&
+    item.authorUid.length <= 160 &&
     typeof item.authorName === 'string' &&
+    item.authorName.length <= 160 &&
     typeof item.color === 'string' &&
+    item.color.length > 0 &&
+    item.color.length <= 32 &&
     typeof item.size === 'number' &&
     Number.isFinite(item.size) &&
-    typeof item.opacity === 'number' &&
-    Number.isFinite(item.opacity) &&
-    typeof item.x === 'number' &&
-    Number.isFinite(item.x) &&
-    typeof item.y === 'number' &&
-    Number.isFinite(item.y) &&
-    typeof item.endX === 'number' &&
-    Number.isFinite(item.endX) &&
-    typeof item.endY === 'number' &&
-    Number.isFinite(item.endY) &&
+    item.size > 0 &&
+    item.size <= 64 &&
+    isUnitNumber(item.opacity) &&
+    isUnitNumber(item.x) &&
+    isUnitNumber(item.y) &&
+    isUnitNumber(item.endX) &&
+    isUnitNumber(item.endY) &&
     typeof item.text === 'string' &&
+    item.text.length <= 500 &&
     typeof item.createdAtMs === 'number' &&
     Number.isFinite(item.createdAtMs) &&
     Array.isArray(item.points) &&
