@@ -23,32 +23,18 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
+          import re
           from pathlib import Path
 
           rules_path = Path('firestore.secure.rules')
           rules = rules_path.read_text()
-          old_rules = '''    match /knowledgeSubmissions/{submissionId} {
-              allow create: if signedIn() && validKnowledgeSubmissionCreate(submissionId);
-              allow read: if isModerator()
-                || (
-                  signedIn()
-                  && userExists(request.auth.uid)
-                  && userProfile(request.auth.uid).status == 'active'
-                  && (
-                    resource.data.status == 'published'
-                    || resource.data.submittedByUid == request.auth.uid
-                  )
-                );
-              allow update: if isModerator() && validKnowledgeModeration();
-              allow delete: if isModerator()
-                || (
-                  isActiveRole(request.auth.uid, 'tutor')
-                  && resource.data.submittedByUid == request.auth.uid
-                  && resource.data.status in ['pending', 'rejected']
-                );
-            }
-          '''
-          new_rules = '''    match /knowledgeSubmissions/{submissionId} {
+          pattern = re.compile(
+              r"    match /knowledgeSubmissions/\{submissionId\} \{\n"
+              r".*?"
+              r"\n    \}\n\n    function whiteboardBooking",
+              re.DOTALL,
+          )
+          replacement = '''    match /knowledgeSubmissions/{submissionId} {
               // All mutations are trusted server operations. Clients retain only
               // the minimum read access required for catalog and moderation UI.
               allow create: if false;
@@ -64,44 +50,41 @@ jobs:
                 );
               allow update, delete: if false;
             }
-          '''
-          if old_rules not in rules:
-              raise SystemExit('Expected Firestore knowledge block was not found')
-          rules_path.write_text(rules.replace(old_rules, new_rules, 1))
+
+            function whiteboardBooking'''
+          rules, count = pattern.subn(replacement, rules, count=1)
+          if count != 1:
+              raise SystemExit(f'Expected one Firestore knowledge block, replaced {count}')
+          rules_path.write_text(rules)
 
           domain_path = Path('artifacts/medstart/lib/domain.ts')
           domain = domain_path.read_text()
           old_domain = '''  fileSize: number
             mimeType: string
-            submittedByUid: string
-          '''
+            submittedByUid: string'''.replace('            ', '  ')
           new_domain = '''  fileSize: number
             mimeType: string
             sha256?: string
             securityStatus?: 'link-validated' | 'signature-verified'
             malwareScanStatus?: 'not-applicable' | 'not-configured'
             storageState?: 'not-applicable' | 'quarantined' | 'published' | 'legacy'
-            submittedByUid: string
-          '''
-          if old_domain not in domain:
-              raise SystemExit('Expected KnowledgeSubmission fields were not found')
+            submittedByUid: string'''.replace('            ', '  ')
+          if domain.count(old_domain) != 1:
+              raise SystemExit('Expected one KnowledgeSubmission field block')
           domain_path.write_text(domain.replace(old_domain, new_domain, 1))
 
           audit_path = Path('scripts/final-audit-invariants.mjs')
           audit = audit_path.read_text()
-          old_audit = '''  'artifacts/medstart/app/api/admin/action/route.ts',
-            'artifacts/medstart/lib/admin-control.ts',
-          '''
-          new_audit = '''  'artifacts/medstart/app/api/admin/action/route.ts',
+          old_audit = "  'artifacts/medstart/app/api/admin/action/route.ts',\n  'artifacts/medstart/lib/admin-control.ts',"
+          new_audit = """  'artifacts/medstart/app/api/admin/action/route.ts',
             'artifacts/medstart/app/api/knowledge/files/route.ts',
             'artifacts/medstart/app/api/knowledge/submissions/route.ts',
             'artifacts/medstart/app/api/knowledge/moderation/route.ts',
             'artifacts/medstart/lib/server/knowledge-access.ts',
             'artifacts/medstart/lib/server/knowledge-security.ts',
-            'artifacts/medstart/lib/admin-control.ts',
-          '''
-          if old_audit not in audit:
-              raise SystemExit('Expected final audit required-files block was not found')
+            'artifacts/medstart/lib/admin-control.ts',""".replace('            ', '  ')
+          if audit.count(old_audit) != 1:
+              raise SystemExit('Expected one final-audit required-files block')
           audit_path.write_text(audit.replace(old_audit, new_audit, 1))
           PY
 
