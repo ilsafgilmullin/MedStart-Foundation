@@ -97,6 +97,7 @@ jobs:
           test -f scripts/test-file-security.mjs
           test -f scripts/test-knowledge-pipeline.mjs
           test -f scripts/test-knowledge-rules.mjs
+          test -f scripts/test-live-audit-guard.mjs
           grep -q "fetch('/api/bookings'" artifacts/medstart/lib/bookings.ts
           grep -q "fetch('/api/messages/action'" artifacts/medstart/lib/conversations.ts
           grep -q "'/api/messages/media'" artifacts/medstart/lib/chat-media.ts
@@ -135,6 +136,7 @@ jobs:
       - name: Test trusted knowledge pipeline
         run: |
           node scripts/test-knowledge-pipeline.mjs
+          node scripts/test-live-audit-guard.mjs
           pnpm --dir artifacts/medstart exec node scripts/verify-knowledge-rules.mjs
 
       - name: Audit mobile messenger invariants
