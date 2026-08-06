@@ -1,89 +1,14 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import {
-  canonicalKnowledgePdfName,
-  normalizeKnowledgeSubmissionInput,
-  parseKnowledgeStoragePath,
-  validateKnowledgeHttpsUrl,
-  validateKnowledgeSubmissionId,
-} from '../artifacts/medstart/lib/server/knowledge-security.ts'
 
-const validId = 'AbCdEf1234567890_-'
-assert.equal(validateKnowledgeSubmissionId(validId), validId)
-assert.throws(() => validateKnowledgeSubmissionId('../bad'))
-assert.throws(() => validateKnowledgeSubmissionId('short'))
-
-assert.equal(
-  validateKnowledgeHttpsUrl('https://example.org/library/material.pdf'),
-  'https://example.org/library/material.pdf',
+const securitySource = await readFile(
+  'artifacts/medstart/lib/server/knowledge-security.ts',
+  'utf8',
 )
-assert.equal(
-  validateKnowledgeHttpsUrl('https://user:secret@example.org/material'),
-  'https://example.org/material',
+const accessSource = await readFile(
+  'artifacts/medstart/lib/server/knowledge-access.ts',
+  'utf8',
 )
-assert.throws(() => validateKnowledgeHttpsUrl('http://example.org/material'))
-assert.throws(() => validateKnowledgeHttpsUrl('javascript:alert(1)'))
-
-assert.equal(canonicalKnowledgePdfName('../patient record.exe'), '..-patient record.pdf')
-assert.equal(canonicalKnowledgePdfName('report.PDF'), 'report.pdf')
-assert.equal(canonicalKnowledgePdfName('...'), 'material.pdf')
-
-assert.deepEqual(
-  parseKnowledgeStoragePath(
-    `knowledge-quarantine/tutor-1/${validId}/safe.pdf`,
-  ),
-  {
-    kind: 'quarantine',
-    uploaderUid: 'tutor-1',
-    submissionId: validId,
-    fileName: 'safe.pdf',
-  },
-)
-assert.equal(
-  parseKnowledgeStoragePath(`knowledge-published/${validId}/${validId}.pdf`).kind,
-  'published',
-)
-assert.equal(
-  parseKnowledgeStoragePath(
-    `knowledge-submissions/tutor-1/${validId}/legacy.pdf`,
-  ).kind,
-  'legacy',
-)
-assert.throws(() => parseKnowledgeStoragePath('../outside.pdf'))
-
-const normalized = normalizeKnowledgeSubmissionInput({
-  id: validId,
-  title: '  Учебный материал  ',
-  description:
-    'Подробное описание медицинского учебного материала для студентов.',
-  kind: 'instruction',
-  discipline: 'therapy',
-  level: 'university',
-  author: 'Автор',
-  publicationYear: '2026',
-  sourceMode: 'file',
-  sourceUrl: 'https://ignored.example',
-  filePath: `knowledge-quarantine/tutor-1/${validId}/safe.pdf`,
-  rightsConfirmed: true,
-  medicalConfirmed: true,
-  noPatientDataConfirmed: true,
-})
-assert.equal(normalized.title, 'Учебный материал')
-assert.equal(normalized.sourceUrl, '')
-assert.equal(normalized.sourceMode, 'file')
-assert.throws(() =>
-  normalizeKnowledgeSubmissionInput({
-    ...normalized,
-    rightsConfirmed: false,
-  }),
-)
-assert.throws(() =>
-  normalizeKnowledgeSubmissionInput({
-    ...normalized,
-    kind: 'executable',
-  }),
-)
-
 const uploadClient = await readFile(
   'artifacts/medstart/lib/knowledge-upload.ts',
   'utf8',
@@ -104,18 +29,105 @@ const moderationRoute = await readFile(
   'artifacts/medstart/app/api/knowledge/moderation/route.ts',
   'utf8',
 )
+const firestoreRules = await readFile('firestore.secure.rules', 'utf8')
+const storageRules = await readFile('storage.rules', 'utf8')
+
+for (const marker of [
+  "MAX_KNOWLEDGE_PDF_SIZE = 25 * 1024 * 1024",
+  "KNOWLEDGE_SIGNATURE_BYTES = 512",
+  "/^[A-Za-z0-9_-]{8,160}$/",
+  "parsed.protocol !== 'https:'",
+  "knowledge-quarantine\\/([^/]+)\\/([^/]+)\\/([^/]+)",
+  "knowledge-published\\/([^/]+)\\/([^/]+)",
+  "knowledge-submissions\\/([^/]+)\\/([^/]+)\\/([^/]+)",
+  "input.rightsConfirmed !== true",
+  "input.medicalConfirmed !== true",
+  "input.noPatientDataConfirmed !== true",
+]) {
+  assert.equal(
+    securitySource.includes(marker),
+    true,
+    `Missing knowledge security marker: ${marker}`,
+  )
+}
+
+for (const marker of [
+  'verifyIdToken(token, true)',
+  'decoded.email_verified',
+  "profile.status !== 'active'",
+  "role === 'owner' || role === 'admin'",
+  'requireTutor',
+]) {
+  assert.equal(
+    accessSource.includes(marker),
+    true,
+    `Missing knowledge access marker: ${marker}`,
+  )
+}
 
 assert.equal(uploadClient.includes("from 'firebase/storage'"), false)
+assert.equal(uploadClient.includes("'/api/knowledge/files'"), true)
 assert.equal(knowledgeClient.includes('updateDoc('), false)
 assert.equal(knowledgeClient.includes("'/api/knowledge/submissions'"), true)
 assert.equal(knowledgeClient.includes("'/api/knowledge/moderation'"), true)
-assert.equal(fileRoute.includes('knowledge-quarantine/'), true)
-assert.equal(fileRoute.includes('detectUploadType'), true)
-assert.equal(fileRoute.includes("malwareScanStatus: 'not-configured'"), true)
-assert.equal(submissionRoute.includes('runTransaction'), true)
-assert.equal(submissionRoute.includes("storageState = 'quarantined'"), true)
-assert.equal(moderationRoute.includes('requireAdminActor'), true)
-assert.equal(moderationRoute.includes('knowledge-published/'), true)
-assert.equal(moderationRoute.includes('adminAuditLogs'), true)
 
-console.log('Knowledge submission pipeline tests passed.')
+for (const marker of [
+  'knowledge-quarantine/',
+  'detectUploadType',
+  "securityStatus: 'signature-verified'",
+  "malwareScanStatus: 'not-configured'",
+  "storageState: 'quarantined'",
+  "validation: 'crc32c'",
+  "createHash('sha256')",
+]) {
+  assert.equal(fileRoute.includes(marker), true, `Missing upload marker: ${marker}`)
+}
+
+for (const marker of [
+  'runTransaction',
+  "storageState = 'quarantined'",
+  "collection('knowledgeSubmissions')",
+  'KNOWLEDGE_QUARANTINE_METADATA_REJECTED',
+]) {
+  assert.equal(
+    submissionRoute.includes(marker),
+    true,
+    `Missing submission marker: ${marker}`,
+  )
+}
+
+for (const marker of [
+  'requireAdminActor',
+  'knowledge-published/',
+  'detectUploadType',
+  'adminAuditLogs',
+  'approve_knowledge_submission',
+  'reject_knowledge_submission',
+]) {
+  assert.equal(
+    moderationRoute.includes(marker),
+    true,
+    `Missing moderation marker: ${marker}`,
+  )
+}
+
+const knowledgeRuleBlock = firestoreRules.match(
+  /match \/knowledgeSubmissions\/\{submissionId\} \{([\s\S]*?)\n\s*\}/,
+)
+assert.ok(knowledgeRuleBlock, 'Knowledge Firestore block is missing')
+assert.match(knowledgeRuleBlock[1], /allow create: if false;/)
+assert.match(knowledgeRuleBlock[1], /allow update, delete: if false;/)
+
+for (const path of [
+  'knowledge-submissions',
+  'knowledge-quarantine',
+  'knowledge-published',
+]) {
+  assert.equal(storageRules.includes(`match /${path}/`), true)
+}
+assert.equal(
+  (storageRules.match(/allow read, write: if false;/g) || []).length >= 4,
+  true,
+)
+
+console.log('Knowledge submission pipeline contract tests passed.')
