@@ -70,6 +70,7 @@ jobs:
         run: |
           test -f firestore.secure.rules
           test -f storage.rules
+          # Legacy root rules must never become a second deployment source.
           test ! -e firestore.rules
           grep -q '"rules": "firestore.secure.rules"' firebase.json
           grep -q 'allow create, update: if false;' storage.rules
