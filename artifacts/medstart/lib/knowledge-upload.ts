@@ -1,17 +1,34 @@
-import { deleteObject, getBytes, ref, uploadBytes } from 'firebase/storage'
-import { storage } from './firebase-storage'
+import { auth } from './firebase'
 
 export const MAX_KNOWLEDGE_PDF_SIZE = 25 * 1024 * 1024
 
-function safeFileName(value: string) {
-  const extension = value.toLowerCase().endsWith('.pdf') ? '.pdf' : ''
-  const base = value
-    .replace(/\.pdf$/i, '')
-    .normalize('NFKD')
-    .replace(/[^\p{L}\p{N}._-]+/gu, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 100)
-  return `${base || 'material'}${extension || '.pdf'}`
+interface KnowledgeFileResponse {
+  ok?: boolean
+  filePath?: string
+  fileName?: string
+  error?: string
+}
+
+async function authorizationToken(forceRefresh = false) {
+  const user = auth.currentUser
+  if (!user) throw new Error('Сессия авторизации устарела. Войдите повторно.')
+  return user.getIdToken(forceRefresh)
+}
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs = 90_000,
+) {
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } catch {
+    throw new Error('Связь с сервером MedStart прервалась. Проверьте интернет.')
+  } finally {
+    window.clearTimeout(timer)
+  }
 }
 
 export async function validateKnowledgePdf(file: File): Promise<void> {
@@ -28,49 +45,90 @@ export async function validateKnowledgePdf(file: File): Promise<void> {
   const header = new Uint8Array(await file.slice(0, 5).arrayBuffer())
   const signature = String.fromCharCode(...header)
   if (signature !== '%PDF-') {
-    throw new Error('Файл не прошёл проверку формата PDF.')
+    throw new Error('Файл не прошёл предварительную проверку формата PDF.')
   }
 }
 
 export async function uploadKnowledgePdf(
-  tutorUid: string,
+  _tutorUid: string,
   submissionId: string,
   file: File,
 ): Promise<{ filePath: string; fileName: string }> {
   await validateKnowledgePdf(file)
-  const fileName = safeFileName(file.name)
-  const filePath = `knowledge-submissions/${tutorUid}/${submissionId}/${fileName}`
-  await uploadBytes(ref(storage, filePath), file, {
-    contentType: 'application/pdf',
-    contentDisposition: `attachment; filename="${fileName}"`,
-    cacheControl: 'private,max-age=3600',
-    customMetadata: {
-      submissionId,
-      tutorUid,
-    },
+  const token = await authorizationToken()
+  const form = new FormData()
+  form.append('submissionId', submissionId)
+  form.append('file', file, file.name)
+
+  const response = await fetchWithTimeout('/api/knowledge/files', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
   })
-  return { filePath, fileName }
+  const payload = (await response.json().catch(() => ({}))) as KnowledgeFileResponse
+  if (!response.ok || !payload.filePath || !payload.fileName) {
+    throw new Error(payload.error || 'Сервер не принял PDF в защищённый карантин.')
+  }
+  return { filePath: payload.filePath, fileName: payload.fileName }
 }
 
 export async function removeKnowledgePdf(filePath: string): Promise<void> {
   if (!filePath) return
-  await deleteObject(ref(storage, filePath))
+  const token = await authorizationToken()
+  const response = await fetchWithTimeout(
+    '/api/knowledge/files',
+    {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ path: filePath }),
+    },
+    30_000,
+  )
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as KnowledgeFileResponse
+    throw new Error(payload.error || 'Не удалось очистить незавершённую загрузку.')
+  }
 }
 
 export async function downloadKnowledgePdf(
   filePath: string,
   fileName: string,
 ): Promise<void> {
-  const bytes = await getBytes(ref(storage, filePath), MAX_KNOWLEDGE_PDF_SIZE)
-  const objectUrl = URL.createObjectURL(
-    new Blob([bytes], { type: 'application/pdf' }),
+  const token = await authorizationToken()
+  const response = await fetchWithTimeout(
+    `/api/knowledge/files?path=${encodeURIComponent(filePath)}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    },
+    60_000,
   )
-  const link = document.createElement('a')
-  link.href = objectUrl
-  link.download = fileName || 'material.pdf'
-  link.rel = 'noopener'
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000)
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as KnowledgeFileResponse
+    throw new Error(payload.error || 'Защищённый PDF недоступен.')
+  }
+  const contentLength = Number(response.headers.get('content-length') || 0)
+  if (contentLength > MAX_KNOWLEDGE_PDF_SIZE) {
+    throw new Error('PDF превышает допустимый размер.')
+  }
+  const blob = await response.blob()
+  if (blob.size > MAX_KNOWLEDGE_PDF_SIZE) {
+    throw new Error('PDF превышает допустимый размер.')
+  }
+
+  const objectUrl = URL.createObjectURL(blob)
+  try {
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = fileName || 'material.pdf'
+    link.rel = 'noopener'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+  } finally {
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000)
+  }
 }
