@@ -762,27 +762,23 @@ service cloud.firestore {
     }
 
     match /knowledgeSubmissions/{submissionId} {
-      allow create: if signedIn() && validKnowledgeSubmissionCreate(submissionId);
-      allow read: if isModerator()
-        || (
-          signedIn()
-          && userExists(request.auth.uid)
-          && userProfile(request.auth.uid).status == 'active'
-          && (
-            resource.data.status == 'published'
-            || resource.data.submittedByUid == request.auth.uid
-          )
-        );
-      allow update: if isModerator() && validKnowledgeModeration();
-      allow delete: if isModerator()
-        || (
-          isActiveRole(request.auth.uid, 'tutor')
-          && resource.data.submittedByUid == request.auth.uid
-          && resource.data.status in ['pending', 'rejected']
-        );
-    }
+    // All mutations are trusted server operations. Clients retain only
+    // the minimum read access required for catalog and moderation UI.
+    allow create: if false;
+    allow read: if isModerator()
+      || (
+        signedIn()
+        && userExists(request.auth.uid)
+        && userProfile(request.auth.uid).status == 'active'
+        && (
+          resource.data.status == 'published'
+          || resource.data.submittedByUid == request.auth.uid
+        )
+      );
+    allow update, delete: if false;
+  }
 
-    function whiteboardBooking(bookingId) {
+  function whiteboardBooking(bookingId) {
       return get(/databases/$(database)/documents/bookings/$(bookingId)).data;
     }
 

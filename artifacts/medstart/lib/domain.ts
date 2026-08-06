@@ -203,6 +203,10 @@ export interface KnowledgeSubmission {
   fileName: string
   fileSize: number
   mimeType: string
+  sha256?: string
+  securityStatus?: 'link-validated' | 'signature-verified'
+  malwareScanStatus?: 'not-applicable' | 'not-configured'
+  storageState?: 'not-applicable' | 'quarantined' | 'published' | 'legacy'
   submittedByUid: string
   submittedByName: string
   rightsConfirmed: boolean
