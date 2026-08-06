@@ -6,13 +6,12 @@ import {
   query,
   serverTimestamp,
   setDoc,
-  updateDoc,
   where,
   type DocumentData,
   type QuerySnapshot,
   type Unsubscribe,
 } from 'firebase/firestore'
-import { db } from './firebase'
+import { auth, db } from './firebase'
 import {
   timestampToMillis,
   type KnowledgeDiscipline,
@@ -23,6 +22,7 @@ import {
 } from './domain'
 
 const KNOWLEDGE_COLLECTION = 'knowledgeSubmissions'
+const API_TIMEOUT_MS = 60_000
 
 export interface CreateKnowledgeSubmissionInput {
   id: string
@@ -43,6 +43,11 @@ export interface CreateKnowledgeSubmissionInput {
   submittedByName: string
 }
 
+interface KnowledgeApiResponse {
+  ok?: boolean
+  error?: string
+}
+
 function cleanText(value: string, maxLength: number) {
   return value.trim().slice(0, maxLength)
 }
@@ -53,6 +58,34 @@ function validateHttpsUrl(value: string) {
     return parsed.protocol === 'https:'
   } catch {
     return false
+  }
+}
+
+async function authorizationToken(forceRefresh = false) {
+  const user = auth.currentUser
+  if (!user) throw new Error('Сессия авторизации устарела. Войдите повторно.')
+  return user.getIdToken(forceRefresh)
+}
+
+async function knowledgeRequest(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  fallback: string,
+) {
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS)
+  try {
+    const response = await fetch(input, { ...init, signal: controller.signal })
+    const payload = (await response.json().catch(() => ({}))) as KnowledgeApiResponse
+    if (!response.ok || payload.ok !== true) {
+      throw new Error(payload.error || fallback)
+    }
+    return payload
+  } catch (error) {
+    if (error instanceof Error && error.name !== 'AbortError') throw error
+    throw new Error(`${fallback} Проверьте интернет и повторите действие.`)
+  } finally {
+    window.clearTimeout(timer)
   }
 }
 
@@ -86,7 +119,6 @@ export async function createKnowledgeSubmission(
   const description = cleanText(input.description, 4_000)
   const author = cleanText(input.author, 160)
   const publicationYear = cleanText(input.publicationYear, 20)
-  const submittedByName = cleanText(input.submittedByName, 160)
 
   if (title.length < 3) {
     throw new Error('Название должно содержать не менее трёх символов.')
@@ -107,36 +139,40 @@ export async function createKnowledgeSubmission(
     throw new Error('PDF-файл не был загружен.')
   }
 
-  await setDoc(doc(db, KNOWLEDGE_COLLECTION, input.id), {
-    origin: 'tutor',
-    status: 'pending',
-    title,
-    description,
-    kind: input.kind,
-    discipline: input.discipline,
-    level: input.level,
-    author,
-    publicationYear,
-    sourceMode: input.sourceMode,
-    sourceUrl:
-      input.sourceMode === 'link' ? input.sourceUrl.trim().slice(0, 2_000) : '',
-    filePath:
-      input.sourceMode === 'file' ? input.filePath.trim().slice(0, 1_000) : '',
-    fileName: input.sourceMode === 'file' ? cleanText(input.fileName, 240) : '',
-    fileSize: input.sourceMode === 'file' ? input.fileSize : 0,
-    mimeType: input.sourceMode === 'file' ? input.mimeType : '',
-    submittedByUid: input.submittedByUid,
-    submittedByName,
-    rightsConfirmed: true,
-    medicalConfirmed: true,
-    noPatientDataConfirmed: true,
-    moderationNote: '',
-    moderatedBy: '',
-    moderatedAt: null,
-    publishedAt: null,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  })
+  const token = await authorizationToken()
+  await knowledgeRequest(
+    '/api/knowledge/submissions',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        id: input.id,
+        title,
+        description,
+        kind: input.kind,
+        discipline: input.discipline,
+        level: input.level,
+        author,
+        publicationYear,
+        sourceMode: input.sourceMode,
+        sourceUrl:
+          input.sourceMode === 'link'
+            ? input.sourceUrl.trim().slice(0, 2_000)
+            : '',
+        filePath:
+          input.sourceMode === 'file'
+            ? input.filePath.trim().slice(0, 1_000)
+            : '',
+        rightsConfirmed: true,
+        medicalConfirmed: true,
+        noPatientDataConfirmed: true,
+      }),
+    },
+    'Не удалось отправить материал на проверку.',
+  )
 }
 
 export function subscribeToPublishedKnowledge(
@@ -186,7 +222,7 @@ export type KnowledgeModerationDecision = 'approve' | 'reject'
 
 export async function moderateKnowledgeSubmission(
   submissionId: string,
-  moderatorUid: string,
+  _moderatorUid: string,
   decision: KnowledgeModerationDecision,
   note = '',
 ): Promise<void> {
@@ -195,18 +231,39 @@ export async function moderateKnowledgeSubmission(
     throw new Error('Укажите причину отклонения.')
   }
 
-  await updateDoc(doc(db, KNOWLEDGE_COLLECTION, submissionId), {
-    status: decision === 'approve' ? 'published' : 'rejected',
-    moderationNote: cleanNote,
-    moderatedBy: moderatorUid,
-    moderatedAt: serverTimestamp(),
-    publishedAt: decision === 'approve' ? serverTimestamp() : null,
-    updatedAt: serverTimestamp(),
-  })
+  const token = await authorizationToken()
+  await knowledgeRequest(
+    '/api/knowledge/moderation',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        submissionId,
+        decision,
+        note: cleanNote,
+      }),
+    },
+    'Не удалось выполнить модерацию.',
+  )
 }
 
-export function deleteKnowledgeSubmission(submissionId: string) {
-  return deleteDoc(doc(db, KNOWLEDGE_COLLECTION, submissionId))
+export async function deleteKnowledgeSubmission(submissionId: string) {
+  const token = await authorizationToken()
+  await knowledgeRequest(
+    '/api/knowledge/submissions',
+    {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ submissionId }),
+    },
+    'Не удалось удалить материал.',
+  )
 }
 
 export function subscribeToKnowledgeBookmarks(
