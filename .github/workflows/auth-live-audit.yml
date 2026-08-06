@@ -1,40 +1,27 @@
 name: Firebase live authentication audit
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'artifacts/medstart/lib/auth.ts'
-      - 'artifacts/medstart/lib/firebase.ts'
-      - 'artifacts/medstart/lib/firebase-public-config.ts'
-      - 'artifacts/medstart/lib/password-policy.ts'
-      - 'artifacts/medstart/lib/server/**'
-      - 'artifacts/medstart/hooks/useLogin.ts'
-      - 'artifacts/medstart/hooks/useStudentRegistration.ts'
-      - 'artifacts/medstart/hooks/useTutorRegistration.ts'
-      - 'artifacts/medstart/app/login/page.tsx'
-      - 'artifacts/medstart/app/forgot-password/page.tsx'
-      - 'artifacts/medstart/app/register/**'
-      - 'artifacts/medstart/app/api/auth/**'
-      - 'artifacts/medstart/app/api/health/auth/**'
-      - 'artifacts/medstart/components/auth/**'
-      - 'artifacts/medstart/scripts/live-auth-audit.mjs'
-      - 'firestore.secure.rules'
-      - 'firebase.json'
-      - '.github/workflows/auth-live-audit.yml'
   workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'This job deploys Firestore Rules to medstart-e9bfe. Select DEPLOY_FIRESTORE_RULES only after explicit production approval.'
+        required: true
+        type: choice
+        default: DO_NOT_DEPLOY
+        options:
+          - DO_NOT_DEPLOY
+          - DEPLOY_FIRESTORE_RULES
 
 permissions:
   contents: read
-  pull-requests: write
 
 concurrency:
-  group: firebase-live-auth-${{ github.ref }}
-  cancel-in-progress: true
+  group: firebase-live-auth-manual
+  cancel-in-progress: false
 
 jobs:
   audit:
+    if: ${{ inputs.confirmation == 'DEPLOY_FIRESTORE_RULES' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -72,34 +59,8 @@ jobs:
         continue-on-error: true
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+          MEDSTART_ALLOW_RULES_DEPLOY: CONFIRMED
         run: pnpm --dir artifacts/medstart exec node scripts/live-auth-audit.mjs
-
-      - name: Publish sanitized audit result
-        if: always() && github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          node - <<'NODE' > auth-live-audit-comment.md
-          const fs = require('node:fs')
-          const reportPath = 'artifacts/medstart/auth-live-audit-report.json'
-          console.log('### Firebase live authentication audit')
-          if (!fs.existsSync(reportPath)) {
-            console.log('\nThe audit stopped before producing its sanitized report.')
-            process.exit(0)
-          }
-          const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'))
-          const checks = report.checks
-            .map((item) => `- ${item.status === 'passed' ? '✅' : '❌'} ${item.name}`)
-            .join('\n')
-          console.log(`\nStatus: **${report.status}**`)
-          if (report.error) console.log(`\nFailure: \`${report.error}\``)
-          if (report.owner) {
-            console.log(`\nOwner: verified=${report.owner.emailVerified}, disabled=${report.owner.disabled}, profile=${report.owner.profileExists}, role=${report.owner.role}, status=${report.owner.status}`)
-          }
-          if (checks) console.log(`\n${checks}`)
-          NODE
-          gh pr comment "$PR_NUMBER" --body-file auth-live-audit-comment.md
 
       - name: Upload sanitized audit report
         if: always()
