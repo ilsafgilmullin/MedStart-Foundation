@@ -78,17 +78,33 @@ jobs:
           grep -A2 'match /users/{userId}' firestore.secure.rules | grep -q 'allow create: if false;'
           grep -A2 'match /bookings/{bookingId}' firestore.secure.rules | grep -q 'allow create: if false;'
           grep -A2 'match /conversations/{conversationId}' firestore.secure.rules | grep -q 'allow create: if false;'
+          grep -A16 'match /knowledgeSubmissions/{submissionId}' firestore.secure.rules | grep -q 'allow create: if false;'
+          grep -A16 'match /knowledgeSubmissions/{submissionId}' firestore.secure.rules | grep -q 'allow update, delete: if false;'
+          grep -A3 'match /knowledge-submissions/' storage.rules | grep -q 'allow read, write: if false;'
+          grep -A3 'match /knowledge-quarantine/' storage.rules | grep -q 'allow read, write: if false;'
+          grep -A3 'match /knowledge-published/' storage.rules | grep -q 'allow read, write: if false;'
           grep -q "direct-client-profile-create-blocked" artifacts/medstart/scripts/live-auth-audit.mjs
           ! grep -q 'medstart-board-' artifacts/medstart/components/live/ServerlessWhiteboard.tsx
           test -f artifacts/medstart/app/api/bookings/route.ts
           test -f artifacts/medstart/app/api/messages/action/route.ts
           test -f artifacts/medstart/app/api/messages/media/route.ts
+          test -f artifacts/medstart/app/api/knowledge/files/route.ts
+          test -f artifacts/medstart/app/api/knowledge/submissions/route.ts
+          test -f artifacts/medstart/app/api/knowledge/moderation/route.ts
           test -f artifacts/medstart/lib/server/file-security.ts
+          test -f artifacts/medstart/lib/server/knowledge-access.ts
+          test -f artifacts/medstart/lib/server/knowledge-security.ts
           test -f scripts/test-file-security.mjs
+          test -f scripts/test-knowledge-pipeline.mjs
+          test -f scripts/test-knowledge-rules.mjs
           grep -q "fetch('/api/bookings'" artifacts/medstart/lib/bookings.ts
           grep -q "fetch('/api/messages/action'" artifacts/medstart/lib/conversations.ts
           grep -q "'/api/messages/media'" artifacts/medstart/lib/chat-media.ts
-          ! grep -R -q "from 'firebase/storage'" artifacts/medstart/lib/chat-media.ts artifacts/medstart/components/messages artifacts/medstart/app/dashboard/messages
+          grep -q "'/api/knowledge/files'" artifacts/medstart/lib/knowledge-upload.ts
+          grep -q "'/api/knowledge/submissions'" artifacts/medstart/lib/knowledge-base.ts
+          grep -q "'/api/knowledge/moderation'" artifacts/medstart/lib/knowledge-base.ts
+          ! grep -R -q "from 'firebase/storage'" artifacts/medstart/lib/chat-media.ts artifacts/medstart/components/messages artifacts/medstart/app/dashboard/messages artifacts/medstart/lib/knowledge-upload.ts
+          ! grep -q 'updateDoc(' artifacts/medstart/lib/knowledge-base.ts
           test -f scripts/test-critical-rules.mjs
           test -f scripts/test-medium-rules.mjs
           test -f scripts/test-auth-rules.mjs
@@ -116,6 +132,11 @@ jobs:
       - name: Test server file security
         run: node scripts/test-file-security.mjs
 
+      - name: Test trusted knowledge pipeline
+        run: |
+          node scripts/test-knowledge-pipeline.mjs
+          pnpm --dir artifacts/medstart exec node scripts/verify-knowledge-rules.mjs
+
       - name: Audit mobile messenger invariants
         run: node scripts/mobile-messenger-invariants.mjs
 
@@ -126,7 +147,7 @@ jobs:
           pnpm dlx firebase-tools@15.24.0 emulators:exec
           --only firestore,storage
           --project demo-medstart
-          "node scripts/test-critical-rules.mjs && node scripts/test-medium-rules.mjs && node scripts/test-auth-rules.mjs && node scripts/test-message-rules.mjs"
+          "node scripts/test-critical-rules.mjs && node scripts/test-medium-rules.mjs && node scripts/test-auth-rules.mjs && node scripts/test-message-rules.mjs && node scripts/test-knowledge-rules.mjs"
 
       - name: Lint MedStart
         run: pnpm --filter @workspace/medstart lint
