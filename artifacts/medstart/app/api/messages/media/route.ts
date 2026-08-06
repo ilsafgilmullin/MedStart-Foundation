@@ -1,6 +1,15 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
+import { Readable, Transform } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { NextResponse } from 'next/server'
 import { getFirebaseAdminBucket } from '@/lib/server/firebase-admin'
+import {
+  buildStoredFileName,
+  detectUploadType,
+  isAttachmentMime,
+  sanitizeOriginalFileName,
+  type DetectedUploadType,
+} from '@/lib/server/file-security'
 import {
   MessageAccessError,
   messageErrorResponse,
@@ -13,22 +22,17 @@ export const dynamic = 'force-dynamic'
 
 const MAX_MEDIA_BYTES = 25 * 1024 * 1024
 const MAX_FILE_BYTES = 15 * 1024 * 1024
-const safeFiles = new Set([
-  'application/pdf',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/heic',
-])
-const safeAudio = new Set([
+const SIGNATURE_BYTES = 512
+const safeInlineMime = new Set([
   'audio/mp4',
   'audio/webm',
   'audio/ogg',
   'audio/mpeg',
   'audio/wav',
-  'audio/x-m4a',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
 ])
-const safeVideo = new Set(['video/mp4', 'video/webm', 'video/quicktime'])
 
 const uploadWindows = new Map<string, { startedAt: number; count: number }>()
 
@@ -38,15 +42,6 @@ function clean(value: unknown, max = 400) {
 
 function baseMime(value: string) {
   return value.split(';', 1)[0].trim().toLowerCase()
-}
-
-function safeName(value: string) {
-  return value
-    .normalize('NFKD')
-    .replace(/[^a-zA-Z0-9._-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^[-.]+|[-.]+$/g, '')
-    .slice(-120) || 'media'
 }
 
 function parsePath(path: string) {
@@ -74,17 +69,17 @@ function enforceUploadRate(uid: string) {
   }
 }
 
-function validateUpload(file: File) {
-  const mime = baseMime(file.type)
-  const recorded = safeAudio.has(mime) || safeVideo.has(mime)
-  const regular = safeFiles.has(mime)
-  if (!recorded && !regular) {
+async function validateUpload(file: File) {
+  const signature = new Uint8Array(await file.slice(0, SIGNATURE_BYTES).arrayBuffer())
+  const detected = detectUploadType(signature, file.type)
+  if (!detected) {
     throw new MessageAccessError(
       415,
-      'MEDIA_TYPE_REJECTED',
-      'Этот тип файла не поддерживается MedStart.',
+      'MEDIA_SIGNATURE_REJECTED',
+      'Фактический тип файла не поддерживается или не совпадает с заявленным.',
     )
   }
+  const regular = detected.category === 'file'
   const max = regular ? MAX_FILE_BYTES : MAX_MEDIA_BYTES
   if (file.size <= 0 || file.size > max) {
     throw new MessageAccessError(
@@ -93,7 +88,66 @@ function validateUpload(file: File) {
       `Размер файла должен быть не больше ${regular ? 15 : 25} МБ.`,
     )
   }
-  return mime
+  return detected
+}
+
+async function saveVerifiedUpload(
+  file: File,
+  path: string,
+  detected: DetectedUploadType,
+  customMetadata: Record<string, string>,
+) {
+  const object = getFirebaseAdminBucket().file(path)
+  const digest = createHash('sha256')
+  let uploadedBytes = 0
+  const hashingStream = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      uploadedBytes += buffer.byteLength
+      digest.update(buffer)
+      callback(null, buffer)
+    },
+  })
+
+  try {
+    await pipeline(
+      Readable.from(file.stream() as unknown as AsyncIterable<Uint8Array>),
+      hashingStream,
+      object.createWriteStream({
+        resumable: false,
+        validation: 'crc32c',
+        metadata: {
+          contentType: detected.mime,
+          cacheControl: 'private, no-store, max-age=0',
+          metadata: customMetadata,
+        },
+      }),
+    )
+    if (uploadedBytes !== file.size) {
+      throw new MessageAccessError(
+        400,
+        'MEDIA_SIZE_MISMATCH',
+        'Размер переданного файла не совпал с ожидаемым.',
+      )
+    }
+    const sha256 = digest.digest('hex')
+    await object.setMetadata({
+      metadata: {
+        ...customMetadata,
+        sha256,
+        uploadedBytes: String(uploadedBytes),
+      },
+    })
+    return sha256
+  } catch (error) {
+    await object.delete({ ignoreNotFound: true }).catch(() => undefined)
+    if (error instanceof MessageAccessError) throw error
+    throw new MessageAccessError(
+      500,
+      'MEDIA_UPLOAD_FAILED',
+      'Не удалось безопасно сохранить файл. Повторите позже.',
+    )
+  }
 }
 
 export async function POST(request: Request) {
@@ -107,28 +161,24 @@ export async function POST(request: Request) {
       throw new MessageAccessError(400, 'FILE_REQUIRED', 'Файл не передан.')
     }
     await requireConversationAccess(conversationId, actor)
-    const mime = validateUpload(file)
-    const fileName = `${Date.now()}-${randomUUID()}-${safeName(file.name)}`
+    const detected = await validateUpload(file)
+    const originalName = sanitizeOriginalFileName(file.name)
+    const fileName = buildStoredFileName(originalName, detected.extension, randomUUID())
     const path = `chat-media/${conversationId}/${actor.uid}/${fileName}`
-    const buffer = Buffer.from(await file.arrayBuffer())
-
-    await getFirebaseAdminBucket().file(path).save(buffer, {
-      resumable: false,
-      validation: 'crc32c',
-      metadata: {
-        contentType: file.type || mime,
-        cacheControl: 'private, no-store, max-age=0',
-        metadata: {
-          conversationId,
-          uploaderUid: actor.uid,
-          originalName: file.name.slice(0, 240),
-          uploadedByRole: actor.role,
-        },
-      },
-    })
+    const customMetadata = {
+      conversationId,
+      uploaderUid: actor.uid,
+      originalName,
+      uploadedByRole: actor.role,
+      declaredMime: baseMime(file.type).slice(0, 120),
+      detectedMime: detected.mime,
+      securityStatus: 'signature-verified',
+      malwareScanStatus: 'not-configured',
+    }
+    const sha256 = await saveVerifiedUpload(file, path, detected, customMetadata)
 
     return NextResponse.json(
-      { ok: true, path },
+      { ok: true, path, sha256 },
       { status: 201, headers: { 'Cache-Control': 'no-store' } },
     )
   } catch (error) {
@@ -164,16 +214,24 @@ export async function GET(request: Request) {
     if (!size || size > MAX_MEDIA_BYTES) {
       throw new MessageAccessError(413, 'MEDIA_TOO_LARGE', 'Файл превышает допустимый размер.')
     }
-    const [buffer] = await file.download()
-    const disposition = safeFiles.has(baseMime(String(metadata.contentType || '')))
-      ? `attachment; filename*=UTF-8''${encodeURIComponent(String(custom.originalName || parsed.fileName))}`
-      : 'inline'
+    const storedMime = baseMime(String(metadata.contentType || ''))
+    const contentType =
+      isAttachmentMime(storedMime) || safeInlineMime.has(storedMime)
+        ? storedMime
+        : 'application/octet-stream'
+    const originalName = sanitizeOriginalFileName(String(custom.originalName || parsed.fileName))
+    const disposition = isAttachmentMime(contentType)
+      ? `attachment; filename*=UTF-8''${encodeURIComponent(originalName)}`
+      : safeInlineMime.has(contentType)
+        ? 'inline'
+        : `attachment; filename*=UTF-8''${encodeURIComponent(originalName)}`
+    const body = Readable.toWeb(file.createReadStream()) as ReadableStream<Uint8Array>
 
-    return new NextResponse(new Uint8Array(buffer), {
+    return new NextResponse(body, {
       status: 200,
       headers: {
-        'Content-Type': String(metadata.contentType || 'application/octet-stream'),
-        'Content-Length': String(buffer.byteLength),
+        'Content-Type': contentType,
+        'Content-Length': String(size),
         'Content-Disposition': disposition,
         'Cache-Control': 'private, no-store, max-age=0',
         'X-Content-Type-Options': 'nosniff',

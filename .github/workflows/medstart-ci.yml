@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - 'fix/**'
+      - 'security/**'
     paths:
       - 'artifacts/medstart/**'
       - 'scripts/**'
@@ -82,6 +83,8 @@ jobs:
           test -f artifacts/medstart/app/api/bookings/route.ts
           test -f artifacts/medstart/app/api/messages/action/route.ts
           test -f artifacts/medstart/app/api/messages/media/route.ts
+          test -f artifacts/medstart/lib/server/file-security.ts
+          test -f scripts/test-file-security.mjs
           grep -q "fetch('/api/bookings'" artifacts/medstart/lib/bookings.ts
           grep -q "fetch('/api/messages/action'" artifacts/medstart/lib/conversations.ts
           grep -q "'/api/messages/media'" artifacts/medstart/lib/chat-media.ts
@@ -109,6 +112,9 @@ jobs:
 
       - name: Run final static audit invariants
         run: node scripts/final-audit-invariants.mjs
+
+      - name: Test server file security
+        run: node scripts/test-file-security.mjs
 
       - name: Audit mobile messenger invariants
         run: node scripts/mobile-messenger-invariants.mjs
