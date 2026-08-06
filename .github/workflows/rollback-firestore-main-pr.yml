@@ -1,0 +1,190 @@
+name: Observable Firestore Rules rollback to current main
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/rollback-firestore-main-pr.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: observable-firestore-rules-rollback-main-20260807
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      EXPECTED_MAIN_SHA: adb30c5a91e251983eaacdb6f87de2e79a9190ec
+      FIREBASE_PROJECT_ID: medstart-e9bfe
+    steps:
+      - name: Checkout PR merge
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact current-main Rules source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show "$EXPECTED_MAIN_SHA:firestore.secure.rules" > "$RUNNER_TEMP/main-firestore.secure.rules"
+          git show "$EXPECTED_MAIN_SHA:firebase.json" > "$RUNNER_TEMP/main-firebase.json"
+          cmp -s firestore.secure.rules "$RUNNER_TEMP/main-firestore.secure.rules"
+          cmp -s firebase.json "$RUNNER_TEMP/main-firebase.json"
+          grep -q '"rules": "firestore.secure.rules"' firebase.json
+          test ! -e firestore.rules
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --reporter=silent
+
+      - name: Compile current-main Firestore Rules
+        run: >-
+          pnpm dlx firebase-tools@15.24.0 emulators:exec
+          --only firestore
+          --project demo-medstart
+          "node -e \"console.log('Current-main Firestore Rules compiled successfully.')\""
+
+      - name: Prepare Firebase service account
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ]; then
+            echo 'GitHub secret FIREBASE_SERVICE_ACCOUNT_JSON is not configured.'
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/firebase-service-account.json"
+          chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
+
+      - name: Publish and verify only current-main Firestore Rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+        run: |
+          pnpm --dir artifacts/medstart exec node --input-type=module <<'NODE'
+          import { createHash } from 'node:crypto'
+          import { readFileSync, writeFileSync } from 'node:fs'
+          import { setTimeout as delay } from 'node:timers/promises'
+          import { applicationDefault } from 'firebase-admin/app'
+
+          const projectId = process.env.FIREBASE_PROJECT_ID
+          const sourceCommit = process.env.EXPECTED_MAIN_SHA
+          const content = readFileSync('../../firestore.secure.rules', 'utf8')
+          const expectedSha256 = createHash('sha256').update(content).digest('hex')
+          const releaseName = `projects/${projectId}/releases/cloud.firestore`
+          const access = await applicationDefault().getAccessToken()
+          const token = access.access_token
+          if (!token) throw new Error('Firebase credential did not return an access token.')
+
+          async function request(path, method = 'GET', body) {
+            const response = await fetch(`https://firebaserules.googleapis.com/v1/${path}`, {
+              method,
+              headers: {
+                authorization: `Bearer ${token}`,
+                ...(body ? { 'content-type': 'application/json' } : {}),
+              },
+              ...(body ? { body: JSON.stringify(body) } : {}),
+            })
+            const payload = await response.json().catch(() => ({}))
+            return { response, payload }
+          }
+
+          const created = await request(
+            `projects/${projectId}/rulesets`,
+            'POST',
+            { source: { files: [{ name: 'firestore.secure.rules', content }] } },
+          )
+          if (!created.response.ok || !created.payload?.name) {
+            throw new Error(`Could not create rollback ruleset: ${created.payload?.error?.message || created.response.status}`)
+          }
+          const rulesetName = created.payload.name
+
+          const current = await request(releaseName)
+          if (!current.response.ok && current.response.status !== 404) {
+            throw new Error(`Could not read Firestore release: ${current.payload?.error?.message || current.response.status}`)
+          }
+          const changed = current.response.status === 404
+            ? await request(`projects/${projectId}/releases`, 'POST', {
+                name: releaseName,
+                rulesetName,
+              })
+            : await request(releaseName, 'PATCH', {
+                release: { name: releaseName, rulesetName },
+                updateMask: 'rulesetName',
+              })
+          if (!changed.response.ok) {
+            throw new Error(`Could not activate rollback ruleset: ${changed.payload?.error?.message || changed.response.status}`)
+          }
+
+          let activeRelease
+          for (let attempt = 0; attempt < 10; attempt += 1) {
+            const result = await request(releaseName)
+            if (result.response.ok && result.payload?.rulesetName === rulesetName) {
+              activeRelease = result.payload
+              break
+            }
+            await delay(1_000)
+          }
+          if (!activeRelease) throw new Error('Active release did not converge to rollback ruleset.')
+
+          const active = await request(`${rulesetName}?view=FULL`)
+          if (!active.response.ok) {
+            throw new Error(`Could not read active ruleset: ${active.payload?.error?.message || active.response.status}`)
+          }
+          const files = Array.isArray(active.payload?.source?.files)
+            ? active.payload.source.files
+            : []
+          const matched = files.find((file) =>
+            createHash('sha256').update(String(file?.content || '')).digest('hex') === expectedSha256,
+          )
+          if (!matched) throw new Error('Active production Rules do not match current main.')
+
+          const report = {
+            status: 'verified',
+            projectId,
+            sourceBranch: 'main',
+            sourceCommit,
+            sourceFile: 'firestore.secure.rules',
+            expectedSha256,
+            activeRulesetName: rulesetName,
+            activeRulesetFileName: String(matched.name || ''),
+            releaseUpdateTime: String(activeRelease.updateTime || ''),
+            verifiedAt: new Date().toISOString(),
+            deployedScope: 'firestore:rules',
+            storageRulesChanged: false,
+            indexesChanged: false,
+            dataChanged: false,
+          }
+          writeFileSync('../../firestore-rollback-report.json', `${JSON.stringify(report, null, 2)}\n`)
+          console.log(`FIRESTORE_ROLLBACK_VERIFIED=${expectedSha256}`)
+          NODE
+
+      - name: Upload sanitized rollback report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firestore-main-rollback-report
+          path: firestore-rollback-report.json
+          if-no-files-found: error
+          retention-days: 7
