@@ -8,7 +8,6 @@ on:
     paths:
       - 'artifacts/medstart/**'
       - 'scripts/**'
-      - 'firestore.rules'
       - 'firestore.secure.rules'
       - 'storage.rules'
       - 'firebase.json'
@@ -24,7 +23,6 @@ on:
     paths:
       - 'artifacts/medstart/**'
       - 'scripts/**'
-      - 'firestore.rules'
       - 'firestore.secure.rules'
       - 'storage.rules'
       - 'firebase.json'
@@ -72,6 +70,7 @@ jobs:
         run: |
           test -f firestore.secure.rules
           test -f storage.rules
+          test ! -e firestore.rules
           grep -q '"rules": "firestore.secure.rules"' firebase.json
           grep -q 'allow create, update: if false;' storage.rules
           grep -A2 'match /users/{userId}' firestore.secure.rules | grep -q 'allow create: if false;'
