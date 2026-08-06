@@ -1,6 +1,4 @@
-import {
-  sanitizeOriginalFileName,
-} from './file-security'
+import { sanitizeOriginalFileName } from './file-security'
 import { KnowledgeAccessError } from './knowledge-access'
 
 export const MAX_KNOWLEDGE_PDF_SIZE = 25 * 1024 * 1024
@@ -74,15 +72,20 @@ export function validateKnowledgeHttpsUrl(value: unknown) {
   const normalized = clean(value, 2_000)
   try {
     const parsed = new URL(normalized)
-    if (parsed.protocol !== 'https:' || !parsed.hostname) throw new Error('invalid')
-    parsed.username = ''
-    parsed.password = ''
+    if (
+      parsed.protocol !== 'https:' ||
+      !parsed.hostname ||
+      parsed.username ||
+      parsed.password
+    ) {
+      throw new Error('invalid')
+    }
     return parsed.toString().slice(0, 2_000)
   } catch {
     throw new KnowledgeAccessError(
       400,
       'INVALID_SOURCE_URL',
-      'Укажите безопасную ссылку, начинающуюся с https://.',
+      'Укажите безопасную ссылку, начинающуюся с https:// и без встроенных учётных данных.',
     )
   }
 }
@@ -91,7 +94,7 @@ export function canonicalKnowledgePdfName(value: string) {
   const sanitized = sanitizeOriginalFileName(value)
   const stem = sanitized
     .replace(/\.[^.]*$/, '')
-    .replace(/[. ]+$/g, '')
+    .replace(/^[-. ]+|[-. ]+$/g, '')
     .slice(0, 190)
   return `${stem || 'material'}.pdf`
 }
@@ -103,7 +106,7 @@ export function parseKnowledgeStoragePath(pathValue: unknown): KnowledgeStorageP
     return {
       kind: 'quarantine',
       uploaderUid: match[1],
-      submissionId: match[2],
+      submissionId: validateKnowledgeSubmissionId(match[2]),
       fileName: match[3],
     }
   }
@@ -113,7 +116,7 @@ export function parseKnowledgeStoragePath(pathValue: unknown): KnowledgeStorageP
     return {
       kind: 'published',
       uploaderUid: '',
-      submissionId: match[1],
+      submissionId: validateKnowledgeSubmissionId(match[1]),
       fileName: match[2],
     }
   }
@@ -123,7 +126,7 @@ export function parseKnowledgeStoragePath(pathValue: unknown): KnowledgeStorageP
     return {
       kind: 'legacy',
       uploaderUid: match[1],
-      submissionId: match[2],
+      submissionId: validateKnowledgeSubmissionId(match[2]),
       fileName: match[3],
     }
   }
