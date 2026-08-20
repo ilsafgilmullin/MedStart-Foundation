@@ -1,11 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { NextResponse } from 'next/server'
+import { AdminAccessError } from '@/lib/server/admin-control'
 import {
-  AdminAccessError,
-  adminErrorResponse,
-  requireAdminActor,
-} from '@/lib/server/admin-control'
+  moderationErrorResponse,
+  requireModerationActor,
+  type ModerationActor,
+} from '@/lib/server/moderation-control'
 import {
   getFirebaseAdminBucket,
   getFirebaseAdminDb,
@@ -88,7 +89,7 @@ function assertPending(data: KnowledgeSubmissionData) {
 }
 
 function adminAuditData(input: {
-  actor: Awaited<ReturnType<typeof requireAdminActor>>
+  actor: ModerationActor
   decision: 'approve' | 'reject'
   submissionId: string
   data: KnowledgeSubmissionData
@@ -165,7 +166,7 @@ export async function POST(request: Request) {
   let submissionId = ''
 
   try {
-    const actor = await requireAdminActor(request)
+    const actor = await requireModerationActor(request)
     const body = (await request.json()) as {
       submissionId?: unknown
       decision?: unknown
@@ -504,7 +505,13 @@ export async function POST(request: Request) {
       )
     }
 
-    const response = adminErrorResponse(error)
+    const response =
+      error instanceof AdminAccessError
+        ? {
+            status: error.status,
+            body: { ok: false, code: error.code, error: error.message },
+          }
+        : moderationErrorResponse(error)
     return NextResponse.json(response.body, {
       status: response.status,
       headers: { 'Cache-Control': 'no-store' },
