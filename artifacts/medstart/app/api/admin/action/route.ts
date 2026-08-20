@@ -385,6 +385,42 @@ async function restoreUser(actor: AdminActor, body: ActionBody) {
   return 'Аккаунт восстановлен. Репетитор при необходимости отправлен на повторную проверку.'
 }
 
+function bookingTimestampMillis(value: unknown) {
+  if (!value || typeof value !== 'object') return null
+  const candidate = value as { toMillis?: () => number }
+  return typeof candidate.toMillis === 'function' ? candidate.toMillis() : null
+}
+
+function bookingInterval(data: Record<string, unknown>) {
+  const start = bookingTimestampMillis(data.requestedStartAt)
+  const directEnd = bookingTimestampMillis(data.requestedEndAt)
+  const duration = Math.max(30, Math.trunc(Number(data.durationMinutes) || 60))
+  return {
+    start,
+    end: directEnd ?? (start === null ? null : start + duration * 60_000),
+  }
+}
+
+function bookingOverlaps(
+  left: Record<string, unknown>,
+  right: Record<string, unknown>,
+) {
+  const leftInterval = bookingInterval(left)
+  const rightInterval = bookingInterval(right)
+  if (
+    leftInterval.start === null ||
+    leftInterval.end === null ||
+    rightInterval.start === null ||
+    rightInterval.end === null
+  ) {
+    return false
+  }
+  return (
+    leftInterval.start < rightInterval.end &&
+    leftInterval.end > rightInterval.start
+  )
+}
+
 async function setBookingStatus(actor: AdminActor, body: ActionBody) {
   requireOwner(actor)
   const bookingId = text(body.bookingId, 200)
@@ -395,32 +431,101 @@ async function setBookingStatus(actor: AdminActor, body: ActionBody) {
     throw new Error('Выберите занятие и корректный статус.')
 
   const db = getFirebaseAdminDb()
-  const reference = db.collection('bookings').doc(bookingId)
-  const snapshot = await reference.get()
-  if (!snapshot.exists) throw new Error('Занятие не найдено.')
-  const data = snapshot.data() as Record<string, unknown>
-  const patch: Record<string, unknown> = {
-    status: nextStatus,
-    updatedAt: FieldValue.serverTimestamp(),
-    adminUpdatedBy: actor.uid,
-  }
-  if (nextStatus === 'accepted') patch.confirmedAt = FieldValue.serverTimestamp()
-  if (nextStatus === 'completed') patch.completedAt = FieldValue.serverTimestamp()
-  await reference.update(patch)
-  await writeAdminAudit({
-    actor,
-    action: 'booking_status_changed',
-    summary: `Статус занятия «${String(data.subject || bookingId)}» изменён: ${String(data.status || 'не указан')} → ${nextStatus}.`,
-    targetUid: bookingId,
-    targetType: 'booking',
-    metadata: {
-      previousStatus: data.status,
-      nextStatus,
-      studentUid: data.studentUid,
-      tutorUid: data.tutorUid,
-    },
+  const bookingRef = db.collection('bookings').doc(bookingId)
+  const auditRef = db.collection('adminAuditLogs').doc()
+  let message = ''
+
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(bookingRef)
+    if (!snapshot.exists) throw new Error('Занятие не найдено.')
+
+    const data = snapshot.data() as Record<string, unknown>
+    const tutorUid = text(data.tutorUid, 160)
+    const currentStatus = text(data.status, 40) as BookingStatus
+    if (!tutorUid) throw new Error('У занятия отсутствует репетитор.')
+
+    const calendarRef = db.collection('bookingCalendars').doc(tutorUid)
+    const tutorBookingsQuery = db.collection('bookings').where('tutorUid', '==', tutorUid)
+    const [, tutorBookingsSnapshot] = await Promise.all([
+      transaction.get(calendarRef),
+      transaction.get(tutorBookingsQuery),
+    ])
+
+    const allowed =
+      (currentStatus === 'pending' &&
+        (nextStatus === 'accepted' ||
+          nextStatus === 'declined' ||
+          nextStatus === 'cancelled')) ||
+      (currentStatus === 'accepted' &&
+        (nextStatus === 'cancelled' || nextStatus === 'completed'))
+    if (!allowed) {
+      throw new Error('Этот переход статуса нарушает жизненный цикл занятия.')
+    }
+
+    if (nextStatus === 'accepted') {
+      const interval = bookingInterval(data)
+      if (interval.start === null || interval.end === null) {
+        throw new Error(
+          'У занятия отсутствует авторитетное время. Подтверждение через восстановление запрещено.',
+        )
+      }
+      for (const document of tutorBookingsSnapshot.docs) {
+        if (document.id === bookingId) continue
+        const existing = document.data() as Record<string, unknown>
+        if (existing.status === 'accepted' && bookingOverlaps(data, existing)) {
+          throw new Error(
+            'Нельзя подтвердить занятие: это время уже занято другим подтверждённым занятием.',
+          )
+        }
+      }
+    }
+
+    if (nextStatus === 'completed') {
+      const interval = bookingInterval(data)
+      if (interval.end === null || Date.now() < interval.end) {
+        throw new Error('Завершить занятие можно только после его окончания.')
+      }
+    }
+
+    const patch: Record<string, unknown> = {
+      status: nextStatus,
+      updatedAt: FieldValue.serverTimestamp(),
+      adminUpdatedBy: actor.uid,
+    }
+    if (nextStatus === 'accepted') patch.confirmedAt = FieldValue.serverTimestamp()
+    if (nextStatus === 'completed') patch.completedAt = FieldValue.serverTimestamp()
+
+    message = `Статус занятия «${String(data.subject || bookingId)}» изменён: ${currentStatus} → ${nextStatus}.`
+    transaction.update(bookingRef, patch)
+    transaction.set(
+      calendarRef,
+      {
+        tutorUid,
+        revision: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    )
+    transaction.set(auditRef, {
+      actorUid: actor.uid,
+      actorName: actor.displayName,
+      actorEmail: actor.email,
+      actorRole: actor.role,
+      action: 'booking_status_changed',
+      summary: message,
+      targetUid: bookingId,
+      targetType: 'booking',
+      metadata: {
+        previousStatus: currentStatus,
+        nextStatus,
+        studentUid: data.studentUid,
+        tutorUid,
+      },
+      createdAt: FieldValue.serverTimestamp(),
+    })
   })
-  return 'Статус занятия обновлён владельцем.'
+
+  return message
 }
 
 export async function POST(request: Request) {
