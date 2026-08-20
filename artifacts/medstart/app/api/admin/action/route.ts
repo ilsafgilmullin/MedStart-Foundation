@@ -14,8 +14,14 @@ import { firebaseIdentityRequest } from '@/lib/server/firebase-identity'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-type UserRole = 'student' | 'tutor' | 'admin'
-type UserStatus = 'pending' | 'active' | 'rejected' | 'blocked' | 'deleted'
+type UserRole = 'student' | 'tutor' | 'admin' | 'moderator'
+type UserStatus =
+  | 'pending'
+  | 'active'
+  | 'rejected'
+  | 'suspended'
+  | 'blocked'
+  | 'deleted'
 type BookingStatus = 'pending' | 'accepted' | 'declined' | 'cancelled' | 'completed'
 
 type ActionName =
@@ -50,7 +56,12 @@ interface ProfileData {
   isPublic?: boolean
 }
 
-const validRoles = new Set<UserRole>(['student', 'tutor', 'admin'])
+const validRoles = new Set<UserRole>([
+  'student',
+  'tutor',
+  'admin',
+  'moderator',
+])
 const validBookingStatuses = new Set<BookingStatus>([
   'pending',
   'accepted',
@@ -71,20 +82,34 @@ async function targetProfile(targetUid: string) {
   return { reference, data: snapshot.data() as ProfileData }
 }
 
-function ensureAdminCanManageTarget(actor: AdminActor, targetUid: string, target: ProfileData) {
+function ensureAdminCanManageTarget(
+  actor: AdminActor,
+  targetUid: string,
+  target: ProfileData,
+) {
   assertTargetIsNotOwner(targetUid)
   if (actor.role === 'owner') return
-  if (targetUid === actor.uid || target.role === 'admin') {
-    throw new Error('Администратор не может изменять другого администратора или собственный доступ.')
+  if (
+    targetUid === actor.uid ||
+    target.role === 'admin' ||
+    target.role === 'moderator'
+  ) {
+    throw new Error(
+      'Администратор не может изменять администратора, модератора или собственный доступ.',
+    )
   }
 }
 
 async function moderateTutor(actor: AdminActor, body: ActionBody) {
   const targetUid = text(body.targetUid, 160)
-  const decision = body.decision === 'approve' || body.decision === 'reject' ? body.decision : null
+  const decision =
+    body.decision === 'approve' || body.decision === 'reject'
+      ? body.decision
+      : null
   const note = text(body.note, 1_000)
   if (!targetUid || !decision) throw new Error('Некорректное решение модерации.')
-  if (decision === 'reject' && note.length < 3) throw new Error('Укажите причину отклонения.')
+  if (decision === 'reject' && note.length < 3)
+    throw new Error('Укажите причину отклонения.')
 
   const db = getFirebaseAdminDb()
   const targetRef = db.collection('users').doc(targetUid)
@@ -94,7 +119,8 @@ async function moderateTutor(actor: AdminActor, body: ActionBody) {
     if (!snapshot.exists) throw new Error('Анкета репетитора не найдена.')
     const profile = snapshot.data() as ProfileData
     ensureAdminCanManageTarget(actor, targetUid, profile)
-    if (profile.role !== 'tutor') throw new Error('Выбранный профиль не является репетитором.')
+    if (profile.role !== 'tutor')
+      throw new Error('Выбранный профиль не является репетитором.')
     if (profile.status !== 'pending') throw new Error('Анкета уже обработана.')
     displayName = profile.displayName || 'Репетитор'
     transaction.update(targetRef, {
@@ -118,7 +144,9 @@ async function moderateTutor(actor: AdminActor, body: ActionBody) {
     targetType: 'user',
     metadata: { decision, note },
   })
-  return decision === 'approve' ? 'Репетитор опубликован в каталоге.' : 'Анкета отклонена.'
+  return decision === 'approve'
+    ? 'Репетитор опубликован в каталоге.'
+    : 'Анкета отклонена.'
 }
 
 async function setBlocked(actor: AdminActor, body: ActionBody) {
@@ -130,7 +158,8 @@ async function setBlocked(actor: AdminActor, body: ActionBody) {
   const db = getFirebaseAdminDb()
   const { reference, data } = await targetProfile(targetUid)
   ensureAdminCanManageTarget(actor, targetUid, data)
-  if (data.status === 'deleted') throw new Error('Архивный аккаунт сначала необходимо восстановить.')
+  if (data.status === 'deleted')
+    throw new Error('Архивный аккаунт сначала необходимо восстановить.')
 
   const authUser = await auth.getUser(targetUid)
   const previousDisabled = authUser.disabled
@@ -143,7 +172,8 @@ async function setBlocked(actor: AdminActor, body: ActionBody) {
       if (!current.exists) throw new Error('Пользователь не найден.')
       const profile = current.data() as ProfileData
       if (blocked) {
-        if (profile.status === 'blocked') throw new Error('Аккаунт уже заблокирован.')
+        if (profile.status === 'blocked')
+          throw new Error('Аккаунт уже заблокирован.')
         transaction.update(reference, {
           statusBeforeBlock: profile.status || 'active',
           status: 'blocked',
@@ -151,9 +181,13 @@ async function setBlocked(actor: AdminActor, body: ActionBody) {
           updatedAt: FieldValue.serverTimestamp(),
         })
       } else {
-        if (profile.status !== 'blocked') throw new Error('Аккаунт не заблокирован.')
+        if (profile.status !== 'blocked')
+          throw new Error('Аккаунт не заблокирован.')
         const restored: UserStatus =
-          profile.statusBeforeBlock && ['active', 'pending', 'rejected'].includes(profile.statusBeforeBlock)
+          profile.statusBeforeBlock &&
+          ['active', 'pending', 'rejected', 'suspended'].includes(
+            profile.statusBeforeBlock,
+          )
             ? profile.statusBeforeBlock
             : profile.role === 'tutor'
               ? 'pending'
@@ -167,7 +201,9 @@ async function setBlocked(actor: AdminActor, body: ActionBody) {
       }
     })
   } catch (error) {
-    await auth.updateUser(targetUid, { disabled: previousDisabled }).catch(() => undefined)
+    await auth
+      .updateUser(targetUid, { disabled: previousDisabled })
+      .catch(() => undefined)
     throw error
   }
 
@@ -181,13 +217,17 @@ async function setBlocked(actor: AdminActor, body: ActionBody) {
     targetType: 'user',
     metadata: { previousStatus: data.status },
   })
-  return blocked ? 'Пользователь заблокирован, активные сессии отозваны.' : 'Доступ пользователя восстановлен.'
+  return blocked
+    ? 'Пользователь заблокирован, активные сессии отозваны.'
+    : 'Доступ пользователя восстановлен.'
 }
 
 async function setRole(actor: AdminActor, body: ActionBody) {
   requireOwner(actor)
   const targetUid = text(body.targetUid, 160)
-  const nextRole = validRoles.has(body.role as UserRole) ? (body.role as UserRole) : null
+  const nextRole = validRoles.has(body.role as UserRole)
+    ? (body.role as UserRole)
+    : null
   if (!targetUid || !nextRole) throw new Error('Выберите корректную роль.')
   assertTargetIsNotOwner(targetUid)
 
@@ -201,7 +241,10 @@ async function setRole(actor: AdminActor, body: ActionBody) {
     status: nextStatus,
     statusBeforeBlock: '',
     isPublic: false,
-    moderationNote: nextRole === 'tutor' ? 'Назначен владельцем. Требуется проверка анкеты.' : '',
+    moderationNote:
+      nextRole === 'tutor'
+        ? 'Назначен владельцем. Требуется проверка анкеты.'
+        : '',
     moderatedBy: '',
     moderatedAt: null,
     updatedAt: FieldValue.serverTimestamp(),
@@ -245,7 +288,8 @@ async function sendPasswordReset(actor: AdminActor, body: ActionBody) {
     requestType: 'PASSWORD_RESET',
     email,
   })
-  if (!reset.response.ok) throw new Error('Firebase не принял запрос восстановления пароля.')
+  if (!reset.response.ok)
+    throw new Error('Firebase не принял запрос восстановления пароля.')
   await writeAdminAudit({
     actor,
     action: 'password_reset_sent',
@@ -280,7 +324,8 @@ async function archiveUser(actor: AdminActor, body: ActionBody) {
   assertTargetIsNotOwner(targetUid)
   const auth = getFirebaseAdminAuth()
   const { reference, data } = await targetProfile(targetUid)
-  if (data.status === 'deleted') throw new Error('Аккаунт уже находится в архиве.')
+  if (data.status === 'deleted')
+    throw new Error('Аккаунт уже находится в архиве.')
   const authUser = await auth.getUser(targetUid)
   await auth.updateUser(targetUid, { disabled: true })
   await auth.revokeRefreshTokens(targetUid)
@@ -292,7 +337,9 @@ async function archiveUser(actor: AdminActor, body: ActionBody) {
       updatedAt: FieldValue.serverTimestamp(),
     })
   } catch (error) {
-    await auth.updateUser(targetUid, { disabled: authUser.disabled }).catch(() => undefined)
+    await auth
+      .updateUser(targetUid, { disabled: authUser.disabled })
+      .catch(() => undefined)
     throw error
   }
   await writeAdminAudit({
@@ -313,14 +360,18 @@ async function restoreUser(actor: AdminActor, body: ActionBody) {
   assertTargetIsNotOwner(targetUid)
   const auth = getFirebaseAdminAuth()
   const { reference, data } = await targetProfile(targetUid)
-  if (data.status !== 'deleted') throw new Error('Аккаунт не находится в архиве.')
+  if (data.status !== 'deleted')
+    throw new Error('Аккаунт не находится в архиве.')
   const restored: UserStatus = data.role === 'tutor' ? 'pending' : 'active'
   await auth.updateUser(targetUid, { disabled: false })
   await reference.update({
     status: restored,
     statusBeforeBlock: '',
     isPublic: false,
-    moderationNote: data.role === 'tutor' ? 'Аккаунт восстановлен владельцем. Требуется повторная проверка.' : '',
+    moderationNote:
+      data.role === 'tutor'
+        ? 'Аккаунт восстановлен владельцем. Требуется повторная проверка.'
+        : '',
     updatedAt: FieldValue.serverTimestamp(),
   })
   await writeAdminAudit({
@@ -340,7 +391,8 @@ async function setBookingStatus(actor: AdminActor, body: ActionBody) {
   const nextStatus = validBookingStatuses.has(body.status as BookingStatus)
     ? (body.status as BookingStatus)
     : null
-  if (!bookingId || !nextStatus) throw new Error('Выберите занятие и корректный статус.')
+  if (!bookingId || !nextStatus)
+    throw new Error('Выберите занятие и корректный статус.')
 
   const db = getFirebaseAdminDb()
   const reference = db.collection('bookings').doc(bookingId)
