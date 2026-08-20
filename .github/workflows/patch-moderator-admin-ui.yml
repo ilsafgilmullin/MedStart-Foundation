@@ -1,0 +1,69 @@
+name: One-time moderator admin UI patch
+
+on:
+  push:
+    branches:
+      - security/moderator-role
+    paths:
+      - '.github/workflows/patch-moderator-admin-ui.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: medstart-one-time-moderator-admin-ui
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout moderator branch
+        uses: actions/checkout@v4
+        with:
+          ref: security/moderator-role
+          fetch-depth: 0
+
+      - name: Apply narrow admin UI compatibility patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('artifacts/medstart/app/dashboard/admin/page.tsx')
+          text = path.read_text()
+
+          replacements = [
+            ("  admin: 'Администратор',\n  tutor: 'Репетитор',", "  admin: 'Администратор',\n  moderator: 'Модератор',\n  tutor: 'Репетитор',"),
+            ("  rejected: 'Отклонён',\n  blocked: 'Заблокирован',", "  rejected: 'Отклонён',\n  suspended: 'Приостановлен',\n  blocked: 'Заблокирован',"),
+            ("  rejected: 'bg-red-100 text-red-800',\n  blocked: 'bg-slate-200 text-slate-800',", "  rejected: 'bg-red-100 text-red-800',\n  suspended: 'bg-amber-100 text-amber-900',\n  blocked: 'bg-slate-200 text-slate-800',"),
+            ("            <option value=\"admin\">Администраторы</option>\n            <option value=\"tutor\">", "            <option value=\"admin\">Администраторы</option>\n            <option value=\"moderator\">Модераторы</option>\n            <option value=\"tutor\">"),
+            ("        <option value=\"admin\">Администратор</option>\n      </select>", "        <option value=\"admin\">Администратор</option>\n        <option value=\"moderator\">Модератор</option>\n      </select>"),
+            ("                        user.profileRole === 'admin')", "                        ['admin', 'moderator'].includes(user.profileRole))"),
+            ("`Роль пользователя «${user.displayName}» будет изменена на «${nextRole === 'admin' ? 'Администратор' : 'Ученик'}».`,", "`Роль пользователя «${user.displayName}» будет изменена на «${nextRole === 'admin' ? 'Администратор' : nextRole === 'moderator' ? 'Модератор' : 'Ученик'}».`,"),
+            ("                      {item.actorRole === 'owner'\n                        ? 'Владелец'\n                        : 'Администратор'}", "                      {item.actorRole === 'owner'\n                        ? 'Владелец'\n                        : item.actorRole === 'moderator'\n                          ? 'Модератор'\n                          : 'Администратор'}"),
+          ]
+
+          for old, new in replacements:
+            if old not in text:
+              raise SystemExit(f'Missing admin UI patch marker: {old[:80]!r}')
+            text = text.replace(old, new)
+
+          path.write_text(text)
+          PY
+
+          grep -q "moderator: 'Модератор'" artifacts/medstart/app/dashboard/admin/page.tsx
+          grep -q "suspended: 'Приостановлен'" artifacts/medstart/app/dashboard/admin/page.tsx
+          grep -q '<option value="moderator">Модератор</option>' artifacts/medstart/app/dashboard/admin/page.tsx
+          git diff --check
+
+      - name: Commit patch and remove one-time workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/patch-moderator-admin-ui.yml
+          git add artifacts/medstart/app/dashboard/admin/page.tsx
+          git diff --cached --check
+          git commit -m 'feat(moderation): update admin UI for moderator role'
+          git push origin HEAD:security/moderator-role
