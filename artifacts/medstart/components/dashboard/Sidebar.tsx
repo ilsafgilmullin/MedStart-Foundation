@@ -62,7 +62,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-4">
-        {getNavigation(role).map((item) => {
+        {getNavigation(role, profile?.status).map((item) => {
           const Icon = item.icon
           const active =
             pathname === item.href ||
