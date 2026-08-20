@@ -302,6 +302,7 @@ export async function POST(request: NextRequest) {
     const studentRef = db.collection('users').doc(decoded.uid)
     const tutorRef = db.collection('users').doc(input.tutorUid)
     const availabilityRef = db.collection('availability').doc(input.tutorUid)
+    const calendarRef = db.collection('bookingCalendars').doc(input.tutorUid)
     const bookingRef = db.collection('bookings').doc()
     const participantUids = [decoded.uid, input.tutorUid]
     const conversationId = [...participantUids].sort().join('__')
@@ -315,6 +316,11 @@ export async function POST(request: NextRequest) {
       .where('studentUid', '==', decoded.uid)
 
     await db.runTransaction(async (transaction) => {
+      // A shared server-only calendar document makes the overlap query serializable
+      // even when it currently returns no documents. Concurrent creates for the
+      // same tutor contend on this document and the losing transaction is retried.
+      await transaction.get(calendarRef)
+
       const [
         studentSnapshot,
         tutorSnapshot,
@@ -484,6 +490,15 @@ export async function POST(request: NextRequest) {
         updatedAt: timestamp,
       }
 
+      transaction.set(
+        calendarRef,
+        {
+          tutorUid: input.tutorUid,
+          revision: FieldValue.increment(1),
+          updatedAt: timestamp,
+        },
+        { merge: true },
+      )
       transaction.set(bookingRef, booking)
 
       const conversationUpdate = {
