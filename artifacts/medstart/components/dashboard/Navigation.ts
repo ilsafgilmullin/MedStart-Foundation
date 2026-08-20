@@ -1,6 +1,7 @@
 import {
   BookOpenCheck,
   CalendarDays,
+  FileCheck2,
   FolderOpen,
   Home,
   Inbox,
@@ -50,9 +51,29 @@ const tutor = [
 const moderator = [
   { name: 'Главная', href: '/dashboard', icon: Home },
   {
+    name: 'Модерация',
+    href: '/dashboard/moderation',
+    icon: FileCheck2,
+  },
+  {
+    name: 'Учебная база',
+    href: '/dashboard/knowledge',
+    icon: BookOpenCheck,
+  },
+  ...account,
+]
+
+const admin = [
+  { name: 'Главная', href: '/dashboard', icon: Home },
+  {
     name: 'Центр управления',
     href: '/dashboard/admin',
     icon: ShieldCheck,
+  },
+  {
+    name: 'Модерация',
+    href: '/dashboard/moderation',
+    icon: FileCheck2,
   },
   { name: 'Сообщения', href: '/dashboard/messages', icon: MessageCircle },
   { name: 'Каталог', href: '/dashboard/tutors', icon: Search },
@@ -66,6 +87,7 @@ const moderator = [
 
 export function getNavigation(role: EffectiveUserRole | null) {
   if (role === 'tutor') return tutor
-  if (role === 'admin' || role === 'owner') return moderator
+  if (role === 'moderator') return moderator
+  if (role === 'admin' || role === 'owner') return admin
   return student
 }
