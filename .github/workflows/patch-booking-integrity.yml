@@ -1,0 +1,202 @@
+name: One-time booking integrity patch
+
+on:
+  push:
+    branches:
+      - security/booking-integrity
+    paths:
+      - '.github/workflows/patch-booking-integrity.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: security/booking-integrity
+          fetch-depth: 0
+      - name: Apply booking integrity patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          route = Path('artifacts/medstart/app/api/bookings/route.ts')
+          text = route.read_text()
+          marker = "    const availabilityRef = db.collection('availability').doc(input.tutorUid)\n    const bookingRef = db.collection('bookings').doc()"
+          replacement = "    const availabilityRef = db.collection('availability').doc(input.tutorUid)\n    const calendarRef = db.collection('bookingCalendars').doc(input.tutorUid)\n    const bookingRef = db.collection('bookings').doc()"
+          if marker not in text:
+            raise SystemExit('booking calendar ref marker missing')
+          text = text.replace(marker, replacement, 1)
+          marker = "    await db.runTransaction(async (transaction) => {\n      const ["
+          replacement = "    await db.runTransaction(async (transaction) => {\n      // This server-only mutex serializes all calendar mutations for the tutor.\n      // Two concurrent empty-query booking transactions therefore cannot both commit.\n      await transaction.get(calendarRef)\n\n      const ["
+          if marker not in text:
+            raise SystemExit('booking transaction marker missing')
+          text = text.replace(marker, replacement, 1)
+          marker = "      transaction.set(bookingRef, booking)\n\n      const conversationUpdate = {"
+          replacement = "      transaction.set(calendarRef, {\n        tutorUid: input.tutorUid,\n        revision: FieldValue.increment(1),\n        updatedAt: timestamp,\n      }, { merge: true })\n      transaction.set(bookingRef, booking)\n\n      const conversationUpdate = {"
+          if marker not in text:
+            raise SystemExit('booking write marker missing')
+          route.write_text(text.replace(marker, replacement, 1))
+
+          rules = Path('firestore.secure.rules')
+          text = rules.read_text()
+          old = """      allow update: if isOwner()
+        || (signedIn() && (
+          validTutorBookingDecision()
+          || validStudentBookingCancellation()
+          || validTutorBookingCompletion()
+        ));
+      allow delete: if isOwner();
+    }
+
+    function conversationExists(conversationId) {"""
+          new = """      // All booking mutations are trusted-server only so calendar serialization
+      // cannot be bypassed by a browser transaction.
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    match /bookingCalendars/{tutorId} {
+      allow read, write: if false;
+    }
+
+    function conversationExists(conversationId) {"""
+          if old not in text:
+            raise SystemExit('booking rules marker missing')
+          rules.write_text(text.replace(old, new, 1))
+
+          tests = Path('scripts/test-critical-rules.mjs')
+          text = tests.read_text()
+          old = """  await assertSucceeds(
+    updateDoc(doc(tutor.firestore(), 'bookings', bookingId), {
+      status: 'completed',
+      completedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
+  )
+"""
+          new = """  await assertFails(
+    updateDoc(doc(tutor.firestore(), 'bookings', bookingId), {
+      status: 'completed',
+      completedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
+  )
+  await assertFails(
+    updateDoc(doc(student.firestore(), 'bookings', bookingId), {
+      status: 'cancelled',
+      updatedAt: serverTimestamp(),
+    }),
+  )
+"""
+          if old not in text:
+            raise SystemExit('critical rules booking update marker missing')
+          tests.write_text(text.replace(old, new, 1))
+
+          admin = Path('artifacts/medstart/app/api/admin/action/route.ts')
+          text = admin.read_text()
+          pattern = re.compile(r"async function setBookingStatus\(actor: AdminActor, body: ActionBody\) \{[\s\S]*?\n\}\n\nexport async function POST")
+          replacement = r"""async function setBookingStatus(actor: AdminActor, body: ActionBody) {
+  requireOwner(actor)
+  const bookingId = text(body.bookingId, 200)
+  const nextStatus = validBookingStatuses.has(body.status as BookingStatus)
+    ? (body.status as BookingStatus)
+    : null
+  if (!bookingId || !nextStatus)
+    throw new Error('Выберите занятие и корректный статус.')
+
+  const db = getFirebaseAdminDb()
+  const bookingRef = db.collection('bookings').doc(bookingId)
+  const auditRef = db.collection('adminAuditLogs').doc()
+  let message = ''
+
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(bookingRef)
+    if (!snapshot.exists) throw new Error('Занятие не найдено.')
+    const data = snapshot.data() as Record<string, unknown>
+    const tutorUid = text(data.tutorUid, 160)
+    const currentStatus = text(data.status, 40) as BookingStatus
+    if (!tutorUid) throw new Error('У занятия отсутствует репетитор.')
+
+    const calendarRef = db.collection('bookingCalendars').doc(tutorUid)
+    await transaction.get(calendarRef)
+
+    const allowed =
+      (currentStatus === 'pending' &&
+        ['accepted', 'declined', 'cancelled'].includes(nextStatus)) ||
+      (currentStatus === 'accepted' &&
+        ['cancelled', 'completed'].includes(nextStatus))
+    if (!allowed) {
+      throw new Error('Этот переход статуса нарушает жизненный цикл занятия.')
+    }
+
+    if (nextStatus === 'completed') {
+      const end = data.requestedEndAt as { toMillis?: () => number } | undefined
+      if (end && typeof end.toMillis === 'function' && Date.now() < end.toMillis()) {
+        throw new Error('Завершить занятие можно только после его окончания.')
+      }
+    }
+
+    const patch: Record<string, unknown> = {
+      status: nextStatus,
+      updatedAt: FieldValue.serverTimestamp(),
+      adminUpdatedBy: actor.uid,
+    }
+    if (nextStatus === 'accepted') patch.confirmedAt = FieldValue.serverTimestamp()
+    if (nextStatus === 'completed') patch.completedAt = FieldValue.serverTimestamp()
+
+    message = `Статус занятия «${String(data.subject || bookingId)}» изменён: ${currentStatus} → ${nextStatus}.`
+    transaction.update(bookingRef, patch)
+    transaction.set(
+      calendarRef,
+      {
+        tutorUid,
+        revision: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    )
+    transaction.set(auditRef, {
+      actorUid: actor.uid,
+      actorName: actor.displayName,
+      actorEmail: actor.email,
+      actorRole: actor.role,
+      action: 'booking_status_changed',
+      summary: message,
+      targetUid: bookingId,
+      targetType: 'booking',
+      metadata: {
+        previousStatus: currentStatus,
+        nextStatus,
+        studentUid: data.studentUid,
+        tutorUid,
+      },
+      createdAt: FieldValue.serverTimestamp(),
+    })
+  })
+  return message
+}
+
+export async function POST"""
+          text, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+            raise SystemExit('admin booking action marker missing')
+          admin.write_text(text)
+          PY
+          git diff --check
+      - name: Commit patch and remove workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/patch-booking-integrity.yml
+          git add artifacts/medstart/app/api/bookings/route.ts artifacts/medstart/app/api/admin/action/route.ts firestore.secure.rules scripts/test-critical-rules.mjs
+          git diff --cached --check
+          git commit -m 'feat(bookings): serialize calendar mutations'
+          git push origin HEAD:security/booking-integrity
