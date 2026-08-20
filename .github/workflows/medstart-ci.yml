@@ -6,6 +6,11 @@ on:
       - security/booking-integrity
     paths:
       - '.github/workflows/medstart-ci.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/medstart-ci.yml'
 
 permissions:
   contents: write
@@ -198,7 +203,7 @@ export async function POST"""
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git show HEAD^:.github/workflows/medstart-ci.yml > .github/workflows/medstart-ci.yml
+          git show HEAD^^:.github/workflows/medstart-ci.yml > .github/workflows/medstart-ci.yml
           git rm -f .github/workflows/patch-booking-integrity.yml
           git add .github/workflows/medstart-ci.yml artifacts/medstart/app/api/bookings/route.ts artifacts/medstart/app/api/admin/action/route.ts firestore.secure.rules scripts/test-critical-rules.mjs
           git diff --cached --check
