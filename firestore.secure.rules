@@ -411,13 +411,14 @@ service cloud.firestore {
     match /bookings/{bookingId} {
       allow create: if false;
       allow read: if isModerator() || isActiveBookingParticipant();
-      allow update: if isOwner()
-        || (signedIn() && (
-          validTutorBookingDecision()
-          || validStudentBookingCancellation()
-          || validTutorBookingCompletion()
-        ));
-      allow delete: if isOwner();
+      // Booking mutations are trusted-server only so calendar serialization
+      // cannot be bypassed by a browser Firestore transaction.
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    match /bookingCalendars/{tutorId} {
+      allow read, write: if false;
     }
 
     function conversationExists(conversationId) {
