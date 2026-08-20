@@ -31,6 +31,8 @@ const moderationRoute = await readFile(
 )
 const firestoreRules = await readFile('firestore.secure.rules', 'utf8')
 const storageRules = await readFile('storage.rules', 'utf8')
+const workspaceConfig = await readFile('pnpm-workspace.yaml', 'utf8')
+const lockfile = await readFile('pnpm-lock.yaml', 'utf8')
 
 for (const marker of [
   "MAX_KNOWLEDGE_PDF_SIZE = 25 * 1024 * 1024",
@@ -164,6 +166,22 @@ for (const path of [
 assert.equal(
   (storageRules.match(/allow read, write: if false;/g) || []).length >= 4,
   true,
+)
+
+assert.equal(
+  workspaceConfig.includes('nanoid@<3.3.18: 3.3.18'),
+  true,
+  'Workspace must pin Nano ID to the patched 3.x release.',
+)
+assert.equal(
+  lockfile.includes('nanoid@3.3.18'),
+  true,
+  'Lockfile must contain Nano ID 3.3.18.',
+)
+assert.equal(
+  lockfile.includes('nanoid@3.3.16'),
+  false,
+  'Vulnerable Nano ID 3.3.16 must not remain in the lockfile.',
 )
 
 console.log('Knowledge submission pipeline contract tests passed.')
