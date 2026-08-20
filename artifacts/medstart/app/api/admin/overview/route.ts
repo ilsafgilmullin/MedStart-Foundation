@@ -171,7 +171,12 @@ export async function GET(request: Request) {
         actorUid: String(data.actorUid || ''),
         actorName: String(data.actorName || 'Администратор'),
         actorEmail: String(data.actorEmail || ''),
-        actorRole: data.actorRole === 'owner' ? 'owner' : 'admin',
+        actorRole:
+          data.actorRole === 'owner'
+            ? 'owner'
+            : data.actorRole === 'moderator'
+              ? 'moderator'
+              : 'admin',
         action: String(data.action || ''),
         summary: String(data.summary || ''),
         targetUid: String(data.targetUid || ''),
