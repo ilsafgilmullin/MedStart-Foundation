@@ -12,6 +12,7 @@ const [
   adminServerSource,
   adminActionSource,
   messageAccessSource,
+  medicalMessengerSource,
   knowledgeAccessSource,
   firestoreRules,
   storageRules,
@@ -24,6 +25,7 @@ const [
   read('artifacts/medstart/lib/server/admin-control.ts'),
   read('artifacts/medstart/app/api/admin/action/route.ts'),
   read('artifacts/medstart/lib/server/message-access.ts'),
+  read('artifacts/medstart/components/messages/MedicalMessenger.tsx'),
   read('artifacts/medstart/lib/server/knowledge-access.ts'),
   read('firestore.secure.rules'),
   read('storage.rules'),
@@ -38,7 +40,7 @@ assert.match(profileSource, /'suspended'/)
 for (const marker of [
   'verifyIdToken(token, true)',
   "profile.role === 'admin' || profile.role === 'moderator'",
-  "role: ModerationActorRole",
+  'role: ModerationActorRole',
   "status !== 'active'",
   "collection('adminAuditLogs')",
 ]) {
@@ -61,7 +63,10 @@ const restrictedTutorNav = navigationSource.match(
   /const restrictedTutor = \[([\s\S]*?)\n\]\n\nconst moderator =/,
 )
 assert.ok(restrictedTutorNav, 'Restricted tutor navigation block is missing')
-assert.doesNotMatch(restrictedTutorNav[1], /\/dashboard\/(requests|schedule|students|messages|materials)/)
+assert.doesNotMatch(
+  restrictedTutorNav[1],
+  /\/dashboard\/(requests|schedule|students|messages|materials)/,
+)
 assert.match(
   navigationSource,
   /status === 'suspended' \? restrictedTutor : tutor/,
@@ -130,6 +135,11 @@ assert.equal(
   messageAccessSource.includes("| 'moderator'"),
   false,
   'Moderator must remain outside MessageActorRole.',
+)
+assert.equal(
+  medicalMessengerSource.includes("role === 'moderator') return null"),
+  true,
+  'Moderator client must not become a ChatSender.',
 )
 
 assert.match(knowledgeAccessSource, /\| 'moderator'/)
