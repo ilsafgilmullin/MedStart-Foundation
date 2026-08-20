@@ -61,7 +61,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     let cancelled = false
     const warmRoleRoutes = () => {
       if (cancelled) return
-      for (const item of getNavigation(role)) router.prefetch(item.href)
+      for (const item of getNavigation(role, profile?.status)) {
+        router.prefetch(item.href)
+      }
     }
 
     const idleWindow = window as unknown as {
@@ -86,7 +88,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [role, router])
+  }, [profile?.status, role, router])
 
   if (loading || !user || !profile) {
     return (
