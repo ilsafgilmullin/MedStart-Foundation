@@ -107,7 +107,8 @@ for (const marker of [
   "nextStatus = 'suspended'",
   "nextStatus = 'active'",
   "isPublic: nextStatus === 'active'",
-  'writeModerationAudit',
+  "collection('adminAuditLogs').doc()",
+  'transaction.set(auditReference',
 ]) {
   assert.equal(
     moderatorTutorSource.includes(marker),
@@ -115,6 +116,11 @@ for (const marker of [
     `Trusted tutor moderation marker missing: ${marker}`,
   )
 }
+assert.equal(
+  moderatorTutorSource.includes('writeModerationAudit'),
+  false,
+  'Tutor status and audit must be committed atomically in the same Firestore transaction.',
+)
 
 assert.equal(
   adminServerSource.includes("profile.role === 'moderator'"),
