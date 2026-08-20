@@ -1,9 +1,14 @@
 import type { LearnerTrack, SchoolExam } from './education'
 
-export type UserRole = 'student' | 'tutor' | 'admin'
+export type UserRole = 'student' | 'tutor' | 'admin' | 'moderator'
 export type EffectiveUserRole = UserRole | 'owner'
 export type UserStatus =
-  'pending' | 'active' | 'rejected' | 'blocked' | 'deleted'
+  | 'pending'
+  | 'active'
+  | 'rejected'
+  | 'suspended'
+  | 'blocked'
+  | 'deleted'
 export type LessonFormat = 'online' | 'in_person'
 
 export interface NotificationPreferences {
