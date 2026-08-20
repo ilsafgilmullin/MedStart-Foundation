@@ -14,6 +14,7 @@ const [
   messageAccessSource,
   medicalMessengerSource,
   knowledgeAccessSource,
+  knowledgeModerationSource,
   firestoreRules,
   storageRules,
 ] = await Promise.all([
@@ -27,6 +28,7 @@ const [
   read('artifacts/medstart/lib/server/message-access.ts'),
   read('artifacts/medstart/components/messages/MedicalMessenger.tsx'),
   read('artifacts/medstart/lib/server/knowledge-access.ts'),
+  read('artifacts/medstart/app/api/knowledge/moderation/route.ts'),
   read('firestore.secure.rules'),
   read('storage.rules'),
 ])
@@ -147,6 +149,18 @@ assert.match(
   knowledgeAccessSource,
   /role === 'owner' \|\| role === 'admin' \|\| role === 'moderator'/,
 )
+assert.equal(
+  knowledgeModerationSource.includes('requireModerationActor(request)'),
+  true,
+  'Knowledge approve/reject must use the dedicated moderation guard.',
+)
+assert.equal(
+  knowledgeModerationSource.includes('requireAdminActor(request)'),
+  false,
+  'Knowledge moderation must not require the broad admin guard.',
+)
+assert.match(knowledgeModerationSource, /actor: ModerationActor/)
+assert.match(knowledgeModerationSource, /transaction\.set\(\s*auditRef,/)
 
 for (const [label, rules] of [
   ['Firestore', firestoreRules],
