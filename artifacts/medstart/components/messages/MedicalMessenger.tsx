@@ -277,7 +277,7 @@ export default function MedicalMessenger() {
   }, [conversations, queryText])
 
   const sender = useMemo<ChatSender | null>(() => {
-    if (!user || !profile || !role) return null
+    if (!user || !profile || !role || role === 'moderator') return null
     return {
       uid: user.uid,
       name: profile.displayName || user.email || 'Пользователь MedStart',

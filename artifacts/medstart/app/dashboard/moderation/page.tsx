@@ -235,15 +235,15 @@ export default function ModerationPage() {
       {overview && (
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            ['Анкеты на проверке', overview.stats.pendingTutors, Clock3],
-            ['Активные репетиторы', overview.stats.activeTutors, UserCheck],
-            ['Приостановлены', overview.stats.suspendedTutors, Stethoscope],
-            ['Материалы на проверке', overview.stats.pendingKnowledge, BookOpenCheck],
-          ].map(([label, value, Icon]) => (
-            <article key={String(label)} className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
+            { label: 'Анкеты на проверке', value: overview.stats.pendingTutors, icon: Clock3 },
+            { label: 'Активные репетиторы', value: overview.stats.activeTutors, icon: UserCheck },
+            { label: 'Приостановлены', value: overview.stats.suspendedTutors, icon: Stethoscope },
+            { label: 'Материалы на проверке', value: overview.stats.pendingKnowledge, icon: BookOpenCheck },
+          ].map(({ label, value, icon: Icon }) => (
+            <article key={label} className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
               <Icon className="h-5 w-5 text-teal-700" />
-              <p className="mt-4 text-3xl font-black text-slate-950">{String(value)}</p>
-              <p className="mt-1 text-sm font-bold text-slate-500">{String(label)}</p>
+              <p className="mt-4 text-3xl font-black text-slate-950">{value}</p>
+              <p className="mt-1 text-sm font-bold text-slate-500">{label}</p>
             </article>
           ))}
         </section>
