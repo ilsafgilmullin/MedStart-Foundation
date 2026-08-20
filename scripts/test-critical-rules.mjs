@@ -256,10 +256,25 @@ async function run() {
     ),
   )
 
-  await assertSucceeds(
+  // Booking lifecycle transitions are trusted-server only. A browser cannot
+  // bypass calendar serialization even when the user is a valid participant.
+  await assertFails(
     updateDoc(doc(tutor.firestore(), 'bookings', bookingId), {
       status: 'completed',
       completedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
+  )
+  await assertFails(
+    updateDoc(doc(student.firestore(), 'bookings', bookingId), {
+      status: 'cancelled',
+      updatedAt: serverTimestamp(),
+    }),
+  )
+  await assertFails(
+    setDoc(doc(student.firestore(), 'bookingCalendars', tutorUid), {
+      tutorUid,
+      revision: 999,
       updatedAt: serverTimestamp(),
     }),
   )
