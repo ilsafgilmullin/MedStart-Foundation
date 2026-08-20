@@ -5,14 +5,12 @@ import {
   ModerationAccessError,
   moderationErrorResponse,
   requireModerationActor,
-  writeModerationAudit,
 } from '@/lib/server/moderation-control'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 type TutorDecision = 'approve' | 'reject' | 'suspend' | 'reinstate'
-
 type TutorStatus = 'pending' | 'active' | 'rejected' | 'suspended'
 
 interface ActionBody {
@@ -34,6 +32,26 @@ function decisionOf(value: unknown): TutorDecision | null {
     : null
 }
 
+function actionFor(decision: TutorDecision) {
+  if (decision === 'approve') return 'tutor_approve'
+  if (decision === 'reject') return 'tutor_reject'
+  if (decision === 'suspend') return 'tutor_suspend'
+  return 'tutor_reinstate'
+}
+
+function summaryFor(decision: TutorDecision, displayName: string) {
+  if (decision === 'approve') {
+    return `Анкета репетитора «${displayName}» одобрена.`
+  }
+  if (decision === 'reject') {
+    return `Анкета репетитора «${displayName}» отклонена.`
+  }
+  if (decision === 'suspend') {
+    return `Публичный доступ репетитора «${displayName}» приостановлен.`
+  }
+  return `Репетитор «${displayName}» восстановлен в каталоге.`
+}
+
 export async function POST(request: Request) {
   try {
     const actor = await requireModerationActor(request)
@@ -41,7 +59,11 @@ export async function POST(request: Request) {
     try {
       body = (await request.json()) as ActionBody
     } catch {
-      throw new ModerationAccessError(400, 'INVALID_REQUEST', 'Некорректный запрос.')
+      throw new ModerationAccessError(
+        400,
+        'INVALID_REQUEST',
+        'Некорректный запрос.',
+      )
     }
 
     const targetUid = text(body.targetUid, 160)
@@ -54,7 +76,10 @@ export async function POST(request: Request) {
         'Некорректное решение модерации.',
       )
     }
-    if ((decision === 'reject' || decision === 'suspend') && note.length < 3) {
+    if (
+      (decision === 'reject' || decision === 'suspend') &&
+      note.length < 3
+    ) {
       throw new ModerationAccessError(
         400,
         'MODERATION_REASON_REQUIRED',
@@ -64,8 +89,8 @@ export async function POST(request: Request) {
 
     const db = getFirebaseAdminDb()
     const reference = db.collection('users').doc(targetUid)
-    let displayName = 'Репетитор'
-    let previousStatus: TutorStatus = 'pending'
+    const auditReference = db.collection('adminAuditLogs').doc()
+    let summary = ''
     let nextStatus: TutorStatus = 'pending'
 
     await db.runTransaction(async (transaction) => {
@@ -90,8 +115,11 @@ export async function POST(request: Request) {
         )
       }
 
-      displayName = String(profile.displayName || 'Репетитор').slice(0, 160)
-      previousStatus = profile.status as TutorStatus
+      const displayName = String(profile.displayName || 'Репетитор').slice(
+        0,
+        160,
+      )
+      const previousStatus = profile.status as TutorStatus
 
       if (decision === 'approve') {
         if (profile.status !== 'pending') {
@@ -131,6 +159,7 @@ export async function POST(request: Request) {
         nextStatus = 'active'
       }
 
+      summary = summaryFor(decision, displayName)
       transaction.update(reference, {
         status: nextStatus,
         isPublic: nextStatus === 'active',
@@ -140,32 +169,23 @@ export async function POST(request: Request) {
         moderatedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       })
-    })
-
-    const action =
-      decision === 'approve'
-        ? 'tutor_approve'
-        : decision === 'reject'
-          ? 'tutor_reject'
-          : decision === 'suspend'
-            ? 'tutor_suspend'
-            : 'tutor_reinstate'
-    const summary =
-      decision === 'approve'
-        ? `Анкета репетитора «${displayName}» одобрена.`
-        : decision === 'reject'
-          ? `Анкета репетитора «${displayName}» отклонена.`
-          : decision === 'suspend'
-            ? `Публичный доступ репетитора «${displayName}» приостановлен.`
-            : `Репетитор «${displayName}» восстановлен в каталоге.`
-
-    await writeModerationAudit({
-      actor,
-      action,
-      summary,
-      targetUid,
-      targetType: 'user',
-      metadata: { decision, note, previousStatus, nextStatus },
+      transaction.set(auditReference, {
+        actorUid: actor.uid,
+        actorName: actor.displayName.slice(0, 160),
+        actorEmail: actor.email.slice(0, 320),
+        actorRole: actor.role,
+        action: actionFor(decision),
+        summary,
+        targetUid,
+        targetType: 'user',
+        metadata: {
+          decision,
+          note,
+          previousStatus,
+          nextStatus,
+        },
+        createdAt: FieldValue.serverTimestamp(),
+      })
     })
 
     return NextResponse.json(
