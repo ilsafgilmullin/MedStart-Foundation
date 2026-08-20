@@ -4,6 +4,7 @@ import { learnerTrackFor } from '@/lib/education'
 const names = {
   student: 'Студент',
   tutor: 'Репетитор',
+  moderator: 'Модератор',
   admin: 'Администратор',
   owner: 'Владелец',
 } as const
