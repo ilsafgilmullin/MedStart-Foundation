@@ -42,6 +42,26 @@ function adminAuditData(input: {
   }
 }
 
+async function cleanupQuarantineSiblings(input: {
+  tutorUid: string
+  submissionId: string
+  keepPath?: string
+}) {
+  const prefix =
+    `knowledge-quarantine/${input.tutorUid}/${input.submissionId}/`
+  const [files] = await getFirebaseAdminBucket().getFiles({ prefix })
+  const staleFiles = files.filter((file) => file.name !== input.keepPath)
+  await Promise.all(
+    staleFiles.map((file) =>
+      file.delete({ ignoreNotFound: true }).catch((error) => {
+        console.error('Knowledge quarantine sibling cleanup failed', error)
+        throw error
+      }),
+    ),
+  )
+  return staleFiles.length
+}
+
 export async function POST(request: Request) {
   try {
     const actor = await requireKnowledgeActor(request)
@@ -157,8 +177,27 @@ export async function POST(request: Request) {
       })
     })
 
+    let orphanCleanupRequired = false
+    let orphanFilesRemoved = 0
+    if (filePath) {
+      try {
+        orphanFilesRemoved = await cleanupQuarantineSiblings({
+          tutorUid: actor.uid,
+          submissionId: input.id,
+          keepPath: filePath,
+        })
+      } catch {
+        orphanCleanupRequired = true
+      }
+    }
+
     return NextResponse.json(
-      { ok: true, id: input.id },
+      {
+        ok: true,
+        id: input.id,
+        orphanFilesRemoved,
+        orphanCleanupRequired,
+      },
       { status: 201, headers: { 'Cache-Control': 'no-store' } },
     )
   } catch (error) {
@@ -226,9 +265,17 @@ export async function DELETE(request: Request) {
     let orphanCleanupRequired = false
     if (data.sourceMode === 'file' && data.filePath) {
       try {
-        await getFirebaseAdminBucket()
-          .file(data.filePath)
-          .delete({ ignoreNotFound: true })
+        const parsed = parseKnowledgeStoragePath(data.filePath)
+        if (parsed.kind === 'quarantine' && parsed.uploaderUid) {
+          await cleanupQuarantineSiblings({
+            tutorUid: parsed.uploaderUid,
+            submissionId,
+          })
+        } else {
+          await getFirebaseAdminBucket()
+            .file(data.filePath)
+            .delete({ ignoreNotFound: true })
+        }
       } catch (error) {
         orphanCleanupRequired = true
         console.error('Knowledge object cleanup failed after document deletion', error)
