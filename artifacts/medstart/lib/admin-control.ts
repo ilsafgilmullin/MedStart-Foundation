@@ -3,7 +3,7 @@ import type { BookingStatus } from './domain'
 import type { LearnerTrack, SchoolExam } from './education'
 import type { UserRole, UserStatus } from './user-profile'
 
-export type AdminActorRole = 'owner' | 'admin'
+export type AdminActorRole = 'owner' | 'admin' | 'moderator'
 export type AdminOverviewTab =
   'overview' | 'moderation' | 'users' | 'bookings' | 'audit' | 'system'
 
