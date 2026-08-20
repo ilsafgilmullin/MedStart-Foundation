@@ -3,7 +3,12 @@ import 'server-only'
 import { PRIMARY_OWNER_UID } from '@/lib/access-control'
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from './firebase-admin'
 
-export type KnowledgeActorRole = 'student' | 'tutor' | 'admin' | 'owner'
+export type KnowledgeActorRole =
+  | 'student'
+  | 'tutor'
+  | 'admin'
+  | 'moderator'
+  | 'owner'
 
 export interface KnowledgeActor {
   uid: string
@@ -87,7 +92,8 @@ export async function requireKnowledgeActor(
       ? 'owner'
       : profile.role === 'student' ||
           profile.role === 'tutor' ||
-          profile.role === 'admin'
+          profile.role === 'admin' ||
+          profile.role === 'moderator'
         ? profile.role
         : null
   if (!role) {
@@ -105,7 +111,8 @@ export async function requireKnowledgeActor(
     ).slice(0, 160),
     email: String(decoded.email || profile.email || ''),
     role,
-    moderator: role === 'owner' || role === 'admin',
+    moderator:
+      role === 'owner' || role === 'admin' || role === 'moderator',
   }
 }
 
@@ -124,7 +131,7 @@ export function requireModerator(actor: KnowledgeActor) {
     throw new KnowledgeAccessError(
       403,
       'MODERATOR_REQUIRED',
-      'Для этого действия нужны права администратора.',
+      'Для этого действия нужны права модератора.',
     )
   }
 }
