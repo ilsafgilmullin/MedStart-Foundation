@@ -106,7 +106,8 @@ for (const marker of [
 }
 
 for (const marker of [
-  'requireAdminActor',
+  'requireModerationActor',
+  'moderationErrorResponse',
   'knowledge-published/',
   'detectUploadType',
   'adminAuditLogs',
@@ -129,6 +130,11 @@ for (const marker of [
   )
 }
 
+assert.equal(
+  moderationRoute.includes('requireAdminActor'),
+  false,
+  'Knowledge moderation must use the isolated moderation guard, not broad admin access.',
+)
 assert.equal(
   moderationRoute.includes(
     "let sha256 = String(data.sha256 || custom.sha256 || '')",
