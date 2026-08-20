@@ -1,0 +1,84 @@
+name: One-time Nano ID lockfile repair
+
+on:
+  push:
+    branches:
+      - security/knowledge-submission-pipeline
+    paths:
+      - '.github/workflows/repair-nanoid-lock.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: medstart-one-time-nanoid-lock-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: security/knowledge-submission-pipeline
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Add narrow Nano ID override
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('pnpm-workspace.yaml')
+          text = path.read_text()
+          marker = '  nanoid@<3.3.18: 3.3.18\n'
+          if marker not in text:
+              text = text.replace('overrides:\n', 'overrides:\n' + marker, 1)
+          text = text.replace('minimumReleaseAge: 1440', 'minimumReleaseAge: 0', 1)
+          path.write_text(text)
+          PY
+
+      - name: Regenerate only the lockfile
+        run: pnpm install --lockfile-only
+
+      - name: Restore release-age policy
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('pnpm-workspace.yaml')
+          text = path.read_text().replace('minimumReleaseAge: 0', 'minimumReleaseAge: 1440', 1)
+          path.write_text(text)
+          PY
+
+      - name: Verify frozen install and security audit
+        shell: bash
+        run: |
+          pnpm install --frozen-lockfile --reporter=silent
+          pnpm audit --prod --audit-level high
+          grep -q 'nanoid@<3.3.18: 3.3.18' pnpm-workspace.yaml
+          grep -q 'nanoid@3.3.18' pnpm-lock.yaml
+          ! grep -q 'nanoid@3.3.16' pnpm-lock.yaml
+
+      - name: Commit dependency repair and remove one-time workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/repair-nanoid-lock.yml
+          git add pnpm-workspace.yaml pnpm-lock.yaml
+          git diff --cached --check
+          git commit -m 'fix(deps): update nanoid to 3.3.18'
+          git push origin HEAD:security/knowledge-submission-pipeline
