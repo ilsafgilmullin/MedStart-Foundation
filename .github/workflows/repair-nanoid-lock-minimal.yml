@@ -1,0 +1,81 @@
+name: One-time minimal Nano ID lockfile repair
+
+on:
+  push:
+    branches:
+      - security/knowledge-submission-pipeline
+    paths:
+      - '.github/workflows/repair-nanoid-lock-minimal.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: medstart-one-time-minimal-nanoid-lock-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: security/knowledge-submission-pipeline
+          fetch-depth: 0
+
+      - name: Restore pre-advisory lockfile and apply minimal patch
+        shell: bash
+        run: |
+          git show e6eddbc3deeac04e1cc2d281d5365ec25dd5bf74:pnpm-lock.yaml > pnpm-lock.yaml
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('pnpm-lock.yaml')
+          text = path.read_text()
+          old_integrity = 'sha512-bzlKTyNJ7+LdGIIwy8ijFpIqEQIvafahV7eYykJ8Cvh42EdJeODoJ6gUJXpQJvej1BddH8OqTXZNE/KfbWAu8Q=='
+          new_integrity = 'sha512-DTg4MJbGMWkfi6VZFdNt2/caMbQy4Ou+Op/hJQvGEWcnVfoA1QA+xzRKAzw9jD6+GVOOeYr/mIcuDSdug6F6+w=='
+          if '  nanoid@<3.3.18: 3.3.18\n' not in text:
+              text = text.replace('overrides:\n', 'overrides:\n  nanoid@<3.3.18: 3.3.18\n', 1)
+          text = text.replace('  nanoid@3.3.16:\n    resolution: {integrity: ' + old_integrity + '}', '  nanoid@3.3.18:\n    resolution: {integrity: ' + new_integrity + '}', 1)
+          text = text.replace('  nanoid@3.3.16: {}', '  nanoid@3.3.18: {}', 1)
+          text = text.replace('      nanoid: 3.3.16', '      nanoid: 3.3.18', 1)
+          if 'nanoid@3.3.16' in text or 'nanoid: 3.3.16' in text:
+              raise SystemExit('Vulnerable Nano ID reference remains in lockfile')
+          if 'nanoid@3.3.18' not in text or 'nanoid: 3.3.18' not in text:
+              raise SystemExit('Nano ID 3.3.18 lock entries were not created')
+          path.write_text(text)
+          PY
+          test "$(git diff --numstat e6eddbc3deeac04e1cc2d281d5365ec25dd5bf74 -- pnpm-lock.yaml | awk '{print $1+$2}')" -le 12
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Verify frozen install and production audit
+        shell: bash
+        run: |
+          pnpm install --frozen-lockfile --reporter=silent
+          pnpm audit --prod --audit-level high
+          grep -q 'nanoid@<3.3.18: 3.3.18' pnpm-workspace.yaml
+          grep -q 'nanoid@<3.3.18: 3.3.18' pnpm-lock.yaml
+          grep -q 'nanoid@3.3.18' pnpm-lock.yaml
+          ! grep -q 'nanoid@3.3.16' pnpm-lock.yaml
+
+      - name: Commit minimal lockfile and remove one-time workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/repair-nanoid-lock-minimal.yml
+          git add pnpm-lock.yaml
+          git diff --cached --check
+          git commit -m 'chore(deps): minimize nanoid lockfile diff'
+          git push origin HEAD:security/knowledge-submission-pipeline
