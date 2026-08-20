@@ -137,6 +137,8 @@ async function saveQuarantinedPdf(input: {
 }
 
 export async function POST(request: Request) {
+  let uploadedPath = ''
+
   try {
     const actor = await requireKnowledgeActor(request)
     requireTutor(actor)
@@ -148,6 +150,18 @@ export async function POST(request: Request) {
     if (!(file instanceof File)) {
       throw new KnowledgeAccessError(400, 'FILE_REQUIRED', 'PDF-файл не передан.')
     }
+
+    const db = getFirebaseAdminDb()
+    const submissionRef = db.collection('knowledgeSubmissions').doc(submissionId)
+    const existingSubmission = await submissionRef.get()
+    if (existingSubmission.exists) {
+      throw new KnowledgeAccessError(
+        409,
+        'KNOWLEDGE_SUBMISSION_ALREADY_EXISTS',
+        'Заявка уже создана. Заменить её PDF после отправки на модерацию нельзя.',
+      )
+    }
+
     await validatePdf(file)
 
     const originalName = canonicalKnowledgePdfName(
@@ -158,19 +172,33 @@ export async function POST(request: Request) {
       'pdf',
       randomUUID(),
     )
-    const path = `knowledge-quarantine/${actor.uid}/${submissionId}/${storedName}`
+    uploadedPath = `knowledge-quarantine/${actor.uid}/${submissionId}/${storedName}`
     const sha256 = await saveQuarantinedPdf({
       file,
-      path,
+      path: uploadedPath,
       submissionId,
       tutorUid: actor.uid,
       originalName,
     })
 
+    const submissionAfterUpload = await submissionRef.get()
+    if (submissionAfterUpload.exists) {
+      await getFirebaseAdminBucket()
+        .file(uploadedPath)
+        .delete({ ignoreNotFound: true })
+        .catch(() => undefined)
+      uploadedPath = ''
+      throw new KnowledgeAccessError(
+        409,
+        'KNOWLEDGE_SUBMISSION_ALREADY_EXISTS',
+        'Заявка была создана во время загрузки. Повторная замена PDF запрещена.',
+      )
+    }
+
     return NextResponse.json(
       {
         ok: true,
-        filePath: path,
+        filePath: uploadedPath,
         fileName: originalName,
         fileSize: file.size,
         mimeType: 'application/pdf',
@@ -182,6 +210,12 @@ export async function POST(request: Request) {
       { status: 201, headers: { 'Cache-Control': 'no-store' } },
     )
   } catch (error) {
+    if (uploadedPath) {
+      await getFirebaseAdminBucket()
+        .file(uploadedPath)
+        .delete({ ignoreNotFound: true })
+        .catch(() => undefined)
+    }
     const response = knowledgeErrorResponse(error)
     return NextResponse.json(response.body, {
       status: response.status,
@@ -311,20 +345,43 @@ export async function DELETE(request: Request) {
         submittedByUid?: string
         status?: string
       }
-      const allowed =
-        data.filePath === path &&
-        (actor.moderator ||
+      const isCurrentFile = data.filePath === path
+      if (isCurrentFile) {
+        const allowed =
+          actor.moderator ||
           (data.submittedByUid === actor.uid &&
-            (data.status === 'pending' || data.status === 'rejected')))
-      if (!allowed) {
-        throw new KnowledgeAccessError(
-          403,
-          'KNOWLEDGE_DELETE_FORBIDDEN',
-          'Удалить этот файл нельзя.',
+            (data.status === 'pending' || data.status === 'rejected'))
+        if (!allowed) {
+          throw new KnowledgeAccessError(
+            403,
+            'KNOWLEDGE_DELETE_FORBIDDEN',
+            'Удалить этот файл нельзя.',
+          )
+        }
+        return NextResponse.json(
+          { ok: true, deferredToSubmissionDelete: true },
+          { headers: { 'Cache-Control': 'no-store' } },
         )
       }
+
+      const ownQuarantineOrphan =
+        parsed.kind === 'quarantine' &&
+        parsed.uploaderUid === actor.uid &&
+        data.submittedByUid === actor.uid
+      const moderatorQuarantineOrphan =
+        parsed.kind === 'quarantine' && actor.moderator
+
+      if (!ownQuarantineOrphan && !moderatorQuarantineOrphan) {
+        throw new KnowledgeAccessError(
+          403,
+          'KNOWLEDGE_ORPHAN_DELETE_FORBIDDEN',
+          'Удалить этот непривязанный файл нельзя.',
+        )
+      }
+
+      await getFirebaseAdminBucket().file(path).delete({ ignoreNotFound: true })
       return NextResponse.json(
-        { ok: true, deferredToSubmissionDelete: true },
+        { ok: true, orphanDeleted: true },
         { headers: { 'Cache-Control': 'no-store' } },
       )
     }
@@ -341,7 +398,7 @@ export async function DELETE(request: Request) {
     }
     await getFirebaseAdminBucket().file(path).delete({ ignoreNotFound: true })
     return NextResponse.json(
-      { ok: true },
+      { ok: true, orphanDeleted: true },
       { headers: { 'Cache-Control': 'no-store' } },
     )
   } catch (error) {
