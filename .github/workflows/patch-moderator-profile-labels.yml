@@ -1,0 +1,47 @@
+name: One-time moderator profile labels patch
+
+on:
+  push:
+    branches:
+      - security/moderator-role
+    paths:
+      - '.github/workflows/patch-moderator-profile-labels.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: security/moderator-role
+          fetch-depth: 0
+      - name: Patch exhaustive profile labels
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('artifacts/medstart/app/dashboard/profile/page.tsx')
+          text = path.read_text()
+          old_role = "  tutor: 'Репетитор',\n  admin: 'Администратор',"
+          new_role = "  tutor: 'Репетитор',\n  moderator: 'Модератор',\n  admin: 'Администратор',"
+          old_status = "  rejected: 'Требуется доработка',\n  blocked: 'Заблокирован',"
+          new_status = "  rejected: 'Требуется доработка',\n  suspended: 'Приостановлен',\n  blocked: 'Заблокирован',"
+          if old_role not in text or old_status not in text:
+            raise SystemExit('Profile role/status label marker missing')
+          path.write_text(text.replace(old_role, new_role, 1).replace(old_status, new_status, 1))
+          PY
+          git diff --check
+      - name: Commit and remove one-time workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/patch-moderator-profile-labels.yml
+          git add artifacts/medstart/app/dashboard/profile/page.tsx
+          git diff --cached --check
+          git commit -m 'feat(moderation): label moderator profile states'
+          git push origin HEAD:security/moderator-role
