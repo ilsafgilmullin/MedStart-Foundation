@@ -1,3 +1,5 @@
+import './test-moderator-role.mjs'
+
 import {
   assertFails,
   assertSucceeds,
