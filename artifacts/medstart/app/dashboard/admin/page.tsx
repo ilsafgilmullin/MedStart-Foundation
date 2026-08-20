@@ -56,6 +56,7 @@ import type { UserRole, UserStatus } from '@/lib/user-profile'
 const roleLabels: Record<AdminUserRecord['role'], string> = {
   owner: 'Владелец',
   admin: 'Администратор',
+  moderator: 'Модератор',
   tutor: 'Репетитор',
   student: 'Ученик',
 }
@@ -64,6 +65,7 @@ const statusLabels: Record<UserStatus, string> = {
   active: 'Активен',
   pending: 'На проверке',
   rejected: 'Отклонён',
+  suspended: 'Приостановлен',
   blocked: 'Заблокирован',
   deleted: 'В архиве',
 }
@@ -80,6 +82,7 @@ const statusTone: Record<UserStatus, string> = {
   active: 'bg-emerald-100 text-emerald-800',
   pending: 'bg-amber-100 text-amber-800',
   rejected: 'bg-red-100 text-red-800',
+  suspended: 'bg-amber-100 text-amber-900',
   blocked: 'bg-slate-200 text-slate-800',
   deleted: 'bg-slate-900 text-white',
 }
@@ -1023,6 +1026,7 @@ function UsersPanel({
             <option value="all">Все роли</option>
             <option value="owner">Владелец</option>
             <option value="admin">Администраторы</option>
+            <option value="moderator">Модераторы</option>
             <option value="tutor">Репетиторы</option>
             <option value="student">Ученики</option>
           </select>
@@ -1157,7 +1161,7 @@ function UsersPanel({
                     disabled={
                       user.status === 'deleted' ||
                       (!overview.capabilities.ownerControl &&
-                        user.profileRole === 'admin')
+                        ['admin', 'moderator'].includes(user.profileRole))
                     }
                     className={
                       user.status === 'blocked'
@@ -1192,7 +1196,7 @@ function UsersPanel({
                     disabled={
                       !user.auth.exists ||
                       (!overview.capabilities.ownerControl &&
-                        user.profileRole === 'admin')
+                        ['admin', 'moderator'].includes(user.profileRole))
                     }
                     className="ms-btn ms-btn-secondary ms-btn-sm"
                   >
@@ -1218,7 +1222,7 @@ function UsersPanel({
                       !user.auth.exists ||
                       !user.email ||
                       (!overview.capabilities.ownerControl &&
-                        user.profileRole === 'admin')
+                        ['admin', 'moderator'].includes(user.profileRole))
                     }
                     className="ms-btn ms-btn-secondary ms-btn-sm"
                   >
@@ -1331,6 +1335,7 @@ function RoleControl({
         <option value="student">Ученик</option>
         <option value="tutor">Репетитор</option>
         <option value="admin">Администратор</option>
+        <option value="moderator">Модератор</option>
       </select>
       <button
         type="button"
@@ -1340,7 +1345,7 @@ function RoleControl({
             description:
               nextRole === 'tutor'
                 ? `Пользователь «${user.displayName}» станет репетитором и будет отправлен на обязательную модерацию.`
-                : `Роль пользователя «${user.displayName}» будет изменена на «${nextRole === 'admin' ? 'Администратор' : 'Ученик'}».`,
+                : `Роль пользователя «${user.displayName}» будет изменена на «${nextRole === 'admin' ? 'Администратор' : nextRole === 'moderator' ? 'Модератор' : 'Ученик'}».`,
             confirmLabel: 'Изменить роль',
             tone: 'primary',
             input: { action: 'set_role', targetUid: user.uid, role: nextRole },
@@ -1536,7 +1541,9 @@ function AuditPanel({ audit }: { audit: AdminAuditRecord[] }) {
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-600">
                       {item.actorRole === 'owner'
                         ? 'Владелец'
-                        : 'Администратор'}
+                        : item.actorRole === 'moderator'
+                          ? 'Модератор'
+                          : 'Администратор'}
                     </span>
                   </div>
                   <p className="mt-3 font-black text-slate-950">
