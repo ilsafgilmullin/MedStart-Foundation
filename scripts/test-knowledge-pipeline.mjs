@@ -79,6 +79,10 @@ for (const marker of [
   "storageState: 'quarantined'",
   "validation: 'crc32c'",
   "createHash('sha256')",
+  "collection('knowledgeSubmissions')",
+  'KNOWLEDGE_SUBMISSION_ALREADY_EXISTS',
+  'submissionAfterUpload',
+  'orphanDeleted: true',
 ]) {
   assert.equal(fileRoute.includes(marker), true, `Missing upload marker: ${marker}`)
 }
@@ -88,6 +92,9 @@ for (const marker of [
   "storageState = 'quarantined'",
   "collection('knowledgeSubmissions')",
   'KNOWLEDGE_QUARANTINE_METADATA_REJECTED',
+  'cleanupQuarantineSiblings',
+  'orphanFilesRemoved',
+  'orphanCleanupRequired',
 ]) {
   assert.equal(
     submissionRoute.includes(marker),
@@ -103,6 +110,15 @@ for (const marker of [
   'adminAuditLogs',
   'approve_knowledge_submission',
   'reject_knowledge_submission',
+  'runTransaction',
+  'moderationLeaseId',
+  'moderationLeaseExpiresAt',
+  'KNOWLEDGE_MODERATION_IN_PROGRESS',
+  'KNOWLEDGE_MODERATION_LEASE_LOST',
+  'hashStorageObject(sourcePath)',
+  'KNOWLEDGE_FILE_HASH_MISMATCH',
+  'FieldValue.delete()',
+  'moderationFinalized',
 ]) {
   assert.equal(
     moderationRoute.includes(marker),
@@ -110,6 +126,26 @@ for (const marker of [
     `Missing moderation marker: ${marker}`,
   )
 }
+
+assert.equal(
+  moderationRoute.includes(
+    "let sha256 = String(data.sha256 || custom.sha256 || '')",
+  ),
+  false,
+  'Moderation must not trust a stored SHA without re-hashing the object.',
+)
+assert.equal(
+  moderationRoute.includes(
+    'knowledge-published/${submissionId}/${parsed.fileName}',
+  ),
+  false,
+  'Published paths must be unique per moderation attempt.',
+)
+assert.equal(
+  (moderationRoute.match(/runTransaction/g) || []).length >= 3,
+  true,
+  'Moderation requires claim, finalize, and lease-release transactions.',
+)
 
 const knowledgeRuleBlock = firestoreRules.match(
   /match \/knowledgeSubmissions\/\{submissionId\} \{([\s\S]*?)\n\s*\}/,
