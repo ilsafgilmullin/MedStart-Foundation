@@ -26,12 +26,15 @@ function toIso(value: unknown) {
   if (value instanceof Date) return value.toISOString()
   if (typeof value === 'object') {
     const timestamp = value as TimestampLike
-    if (typeof timestamp.toDate === 'function')
+    if (typeof timestamp.toDate === 'function') {
       return timestamp.toDate().toISOString()
-    if (typeof timestamp.toMillis === 'function')
+    }
+    if (typeof timestamp.toMillis === 'function') {
       return new Date(timestamp.toMillis()).toISOString()
-    if (typeof timestamp.seconds === 'number')
+    }
+    if (typeof timestamp.seconds === 'number') {
       return new Date(timestamp.seconds * 1_000).toISOString()
+    }
   }
   return ''
 }
@@ -106,19 +109,18 @@ export async function GET(request: Request) {
           specialization: String(data.specialization || ''),
           subjects: Array.isArray(data.subjects)
             ? data.subjects.filter(
-                (item): item is string => typeof item === 'string',
+                (subject): subject is string => typeof subject === 'string',
               )
             : [],
           tutorAudiences: Array.isArray(data.tutorAudiences)
             ? data.tutorAudiences.filter(
-                (item): item is 'medical' | 'school' =>
-                  item === 'medical' || item === 'school',
+                (audience): audience is 'medical' | 'school' =>
+                  audience === 'medical' || audience === 'school',
               )
             : ['medical'],
           examTypes: Array.isArray(data.examTypes)
             ? data.examTypes.filter(
-                (item): item is 'oge' | 'ege' =>
-                  item === 'oge' || item === 'ege',
+                (exam): exam is 'oge' | 'ege' => exam === 'oge' || exam === 'ege',
               )
             : [],
           institution: String(data.institution || ''),
@@ -166,6 +168,12 @@ export async function GET(request: Request) {
 
     const audit = auditSnapshot.docs.map((item) => {
       const data = item.data()
+      const operationStatus =
+        data.operationStatus === 'started' ||
+        data.operationStatus === 'failed' ||
+        data.operationStatus === 'succeeded'
+          ? data.operationStatus
+          : 'succeeded'
       return {
         id: item.id,
         actorUid: String(data.actorUid || ''),
@@ -185,7 +193,14 @@ export async function GET(request: Request) {
           data.metadata && typeof data.metadata === 'object'
             ? data.metadata
             : {},
+        resultMetadata:
+          data.resultMetadata && typeof data.resultMetadata === 'object'
+            ? data.resultMetadata
+            : {},
+        operationStatus,
+        failureMessage: String(data.failureMessage || ''),
         createdAt: toIso(data.createdAt),
+        completedAt: toIso(data.completedAt),
       }
     })
 
