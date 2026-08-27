@@ -146,11 +146,34 @@ for (const marker of ['FirebaseAdminConfigurationError', 'ownerAccount', 'ownerP
 for (const marker of ['requireAdminActor', 'listAllAuthUsers', 'adminAuditLogs', 'ownerProtected']) {
   if (!adminOverviewRouteSource.includes(marker)) failures.push(`Admin overview route is missing: ${marker}`)
 }
-for (const marker of ['requireOwner', 'assertTargetIsNotOwner', 'revokeRefreshTokens', 'writeAdminAudit', 'set_booking_status']) {
+for (const marker of [
+  'requireOwner',
+  'assertTargetIsNotOwner',
+  'buildAdminAuditData',
+  'startAdminAudit',
+  'completeAdminAudit',
+  'failAdminAudit',
+  'revokeRefreshTokens',
+  'set_booking_status',
+]) {
   if (!adminActionRouteSource.includes(marker)) failures.push(`Admin action route is missing: ${marker}`)
 }
-for (const marker of ['verifyIdToken(token, true)', 'PRIMARY_OWNER_UID', 'adminAuditLogs']) {
+for (const marker of [
+  'verifyIdToken(token, true)',
+  'PRIMARY_OWNER_UID',
+  'adminAuditLogs',
+  'operationStatus',
+  'startAdminAudit',
+  'completeAdminAudit',
+  'failAdminAudit',
+]) {
   if (!adminServerSource.includes(marker)) failures.push(`Admin server guard is missing: ${marker}`)
+}
+if (!adminServerSource.includes("operationStatus === 'started' ? null")) {
+  failures.push('Admin audit intent does not preserve an explicit incomplete state')
+}
+if (!adminActionRouteSource.includes("operationStatus: 'succeeded'")) {
+  failures.push('Admin Auth/Firestore compound actions do not atomically finalize their audit record')
 }
 
 if (!nextConfigSource.includes("!isProduction ? [\"'unsafe-eval'\"] : []")) failures.push('Development CSP can block Next.js hydration in Replit')
