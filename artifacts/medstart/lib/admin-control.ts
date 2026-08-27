@@ -4,8 +4,14 @@ import type { LearnerTrack, SchoolExam } from './education'
 import type { UserRole, UserStatus } from './user-profile'
 
 export type AdminActorRole = 'owner' | 'admin' | 'moderator'
+export type AdminAuditOperationStatus = 'started' | 'succeeded' | 'failed'
 export type AdminOverviewTab =
-  'overview' | 'moderation' | 'users' | 'bookings' | 'audit' | 'system'
+  | 'overview'
+  | 'moderation'
+  | 'users'
+  | 'bookings'
+  | 'audit'
+  | 'system'
 
 export interface AdminUserRecord {
   uid: string
@@ -66,7 +72,11 @@ export interface AdminAuditRecord {
   targetUid: string
   targetType: string
   metadata: Record<string, unknown>
+  resultMetadata: Record<string, unknown>
+  operationStatus: AdminAuditOperationStatus
+  failureMessage: string
   createdAt: string
+  completedAt: string
 }
 
 export interface AdminOverviewResponse {
