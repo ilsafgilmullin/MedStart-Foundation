@@ -56,6 +56,13 @@ export async function requireAdminActor(request: Request): Promise<AdminActor> {
   } catch {
     throw new AdminAccessError(401, 'SESSION_INVALID', 'Сессия устарела. Войдите повторно.')
   }
+  if (!decoded.email_verified) {
+    throw new AdminAccessError(
+      403,
+      'EMAIL_NOT_VERIFIED',
+      'Подтвердите электронную почту перед административными действиями.',
+    )
+  }
 
   const db = getFirebaseAdminDb()
   const profileSnapshot = await db.collection('users').doc(decoded.uid).get()
