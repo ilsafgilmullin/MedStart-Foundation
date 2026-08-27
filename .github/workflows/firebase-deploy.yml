@@ -2,25 +2,38 @@ name: Deploy Firebase rules
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - firebase.json
-      - firestore.secure.rules
-      - firestore.indexes.json
-      - storage.rules
+    inputs:
+      confirmation:
+        description: 'This job deploys Firestore Rules, indexes and Storage Rules to medstart-e9bfe. Select DEPLOY_FIREBASE_CONFIG only after explicit production approval.'
+        required: true
+        type: choice
+        default: DO_NOT_DEPLOY
+        options:
+          - DO_NOT_DEPLOY
+          - DEPLOY_FIREBASE_CONFIG
 
 permissions:
   contents: read
 
+concurrency:
+  group: firebase-production-config-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'DEPLOY_FIREBASE_CONFIG' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: production
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Verify production deployment ref
+        shell: bash
+        run: |
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -43,7 +56,7 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
         run: >-
-          npx --yes firebase-tools@15.24.0 deploy
+          npx --yes firebase-tools@15.25.1 deploy
           --project medstart-e9bfe
           --only firestore:rules,firestore:indexes,storage
           --non-interactive
