@@ -3,9 +3,12 @@ import { NextResponse } from 'next/server'
 import {
   adminErrorResponse,
   assertTargetIsNotOwner,
+  buildAdminAuditData,
+  completeAdminAudit,
+  failAdminAudit,
   requireAdminActor,
   requireOwner,
-  writeAdminAudit,
+  startAdminAudit,
   type AdminActor,
 } from '@/lib/server/admin-control'
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from '@/lib/server/firebase-admin'
@@ -22,7 +25,12 @@ type UserStatus =
   | 'suspended'
   | 'blocked'
   | 'deleted'
-type BookingStatus = 'pending' | 'accepted' | 'declined' | 'cancelled' | 'completed'
+type BookingStatus =
+  | 'pending'
+  | 'accepted'
+  | 'declined'
+  | 'cancelled'
+  | 'completed'
 
 type ActionName =
   | 'moderate_tutor'
@@ -74,6 +82,10 @@ function text(value: unknown, max = 2_000) {
   return typeof value === 'string' ? value.trim().slice(0, max) : ''
 }
 
+function userLabel(data: ProfileData, targetUid: string) {
+  return data.displayName || data.email || targetUid
+}
+
 async function targetProfile(targetUid: string) {
   const db = getFirebaseAdminDb()
   const reference = db.collection('users').doc(targetUid)
@@ -108,21 +120,31 @@ async function moderateTutor(actor: AdminActor, body: ActionBody) {
       : null
   const note = text(body.note, 1_000)
   if (!targetUid || !decision) throw new Error('Некорректное решение модерации.')
-  if (decision === 'reject' && note.length < 3)
+  if (decision === 'reject' && note.length < 3) {
     throw new Error('Укажите причину отклонения.')
+  }
 
   const db = getFirebaseAdminDb()
   const targetRef = db.collection('users').doc(targetUid)
+  const auditRef = db.collection('adminAuditLogs').doc()
   let displayName = 'Репетитор'
+
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(targetRef)
     if (!snapshot.exists) throw new Error('Анкета репетитора не найдена.')
     const profile = snapshot.data() as ProfileData
     ensureAdminCanManageTarget(actor, targetUid, profile)
-    if (profile.role !== 'tutor')
+    if (profile.role !== 'tutor') {
       throw new Error('Выбранный профиль не является репетитором.')
+    }
     if (profile.status !== 'pending') throw new Error('Анкета уже обработана.')
+
     displayName = profile.displayName || 'Репетитор'
+    const summary =
+      decision === 'approve'
+        ? `Анкета репетитора «${displayName}» одобрена.`
+        : `Анкета репетитора «${displayName}» отклонена.`
+
     transaction.update(targetRef, {
       status: decision === 'approve' ? 'active' : 'rejected',
       isPublic: decision === 'approve',
@@ -131,19 +153,24 @@ async function moderateTutor(actor: AdminActor, body: ActionBody) {
       moderatedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     })
+    transaction.set(
+      auditRef,
+      buildAdminAuditData({
+        actor,
+        action: `tutor_${decision}`,
+        summary,
+        targetUid,
+        targetType: 'user',
+        metadata: {
+          decision,
+          note,
+          previousStatus: profile.status || '',
+          nextStatus: decision === 'approve' ? 'active' : 'rejected',
+        },
+      }),
+    )
   })
 
-  await writeAdminAudit({
-    actor,
-    action: `tutor_${decision}`,
-    summary:
-      decision === 'approve'
-        ? `Анкета репетитора «${displayName}» одобрена.`
-        : `Анкета репетитора «${displayName}» отклонена.`,
-    targetUid,
-    targetType: 'user',
-    metadata: { decision, note },
-  })
   return decision === 'approve'
     ? 'Репетитор опубликован в каталоге.'
     : 'Анкета отклонена.'
@@ -158,32 +185,65 @@ async function setBlocked(actor: AdminActor, body: ActionBody) {
   const db = getFirebaseAdminDb()
   const { reference, data } = await targetProfile(targetUid)
   ensureAdminCanManageTarget(actor, targetUid, data)
-  if (data.status === 'deleted')
+  if (data.status === 'deleted') {
     throw new Error('Архивный аккаунт сначала необходимо восстановить.')
+  }
 
   const authUser = await auth.getUser(targetUid)
   const previousDisabled = authUser.disabled
-  await auth.updateUser(targetUid, { disabled: blocked })
-  if (blocked) await auth.revokeRefreshTokens(targetUid)
+  const actionName = blocked ? 'user_blocked' : 'user_unblocked'
+  const summary = blocked
+    ? `Доступ пользователя «${userLabel(data, targetUid)}» заблокирован.`
+    : `Доступ пользователя «${userLabel(data, targetUid)}» восстановлен.`
+  const auditRef = await startAdminAudit({
+    actor,
+    action: actionName,
+    summary,
+    targetUid,
+    targetType: 'user',
+    metadata: {
+      requestedBlocked: blocked,
+      previousStatus: data.status || '',
+      previousAuthDisabled: previousDisabled,
+    },
+  })
 
+  let authStateChanged = false
+  let refreshTokensRevoked = false
   try {
+    await auth.updateUser(targetUid, { disabled: blocked })
+    authStateChanged = true
+    if (blocked) {
+      await auth.revokeRefreshTokens(targetUid)
+      refreshTokensRevoked = true
+    }
+
     await db.runTransaction(async (transaction) => {
       const current = await transaction.get(reference)
       if (!current.exists) throw new Error('Пользователь не найден.')
       const profile = current.data() as ProfileData
+      ensureAdminCanManageTarget(actor, targetUid, profile)
+
+      let nextStatus: UserStatus
       if (blocked) {
-        if (profile.status === 'blocked')
+        if (profile.status === 'blocked') {
           throw new Error('Аккаунт уже заблокирован.')
+        }
+        if (profile.status === 'deleted') {
+          throw new Error('Архивный аккаунт сначала необходимо восстановить.')
+        }
+        nextStatus = 'blocked'
         transaction.update(reference, {
           statusBeforeBlock: profile.status || 'active',
-          status: 'blocked',
+          status: nextStatus,
           isPublic: false,
           updatedAt: FieldValue.serverTimestamp(),
         })
       } else {
-        if (profile.status !== 'blocked')
+        if (profile.status !== 'blocked') {
           throw new Error('Аккаунт не заблокирован.')
-        const restored: UserStatus =
+        }
+        nextStatus =
           profile.statusBeforeBlock &&
           ['active', 'pending', 'rejected', 'suspended'].includes(
             profile.statusBeforeBlock,
@@ -193,30 +253,44 @@ async function setBlocked(actor: AdminActor, body: ActionBody) {
               ? 'pending'
               : 'active'
         transaction.update(reference, {
-          status: restored,
+          status: nextStatus,
           statusBeforeBlock: '',
-          isPublic: profile.role === 'tutor' && restored === 'active',
+          isPublic: profile.role === 'tutor' && nextStatus === 'active',
           updatedAt: FieldValue.serverTimestamp(),
         })
       }
+
+      transaction.update(auditRef, {
+        operationStatus: 'succeeded',
+        resultMetadata: {
+          previousStatus: profile.status || '',
+          nextStatus,
+          refreshTokensRevoked,
+        },
+        completedAt: FieldValue.serverTimestamp(),
+      })
     })
   } catch (error) {
-    await auth
-      .updateUser(targetUid, { disabled: previousDisabled })
-      .catch(() => undefined)
+    let compensationFailed = false
+    if (authStateChanged) {
+      try {
+        await auth.updateUser(targetUid, { disabled: previousDisabled })
+      } catch (compensationError) {
+        compensationFailed = true
+        console.error('MedStart failed to restore Firebase Auth disabled state', {
+          targetUid,
+          compensationError,
+        })
+      }
+    }
+    await failAdminAudit(auditRef, error, {
+      authStateChanged,
+      authCompensationFailed: compensationFailed,
+      refreshTokensRevoked,
+    })
     throw error
   }
 
-  await writeAdminAudit({
-    actor,
-    action: blocked ? 'user_blocked' : 'user_unblocked',
-    summary: blocked
-      ? `Доступ пользователя «${data.displayName || data.email || targetUid}» заблокирован.`
-      : `Доступ пользователя «${data.displayName || data.email || targetUid}» восстановлен.`,
-    targetUid,
-    targetType: 'user',
-    metadata: { previousStatus: data.status },
-  })
   return blocked
     ? 'Пользователь заблокирован, активные сессии отозваны.'
     : 'Доступ пользователя восстановлен.'
@@ -231,33 +305,50 @@ async function setRole(actor: AdminActor, body: ActionBody) {
   if (!targetUid || !nextRole) throw new Error('Выберите корректную роль.')
   assertTargetIsNotOwner(targetUid)
 
-  const { reference, data } = await targetProfile(targetUid)
-  if (data.status === 'blocked' || data.status === 'deleted') {
-    throw new Error('Сначала восстановите активный доступ пользователя.')
-  }
+  const db = getFirebaseAdminDb()
+  const reference = db.collection('users').doc(targetUid)
+  const auditRef = db.collection('adminAuditLogs').doc()
   const nextStatus: UserStatus = nextRole === 'tutor' ? 'pending' : 'active'
-  await reference.update({
-    role: nextRole,
-    status: nextStatus,
-    statusBeforeBlock: '',
-    isPublic: false,
-    moderationNote:
-      nextRole === 'tutor'
-        ? 'Назначен владельцем. Требуется проверка анкеты.'
-        : '',
-    moderatedBy: '',
-    moderatedAt: null,
-    updatedAt: FieldValue.serverTimestamp(),
+
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(reference)
+    if (!snapshot.exists) throw new Error('Пользователь не найден.')
+    const data = snapshot.data() as ProfileData
+    if (data.status === 'blocked' || data.status === 'deleted') {
+      throw new Error('Сначала восстановите активный доступ пользователя.')
+    }
+
+    transaction.update(reference, {
+      role: nextRole,
+      status: nextStatus,
+      statusBeforeBlock: '',
+      isPublic: false,
+      moderationNote:
+        nextRole === 'tutor'
+          ? 'Назначен владельцем. Требуется проверка анкеты.'
+          : '',
+      moderatedBy: '',
+      moderatedAt: null,
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+    transaction.set(
+      auditRef,
+      buildAdminAuditData({
+        actor,
+        action: 'user_role_changed',
+        summary: `Роль пользователя «${userLabel(data, targetUid)}» изменена: ${data.role || 'не указана'} → ${nextRole}.`,
+        targetUid,
+        targetType: 'user',
+        metadata: {
+          previousRole: data.role || '',
+          nextRole,
+          previousStatus: data.status || '',
+          nextStatus,
+        },
+      }),
+    )
   })
 
-  await writeAdminAudit({
-    actor,
-    action: 'user_role_changed',
-    summary: `Роль пользователя «${data.displayName || data.email || targetUid}» изменена: ${data.role || 'не указана'} → ${nextRole}.`,
-    targetUid,
-    targetType: 'user',
-    metadata: { previousRole: data.role, nextRole, nextStatus },
-  })
   return 'Роль пользователя обновлена.'
 }
 
@@ -266,14 +357,21 @@ async function revokeSessions(actor: AdminActor, body: ActionBody) {
   if (!targetUid) throw new Error('Пользователь не выбран.')
   const { data } = await targetProfile(targetUid)
   ensureAdminCanManageTarget(actor, targetUid, data)
-  await getFirebaseAdminAuth().revokeRefreshTokens(targetUid)
-  await writeAdminAudit({
+
+  const auditRef = await startAdminAudit({
     actor,
     action: 'sessions_revoked',
-    summary: `Все активные сессии пользователя «${data.displayName || data.email || targetUid}» отозваны.`,
+    summary: `Все активные сессии пользователя «${userLabel(data, targetUid)}» отозваны.`,
     targetUid,
     targetType: 'user',
   })
+  try {
+    await getFirebaseAdminAuth().revokeRefreshTokens(targetUid)
+  } catch (error) {
+    await failAdminAudit(auditRef, error)
+    throw error
+  }
+  await completeAdminAudit(auditRef)
   return 'Активные сессии пользователя отозваны.'
 }
 
@@ -284,19 +382,27 @@ async function sendPasswordReset(actor: AdminActor, body: ActionBody) {
   ensureAdminCanManageTarget(actor, targetUid, data)
   const email = text(data.email, 320)
   if (!email) throw new Error('У пользователя отсутствует электронная почта.')
-  const reset = await firebaseIdentityRequest('sendOobCode', {
-    requestType: 'PASSWORD_RESET',
-    email,
-  })
-  if (!reset.response.ok)
-    throw new Error('Firebase не принял запрос восстановления пароля.')
-  await writeAdminAudit({
+
+  const auditRef = await startAdminAudit({
     actor,
     action: 'password_reset_sent',
     summary: `Пользователю «${data.displayName || email}» отправлено письмо восстановления пароля.`,
     targetUid,
     targetType: 'user',
   })
+  try {
+    const reset = await firebaseIdentityRequest('sendOobCode', {
+      requestType: 'PASSWORD_RESET',
+      email,
+    })
+    if (!reset.response.ok) {
+      throw new Error('Firebase не принял запрос восстановления пароля.')
+    }
+  } catch (error) {
+    await failAdminAudit(auditRef, error)
+    throw error
+  }
+  await completeAdminAudit(auditRef)
   return 'Письмо восстановления пароля отправлено.'
 }
 
@@ -306,14 +412,21 @@ async function verifyEmail(actor: AdminActor, body: ActionBody) {
   if (!targetUid) throw new Error('Пользователь не выбран.')
   assertTargetIsNotOwner(targetUid)
   const { data } = await targetProfile(targetUid)
-  await getFirebaseAdminAuth().updateUser(targetUid, { emailVerified: true })
-  await writeAdminAudit({
+
+  const auditRef = await startAdminAudit({
     actor,
     action: 'email_verified_by_owner',
-    summary: `Владелец подтвердил почту пользователя «${data.displayName || data.email || targetUid}».`,
+    summary: `Владелец подтвердил почту пользователя «${userLabel(data, targetUid)}».`,
     targetUid,
     targetType: 'user',
   })
+  try {
+    await getFirebaseAdminAuth().updateUser(targetUid, { emailVerified: true })
+  } catch (error) {
+    await failAdminAudit(auditRef, error)
+    throw error
+  }
+  await completeAdminAudit(auditRef)
   return 'Электронная почта отмечена как подтверждённая.'
 }
 
@@ -322,34 +435,78 @@ async function archiveUser(actor: AdminActor, body: ActionBody) {
   const targetUid = text(body.targetUid, 160)
   if (!targetUid) throw new Error('Пользователь не выбран.')
   assertTargetIsNotOwner(targetUid)
+
   const auth = getFirebaseAdminAuth()
+  const db = getFirebaseAdminDb()
   const { reference, data } = await targetProfile(targetUid)
-  if (data.status === 'deleted')
-    throw new Error('Аккаунт уже находится в архиве.')
+  if (data.status === 'deleted') throw new Error('Аккаунт уже находится в архиве.')
+
   const authUser = await auth.getUser(targetUid)
-  await auth.updateUser(targetUid, { disabled: true })
-  await auth.revokeRefreshTokens(targetUid)
-  try {
-    await reference.update({
-      statusBeforeBlock: data.status || 'active',
-      status: 'deleted',
-      isPublic: false,
-      updatedAt: FieldValue.serverTimestamp(),
-    })
-  } catch (error) {
-    await auth
-      .updateUser(targetUid, { disabled: authUser.disabled })
-      .catch(() => undefined)
-    throw error
-  }
-  await writeAdminAudit({
+  const auditRef = await startAdminAudit({
     actor,
     action: 'user_archived',
-    summary: `Аккаунт «${data.displayName || data.email || targetUid}» архивирован.`,
+    summary: `Аккаунт «${userLabel(data, targetUid)}» архивирован.`,
     targetUid,
     targetType: 'user',
-    metadata: { previousStatus: data.status },
+    metadata: {
+      previousStatus: data.status || '',
+      previousAuthDisabled: authUser.disabled,
+    },
   })
+
+  let authStateChanged = false
+  let refreshTokensRevoked = false
+  try {
+    await auth.updateUser(targetUid, { disabled: true })
+    authStateChanged = true
+    await auth.revokeRefreshTokens(targetUid)
+    refreshTokensRevoked = true
+
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(reference)
+      if (!snapshot.exists) throw new Error('Пользователь не найден.')
+      const current = snapshot.data() as ProfileData
+      if (current.status === 'deleted') {
+        throw new Error('Аккаунт уже находится в архиве.')
+      }
+
+      transaction.update(reference, {
+        statusBeforeBlock: current.status || 'active',
+        status: 'deleted',
+        isPublic: false,
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+      transaction.update(auditRef, {
+        operationStatus: 'succeeded',
+        resultMetadata: {
+          previousStatus: current.status || '',
+          nextStatus: 'deleted',
+          refreshTokensRevoked,
+        },
+        completedAt: FieldValue.serverTimestamp(),
+      })
+    })
+  } catch (error) {
+    let compensationFailed = false
+    if (authStateChanged) {
+      try {
+        await auth.updateUser(targetUid, { disabled: authUser.disabled })
+      } catch (compensationError) {
+        compensationFailed = true
+        console.error('MedStart failed to compensate archive Auth state', {
+          targetUid,
+          compensationError,
+        })
+      }
+    }
+    await failAdminAudit(auditRef, error, {
+      authStateChanged,
+      authCompensationFailed: compensationFailed,
+      refreshTokensRevoked,
+    })
+    throw error
+  }
+
   return 'Аккаунт архивирован и отключён в Firebase Authentication.'
 }
 
@@ -358,30 +515,78 @@ async function restoreUser(actor: AdminActor, body: ActionBody) {
   const targetUid = text(body.targetUid, 160)
   if (!targetUid) throw new Error('Пользователь не выбран.')
   assertTargetIsNotOwner(targetUid)
+
   const auth = getFirebaseAdminAuth()
+  const db = getFirebaseAdminDb()
   const { reference, data } = await targetProfile(targetUid)
-  if (data.status !== 'deleted')
-    throw new Error('Аккаунт не находится в архиве.')
-  const restored: UserStatus = data.role === 'tutor' ? 'pending' : 'active'
-  await auth.updateUser(targetUid, { disabled: false })
-  await reference.update({
-    status: restored,
-    statusBeforeBlock: '',
-    isPublic: false,
-    moderationNote:
-      data.role === 'tutor'
-        ? 'Аккаунт восстановлен владельцем. Требуется повторная проверка.'
-        : '',
-    updatedAt: FieldValue.serverTimestamp(),
-  })
-  await writeAdminAudit({
+  if (data.status !== 'deleted') throw new Error('Аккаунт не находится в архиве.')
+
+  const authUser = await auth.getUser(targetUid)
+  const auditRef = await startAdminAudit({
     actor,
     action: 'user_restored',
-    summary: `Аккаунт «${data.displayName || data.email || targetUid}» восстановлен из архива.`,
+    summary: `Аккаунт «${userLabel(data, targetUid)}» восстановлен из архива.`,
     targetUid,
     targetType: 'user',
-    metadata: { restoredStatus: restored },
+    metadata: {
+      previousStatus: data.status || '',
+      previousAuthDisabled: authUser.disabled,
+    },
   })
+
+  let authStateChanged = false
+  try {
+    await auth.updateUser(targetUid, { disabled: false })
+    authStateChanged = true
+
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(reference)
+      if (!snapshot.exists) throw new Error('Пользователь не найден.')
+      const current = snapshot.data() as ProfileData
+      if (current.status !== 'deleted') {
+        throw new Error('Аккаунт не находится в архиве.')
+      }
+      const restored: UserStatus = current.role === 'tutor' ? 'pending' : 'active'
+
+      transaction.update(reference, {
+        status: restored,
+        statusBeforeBlock: '',
+        isPublic: false,
+        moderationNote:
+          current.role === 'tutor'
+            ? 'Аккаунт восстановлен владельцем. Требуется повторная проверка.'
+            : '',
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+      transaction.update(auditRef, {
+        operationStatus: 'succeeded',
+        resultMetadata: {
+          previousStatus: current.status || '',
+          restoredStatus: restored,
+        },
+        completedAt: FieldValue.serverTimestamp(),
+      })
+    })
+  } catch (error) {
+    let compensationFailed = false
+    if (authStateChanged) {
+      try {
+        await auth.updateUser(targetUid, { disabled: authUser.disabled })
+      } catch (compensationError) {
+        compensationFailed = true
+        console.error('MedStart failed to compensate restore Auth state', {
+          targetUid,
+          compensationError,
+        })
+      }
+    }
+    await failAdminAudit(auditRef, error, {
+      authStateChanged,
+      authCompensationFailed: compensationFailed,
+    })
+    throw error
+  }
+
   return 'Аккаунт восстановлен. Репетитор при необходимости отправлен на повторную проверку.'
 }
 
@@ -427,8 +632,9 @@ async function setBookingStatus(actor: AdminActor, body: ActionBody) {
   const nextStatus = validBookingStatuses.has(body.status as BookingStatus)
     ? (body.status as BookingStatus)
     : null
-  if (!bookingId || !nextStatus)
+  if (!bookingId || !nextStatus) {
     throw new Error('Выберите занятие и корректный статус.')
+  }
 
   const db = getFirebaseAdminDb()
   const bookingRef = db.collection('bookings').doc(bookingId)
@@ -445,7 +651,9 @@ async function setBookingStatus(actor: AdminActor, body: ActionBody) {
     if (!tutorUid) throw new Error('У занятия отсутствует репетитор.')
 
     const calendarRef = db.collection('bookingCalendars').doc(tutorUid)
-    const tutorBookingsQuery = db.collection('bookings').where('tutorUid', '==', tutorUid)
+    const tutorBookingsQuery = db
+      .collection('bookings')
+      .where('tutorUid', '==', tutorUid)
     const [, tutorBookingsSnapshot] = await Promise.all([
       transaction.get(calendarRef),
       transaction.get(tutorBookingsQuery),
@@ -492,8 +700,12 @@ async function setBookingStatus(actor: AdminActor, body: ActionBody) {
       updatedAt: FieldValue.serverTimestamp(),
       adminUpdatedBy: actor.uid,
     }
-    if (nextStatus === 'accepted') patch.confirmedAt = FieldValue.serverTimestamp()
-    if (nextStatus === 'completed') patch.completedAt = FieldValue.serverTimestamp()
+    if (nextStatus === 'accepted') {
+      patch.confirmedAt = FieldValue.serverTimestamp()
+    }
+    if (nextStatus === 'completed') {
+      patch.completedAt = FieldValue.serverTimestamp()
+    }
 
     message = `Статус занятия «${String(data.subject || bookingId)}» изменён: ${currentStatus} → ${nextStatus}.`
     transaction.update(bookingRef, patch)
@@ -506,23 +718,22 @@ async function setBookingStatus(actor: AdminActor, body: ActionBody) {
       },
       { merge: true },
     )
-    transaction.set(auditRef, {
-      actorUid: actor.uid,
-      actorName: actor.displayName,
-      actorEmail: actor.email,
-      actorRole: actor.role,
-      action: 'booking_status_changed',
-      summary: message,
-      targetUid: bookingId,
-      targetType: 'booking',
-      metadata: {
-        previousStatus: currentStatus,
-        nextStatus,
-        studentUid: data.studentUid,
-        tutorUid,
-      },
-      createdAt: FieldValue.serverTimestamp(),
-    })
+    transaction.set(
+      auditRef,
+      buildAdminAuditData({
+        actor,
+        action: 'booking_status_changed',
+        summary: message,
+        targetUid: bookingId,
+        targetType: 'booking',
+        metadata: {
+          previousStatus: currentStatus,
+          nextStatus,
+          studentUid: data.studentUid,
+          tutorUid,
+        },
+      }),
+    )
   })
 
   return message
