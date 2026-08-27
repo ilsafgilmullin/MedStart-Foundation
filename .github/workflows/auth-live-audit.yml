@@ -21,12 +21,19 @@ concurrency:
 
 jobs:
   audit:
-    if: ${{ inputs.confirmation == 'DEPLOY_FIRESTORE_RULES' }}
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'DEPLOY_FIRESTORE_RULES' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment: production
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Verify production deployment ref
+        shell: bash
+        run: |
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
