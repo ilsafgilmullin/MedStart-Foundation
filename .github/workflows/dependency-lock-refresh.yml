@@ -1,0 +1,51 @@
+name: Dependency lock refresh
+
+on:
+  push:
+    branches:
+      - security/release-governance-hardening
+    paths:
+      - package.json
+      - artifacts/medstart/package.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: medstart-dependency-lock-refresh
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Refresh lockfile only
+        run: pnpm install --lockfile-only --no-frozen-lockfile
+
+      - name: Verify patched dependency targets
+        shell: bash
+        run: |
+          grep -q 'version: 12.18.0' pnpm-lock.yaml
+          grep -q 'version: 15.5.24' pnpm-lock.yaml
+
+      - name: Upload refreshed lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: medstart-pnpm-lock-refresh
+          path: pnpm-lock.yaml
+          if-no-files-found: error
+          retention-days: 1
