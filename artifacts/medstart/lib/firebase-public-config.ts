@@ -19,9 +19,15 @@ const environmentConfig = {
 
 const configuredValues = Object.values(environmentConfig).filter(Boolean).length
 
-if (configuredValues !== 6) {
+if (configuredValues > 0 && configuredValues < 6) {
   throw new Error(
-    'Firebase public configuration is required. Configure all six NEXT_PUBLIC_FIREBASE_* variables for this environment; MedStart never falls back to the production Firebase project.',
+    'Firebase public configuration is incomplete. Configure all six NEXT_PUBLIC_FIREBASE_* variables together.',
+  )
+}
+
+if (configuredValues === 0) {
+  throw new Error(
+    'Firebase public configuration is required. MedStart never falls back to the production Firebase project; configure this environment explicitly.',
   )
 }
 
