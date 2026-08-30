@@ -30,6 +30,27 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const KNOWLEDGE_UPLOAD_WINDOW_MS = 30 * 60_000
+const MAX_MULTIPART_OVERHEAD = 512 * 1024
+
+function enforceMultipartLength(request: Request) {
+  const raw = request.headers.get('content-length')
+  if (!raw) return
+  const length = Number(raw)
+  if (!Number.isSafeInteger(length) || length < 0) {
+    throw new KnowledgeAccessError(
+      400,
+      'KNOWLEDGE_CONTENT_LENGTH_INVALID',
+      'Размер запроса указан некорректно.',
+    )
+  }
+  if (length > MAX_KNOWLEDGE_PDF_SIZE + MAX_MULTIPART_OVERHEAD) {
+    throw new KnowledgeAccessError(
+      413,
+      'KNOWLEDGE_REQUEST_TOO_LARGE',
+      'Размер запроса с PDF превышает допустимый предел.',
+    )
+  }
+}
 
 async function enforceUploadRate(uid: string) {
   try {
@@ -154,6 +175,7 @@ export async function POST(request: Request) {
   let uploadedPath = ''
 
   try {
+    enforceMultipartLength(request)
     const actor = await requireKnowledgeActor(request)
     requireTutor(actor)
     await enforceUploadRate(actor.uid)
