@@ -1,0 +1,81 @@
+name: MedStart browser smoke
+
+on:
+  push:
+    branches:
+      - main
+      - 'security/**'
+    paths:
+      - 'artifacts/medstart/**'
+      - 'scripts/browser-smoke/**'
+      - 'playwright.config.ts'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+      - '.github/workflows/medstart-browser-smoke.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'artifacts/medstart/**'
+      - 'scripts/browser-smoke/**'
+      - 'playwright.config.ts'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+      - '.github/workflows/medstart-browser-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: medstart-browser-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: test-api-key
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: example.firebaseapp.com
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: example
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: example.appspot.com
+      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '123456789'
+      NEXT_PUBLIC_FIREBASE_APP_ID: 1:123456789:web:test
+      NEXT_PUBLIC_OWNER_UID: test-owner
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      MEDSTART_RATE_LIMIT_PEPPER: 0123456789abcdef0123456789abcdef
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build production app
+        run: pnpm --filter @workspace/medstart build
+
+      - name: Install Chromium and WebKit
+        run: pnpm exec playwright install --with-deps chromium webkit
+
+      - name: Run desktop Android and iPhone browser smoke
+        run: pnpm exec playwright test
+
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: medstart-browser-smoke-evidence
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 5
