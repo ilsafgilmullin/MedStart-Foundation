@@ -1,4 +1,5 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
+import { FieldValue } from 'firebase-admin/firestore'
 import { NextResponse } from 'next/server'
 import {
   getFirebaseAdminAuth,
@@ -38,7 +39,26 @@ function bearerToken(request: Request) {
 
 function publicAvatarUrl(bucketName: string, path: string) {
   const encodedPath = encodeURIComponent(path)
-  return `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucketName)}/o/${encodedPath}?alt=media&v=${Date.now()}`
+  return `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucketName)}/o/${encodedPath}?alt=media`
+}
+
+function managedAvatarPath(value: unknown, bucketName: string, uid: string) {
+  if (typeof value !== 'string' || !value.trim()) return ''
+  try {
+    const url = new URL(value)
+    if (
+      url.protocol !== 'https:' ||
+      url.hostname !== 'firebasestorage.googleapis.com'
+    ) {
+      return ''
+    }
+    const prefix = `/v0/b/${encodeURIComponent(bucketName)}/o/`
+    if (!url.pathname.startsWith(prefix)) return ''
+    const path = decodeURIComponent(url.pathname.slice(prefix.length))
+    return path.startsWith(`avatars/${uid}/`) ? path : ''
+  } catch {
+    return ''
+  }
 }
 
 export async function POST(request: Request) {
@@ -53,16 +73,16 @@ export async function POST(request: Request) {
     return jsonError('Размер фотографии не должен превышать 5 МБ.', 413)
   }
 
+  let uploadedPath = ''
   try {
     const decoded = await getFirebaseAdminAuth().verifyIdToken(token, true)
     if (!decoded.email_verified) {
       return jsonError('Подтвердите электронную почту.', 403)
     }
 
-    const profileSnapshot = await getFirebaseAdminDb()
-      .collection('users')
-      .doc(decoded.uid)
-      .get()
+    const db = getFirebaseAdminDb()
+    const profileRef = db.collection('users').doc(decoded.uid)
+    const profileSnapshot = await profileRef.get()
     if (!profileSnapshot.exists) {
       return jsonError('Профиль пользователя не найден.', 404)
     }
@@ -99,8 +119,8 @@ export async function POST(request: Request) {
 
     const sha256 = createHash('sha256').update(bytes).digest('hex')
     const bucket = getFirebaseAdminBucket()
-    const path = `avatars/${decoded.uid}/profile`
-    const object = bucket.file(path)
+    uploadedPath = `avatars/${decoded.uid}/${randomUUID()}.${detected.extension}`
+    const object = bucket.file(uploadedPath)
 
     await object.save(bytes, {
       resumable: false,
@@ -118,10 +138,41 @@ export async function POST(request: Request) {
       },
     })
 
+    const avatarUrl = publicAvatarUrl(bucket.name, uploadedPath)
+    let previousAvatarPath = ''
+    await db.runTransaction(async (transaction) => {
+      const latestProfile = await transaction.get(profileRef)
+      if (!latestProfile.exists) {
+        throw new Error('PROFILE_MISSING_DURING_AVATAR_UPDATE')
+      }
+      const latest = latestProfile.data() || {}
+      const latestStatus = String(latest.status || '')
+      if (latestStatus === 'blocked' || latestStatus === 'deleted') {
+        throw new Error('PROFILE_UNAVAILABLE_DURING_AVATAR_UPDATE')
+      }
+      previousAvatarPath = managedAvatarPath(
+        latest.avatar,
+        bucket.name,
+        decoded.uid,
+      )
+      transaction.update(profileRef, {
+        avatar: avatarUrl,
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+    })
+
+    if (previousAvatarPath && previousAvatarPath !== uploadedPath) {
+      await bucket
+        .file(previousAvatarPath)
+        .delete({ ignoreNotFound: true })
+        .catch(() => undefined)
+    }
+    uploadedPath = ''
+
     return NextResponse.json(
       {
         ok: true,
-        avatarUrl: publicAvatarUrl(bucket.name, path),
+        avatarUrl,
         mimeType: detected.mime,
       },
       {
@@ -133,6 +184,12 @@ export async function POST(request: Request) {
       },
     )
   } catch (error) {
+    if (uploadedPath) {
+      await getFirebaseAdminBucket()
+        .file(uploadedPath)
+        .delete({ ignoreNotFound: true })
+        .catch(() => undefined)
+    }
     console.error('Trusted avatar upload failed', error)
     return jsonError('Не удалось безопасно загрузить фотографию.', 503)
   }
