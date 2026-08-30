@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { PRIMARY_OWNER_UID } from '@/lib/access-control'
 import {
+  AppCheckAccessError,
+  appCheckTokenForRequest,
+} from '@/lib/server/app-check'
+import {
   FirebaseAdminConfigurationError,
   getFirebaseAdminAuth,
   getFirebaseAdminDb,
@@ -51,6 +55,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    const appCheckToken = await appCheckTokenForRequest(request)
     const address = clientAddress(request)
     if (address) {
       const networkLimit = await takeRateLimit(`login:network:${address}`, 120)
@@ -66,11 +71,15 @@ export async function POST(request: Request) {
       return rateLimited(accountLimit.retryAfterSeconds)
     }
 
-    const signedIn = await firebaseIdentityRequest('signInWithPassword', {
-      email,
-      password,
-      returnSecureToken: true,
-    })
+    const signedIn = await firebaseIdentityRequest(
+      'signInWithPassword',
+      {
+        email,
+        password,
+        returnSecureToken: true,
+      },
+      appCheckToken,
+    )
 
     if (
       !signedIn.response.ok ||
@@ -78,6 +87,15 @@ export async function POST(request: Request) {
       !signedIn.payload.idToken
     ) {
       const firebaseCode = signedIn.payload.error?.message || ''
+      if (
+        firebaseCode.includes('MISSING_APP_CREDENTIAL') ||
+        firebaseCode.includes('INVALID_APP_CREDENTIAL')
+      ) {
+        return NextResponse.json(
+          { ok: false, code: 'APP_CHECK_REQUIRED' },
+          { status: 401, headers: noStoreHeaders() },
+        )
+      }
       if (firebaseCode.includes('TOO_MANY_ATTEMPTS_TRY_LATER')) {
         return NextResponse.json(
           { ok: false, code: 'TOO_MANY_REQUESTS' },
@@ -108,10 +126,14 @@ export async function POST(request: Request) {
     }
 
     if (!user.emailVerified) {
-      const verification = await firebaseIdentityRequest('sendOobCode', {
-        requestType: 'VERIFY_EMAIL',
-        idToken: signedIn.payload.idToken,
-      })
+      const verification = await firebaseIdentityRequest(
+        'sendOobCode',
+        {
+          requestType: 'VERIFY_EMAIL',
+          idToken: signedIn.payload.idToken,
+        },
+        appCheckToken,
+      )
       return NextResponse.json(
         {
           ok: false,
@@ -152,6 +174,12 @@ export async function POST(request: Request) {
       { headers: noStoreHeaders() },
     )
   } catch (error) {
+    if (error instanceof AppCheckAccessError) {
+      return NextResponse.json(
+        { ok: false, code: 'APP_CHECK_REQUIRED' },
+        { status: 401, headers: noStoreHeaders() },
+      )
+    }
     console.error('MedStart server login failed', error)
     return NextResponse.json(
       {
