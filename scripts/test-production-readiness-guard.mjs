@@ -26,19 +26,37 @@ assert.equal(
   workflow.includes('MEDSTART_EXPECTED_FIREBASE_PROJECT_ID: medstart-e9bfe'),
   true,
 )
+assert.equal(
+  workflow.includes('FIREBASE_READ_ONLY_SERVICE_ACCOUNT_JSON'),
+  true,
+)
+assert.equal(workflow.includes('FIREBASE_SERVICE_ACCOUNT_JSON'), false)
+
+// The report hashes document IDs before writing its local JSON artifact. Remove
+// that known-safe crypto method from the static mutation scan so `.update()` on
+// the hash object cannot be mistaken for a Firestore DocumentReference update.
+const mutationScanSource = script.replace(
+  /createHash\([^\n]+\)\.update\([^\n]+\)\.digest\([^\n]+\)/g,
+  '',
+)
 
 for (const forbidden of [
   '.set(',
   '.update(',
   '.delete(',
   '.create(',
+  'runTransaction(',
+  '.batch(',
+  '.bulkWriter(',
   'deleteUser(',
   'updateUser(',
   'createUser(',
   'setCustomUserClaims(',
+  'revokeRefreshTokens(',
+  "from 'firebase-admin/storage'",
 ]) {
   assert.equal(
-    script.includes(forbidden),
+    mutationScanSource.includes(forbidden),
     false,
     `read-only production audit contains forbidden mutation marker: ${forbidden}`,
   )
