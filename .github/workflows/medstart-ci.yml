@@ -86,6 +86,7 @@ jobs:
           grep -A3 'match /knowledge-published/' storage.rules | grep -q 'allow read, write: if false;'
           grep -q "direct-client-profile-create-blocked" artifacts/medstart/scripts/live-auth-audit.mjs
           ! grep -q 'medstart-board-' artifacts/medstart/components/live/ServerlessWhiteboard.tsx
+          grep -q 'canApplyRealtimeElement' artifacts/medstart/components/live/ServerlessWhiteboard.tsx
           test -f artifacts/medstart/app/api/bookings/route.ts
           test -f artifacts/medstart/app/api/messages/action/route.ts
           test -f artifacts/medstart/app/api/messages/media/route.ts
@@ -98,6 +99,7 @@ jobs:
           test -f artifacts/medstart/lib/server/knowledge-security.ts
           test -f scripts/test-file-security.mjs
           test -f scripts/test-avatar-rules.mjs
+          test -f scripts/test-live-whiteboard-security.mjs
           test -f scripts/test-knowledge-pipeline.mjs
           test -f scripts/test-knowledge-rules.mjs
           test -f scripts/test-live-audit-guard.mjs
@@ -138,6 +140,9 @@ jobs:
 
       - name: Test server file security
         run: node scripts/test-file-security.mjs
+
+      - name: Test realtime whiteboard security
+        run: node scripts/test-live-whiteboard-security.mjs
 
       - name: Test trusted knowledge pipeline
         run: |
