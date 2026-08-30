@@ -1,3 +1,5 @@
+import './test-moderator-role.mjs'
+
 import {
   assertFails,
   assertSucceeds,
@@ -121,6 +123,22 @@ async function run() {
     }),
   )
 
+  // Distributed abuse-control buckets are server-only. A signed-in browser
+  // must never inspect, reset or inflate another requester's counters.
+  const limiterProbe = doc(
+    verified.firestore(),
+    'securityRateLimits',
+    'client-probe',
+  )
+  await assertFails(getDoc(limiterProbe))
+  await assertFails(
+    setDoc(limiterProbe, {
+      count: 0,
+      resetAt: serverTimestamp(),
+      expiresAt: serverTimestamp(),
+    }),
+  )
+
   const mismatchedUid = 'auth-email-mismatch'
   const mismatched = environment.authenticatedContext(mismatchedUid, {
     email: `${mismatchedUid}@example.test`,
@@ -148,6 +166,9 @@ async function run() {
 
   const ownerUid = 'm8JbbeeXMmZzywUwHboOyMm9MnG2'
   const adminUid = 'auth-audit-admin'
+  const moderatorUid = 'auth-least-privilege-moderator'
+  const tutorUid = 'auth-private-tutor'
+  const studentUid = 'auth-booking-student'
   const owner = environment.authenticatedContext(ownerUid, {
     email: 'owner@example.test',
     email_verified: true,
@@ -156,11 +177,40 @@ async function run() {
     email: `${adminUid}@example.test`,
     email_verified: true,
   })
+  const moderator = environment.authenticatedContext(moderatorUid, {
+    email: `${moderatorUid}@example.test`,
+    email_verified: true,
+  })
 
   await environment.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), 'users', adminUid), {
       ...studentProfile(adminUid, `${adminUid}@example.test`),
       role: 'admin',
+    })
+    await setDoc(doc(context.firestore(), 'users', moderatorUid), {
+      ...studentProfile(moderatorUid, `${moderatorUid}@example.test`),
+      firstName: 'Тестовый',
+      lastName: 'Модератор',
+      displayName: 'Тестовый Модератор',
+      role: 'moderator',
+    })
+    await setDoc(doc(context.firestore(), 'users', tutorUid), {
+      ...studentProfile(tutorUid, `${tutorUid}@example.test`),
+      firstName: 'Тестовый',
+      lastName: 'Репетитор',
+      displayName: 'Тестовый Репетитор',
+      role: 'tutor',
+      status: 'active',
+      isPublic: true,
+      specialization: 'Анатомия',
+    })
+    await setDoc(doc(context.firestore(), 'users', studentUid), {
+      ...studentProfile(studentUid, `${studentUid}@example.test`),
+    })
+    await setDoc(doc(context.firestore(), 'tutorPrivateProfiles', tutorUid), {
+      tutorUid,
+      qualificationReference: 'private-qualification-reference',
+      updatedAt: serverTimestamp(),
     })
     await setDoc(doc(context.firestore(), 'adminAuditLogs', 'seed-audit'), {
       actorUid: ownerUid,
@@ -169,6 +219,17 @@ async function run() {
       summary: 'Rules audit seed',
       createdAt: serverTimestamp(),
     })
+    await setDoc(doc(context.firestore(), 'bookings', 'moderator-hidden-booking'), {
+      studentUid,
+      tutorUid,
+      status: 'accepted',
+    })
+    await setDoc(
+      doc(context.firestore(), 'conversations', 'moderator-hidden-conversation'),
+      {
+        participantUids: [studentUid, tutorUid],
+      },
+    )
   })
 
   await assertSucceeds(
@@ -185,8 +246,43 @@ async function run() {
     }),
   )
 
+  // A moderator is a server-assigned role, but it does not become a broad
+  // Firestore administrator. The browser can read/edit only the moderator's own
+  // safe profile; moderation data is delivered through trusted server APIs.
+  await assertSucceeds(
+    getDoc(doc(moderator.firestore(), 'users', moderatorUid)),
+  )
+  await assertFails(
+    updateDoc(doc(moderator.firestore(), 'users', moderatorUid), {
+      role: 'admin',
+      updatedAt: serverTimestamp(),
+    }),
+  )
+  await assertFails(
+    getDoc(doc(moderator.firestore(), 'adminAuditLogs', 'seed-audit')),
+  )
+  await assertFails(
+    getDoc(
+      doc(moderator.firestore(), 'tutorPrivateProfiles', tutorUid),
+    ),
+  )
+  await assertFails(
+    getDoc(
+      doc(moderator.firestore(), 'bookings', 'moderator-hidden-booking'),
+    ),
+  )
+  await assertFails(
+    getDoc(
+      doc(
+        moderator.firestore(),
+        'conversations',
+        'moderator-hidden-conversation',
+      ),
+    ),
+  )
+
   console.log(
-    'Authentication and server-only registration Firebase rules suite passed.',
+    'Authentication, distributed limiter isolation, moderator least-privilege and server-only registration Firebase rules suite passed.',
   )
 }
 

@@ -1,4 +1,9 @@
 import { NextResponse } from 'next/server'
+import { PRIMARY_OWNER_UID } from '@/lib/access-control'
+import {
+  AppCheckAccessError,
+  appCheckTokenForRequest,
+} from '@/lib/server/app-check'
 import {
   FirebaseAdminConfigurationError,
   getFirebaseAdminAuth,
@@ -6,6 +11,7 @@ import {
 } from '@/lib/server/firebase-admin'
 import { firebaseIdentityRequest } from '@/lib/server/firebase-identity'
 import {
+  AuthSecurityConfigurationError,
   clientAddress,
   isValidEmail,
   noStoreHeaders,
@@ -16,7 +22,17 @@ import {
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const OWNER_UID = 'm8JbbeeXMmZzywUwHboOyMm9MnG2'
+function rateLimited(retryAfterSeconds: number) {
+  return NextResponse.json(
+    { ok: false, code: 'TOO_MANY_REQUESTS' },
+    {
+      status: 429,
+      headers: noStoreHeaders({
+        'retry-after': String(Math.max(1, retryAfterSeconds)),
+      }),
+    },
+  )
+}
 
 export async function POST(request: Request) {
   let body: { email?: unknown; password?: unknown }
@@ -38,29 +54,48 @@ export async function POST(request: Request) {
     )
   }
 
-  const limit = takeRateLimit(
-    `login:${clientAddress(request)}:${email}`,
-    10,
-  )
-  if (!limit.allowed) {
-    return NextResponse.json(
-      { ok: false, code: 'TOO_MANY_REQUESTS' },
-      {
-        status: 429,
-        headers: noStoreHeaders({ 'retry-after': String(limit.retryAfterSeconds) }),
-      },
-    )
-  }
-
   try {
-    const signedIn = await firebaseIdentityRequest('signInWithPassword', {
-      email,
-      password,
-      returnSecureToken: true,
-    })
+    const appCheckToken = await appCheckTokenForRequest(request)
+    const address = clientAddress(request)
+    if (address) {
+      const networkLimit = await takeRateLimit(`login:network:${address}`, 120)
+      if (!networkLimit.allowed) {
+        return rateLimited(networkLimit.retryAfterSeconds)
+      }
+    }
 
-    if (!signedIn.response.ok || !signedIn.payload.localId || !signedIn.payload.idToken) {
+    // Account throttling is always enforced, even when proxy IP headers are not
+    // trusted for this deployment.
+    const accountLimit = await takeRateLimit(`login:account:${email}`, 10)
+    if (!accountLimit.allowed) {
+      return rateLimited(accountLimit.retryAfterSeconds)
+    }
+
+    const signedIn = await firebaseIdentityRequest(
+      'signInWithPassword',
+      {
+        email,
+        password,
+        returnSecureToken: true,
+      },
+      appCheckToken,
+    )
+
+    if (
+      !signedIn.response.ok ||
+      !signedIn.payload.localId ||
+      !signedIn.payload.idToken
+    ) {
       const firebaseCode = signedIn.payload.error?.message || ''
+      if (
+        firebaseCode.includes('MISSING_APP_CREDENTIAL') ||
+        firebaseCode.includes('INVALID_APP_CREDENTIAL')
+      ) {
+        return NextResponse.json(
+          { ok: false, code: 'APP_CHECK_REQUIRED' },
+          { status: 401, headers: noStoreHeaders() },
+        )
+      }
       if (firebaseCode.includes('TOO_MANY_ATTEMPTS_TRY_LATER')) {
         return NextResponse.json(
           { ok: false, code: 'TOO_MANY_REQUESTS' },
@@ -91,10 +126,14 @@ export async function POST(request: Request) {
     }
 
     if (!user.emailVerified) {
-      const verification = await firebaseIdentityRequest('sendOobCode', {
-        requestType: 'VERIFY_EMAIL',
-        idToken: signedIn.payload.idToken,
-      })
+      const verification = await firebaseIdentityRequest(
+        'sendOobCode',
+        {
+          requestType: 'VERIFY_EMAIL',
+          idToken: signedIn.payload.idToken,
+        },
+        appCheckToken,
+      )
       return NextResponse.json(
         {
           ok: false,
@@ -129,18 +168,25 @@ export async function POST(request: Request) {
       {
         ok: true,
         customToken,
-        role: user.uid === OWNER_UID ? 'owner' : profile.role,
+        role: user.uid === PRIMARY_OWNER_UID ? 'owner' : profile.role,
         status: profile.status,
       },
       { headers: noStoreHeaders() },
     )
   } catch (error) {
+    if (error instanceof AppCheckAccessError) {
+      return NextResponse.json(
+        { ok: false, code: 'APP_CHECK_REQUIRED' },
+        { status: 401, headers: noStoreHeaders() },
+      )
+    }
     console.error('MedStart server login failed', error)
     return NextResponse.json(
       {
         ok: false,
         code:
-          error instanceof FirebaseAdminConfigurationError
+          error instanceof FirebaseAdminConfigurationError ||
+          error instanceof AuthSecurityConfigurationError
             ? 'AUTH_CONFIGURATION_ERROR'
             : 'AUTH_SERVICE_UNAVAILABLE',
       },

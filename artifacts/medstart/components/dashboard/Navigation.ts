@@ -1,6 +1,7 @@
 import {
   BookOpenCheck,
   CalendarDays,
+  FileCheck2,
   FolderOpen,
   Home,
   Inbox,
@@ -11,7 +12,7 @@ import {
   UserRound,
   UsersRound,
 } from 'lucide-react'
-import type { EffectiveUserRole } from '@/lib/user-profile'
+import type { EffectiveUserRole, UserStatus } from '@/lib/user-profile'
 
 const account = [
   { name: 'Профиль', href: '/dashboard/profile', icon: UserRound },
@@ -47,12 +48,37 @@ const tutor = [
   ...account,
 ]
 
+const restrictedTutor = [
+  { name: 'Главная', href: '/dashboard', icon: Home },
+  ...account,
+]
+
 const moderator = [
+  { name: 'Главная', href: '/dashboard', icon: Home },
+  {
+    name: 'Модерация',
+    href: '/dashboard/moderation',
+    icon: FileCheck2,
+  },
+  {
+    name: 'Учебная база',
+    href: '/dashboard/knowledge',
+    icon: BookOpenCheck,
+  },
+  ...account,
+]
+
+const admin = [
   { name: 'Главная', href: '/dashboard', icon: Home },
   {
     name: 'Центр управления',
     href: '/dashboard/admin',
     icon: ShieldCheck,
+  },
+  {
+    name: 'Модерация',
+    href: '/dashboard/moderation',
+    icon: FileCheck2,
   },
   { name: 'Сообщения', href: '/dashboard/messages', icon: MessageCircle },
   { name: 'Каталог', href: '/dashboard/tutors', icon: Search },
@@ -64,8 +90,14 @@ const moderator = [
   ...account,
 ]
 
-export function getNavigation(role: EffectiveUserRole | null) {
-  if (role === 'tutor') return tutor
-  if (role === 'admin' || role === 'owner') return moderator
+export function getNavigation(
+  role: EffectiveUserRole | null,
+  status?: UserStatus | null,
+) {
+  if (role === 'tutor') {
+    return status === 'suspended' ? restrictedTutor : tutor
+  }
+  if (role === 'moderator') return moderator
+  if (role === 'admin' || role === 'owner') return admin
   return student
 }

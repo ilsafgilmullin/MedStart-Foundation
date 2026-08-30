@@ -20,6 +20,17 @@ export interface WhiteboardRealtimeChannel {
   ) => () => void
 }
 
+export function canApplyRealtimeElement(
+  existing: Pick<WhiteboardElement, 'authorUid'> | null | undefined,
+  incoming: Pick<WhiteboardElement, 'authorUid'>,
+  senderUid: string,
+) {
+  return (
+    incoming.authorUid === senderUid &&
+    (!existing || existing.authorUid === senderUid)
+  )
+}
+
 function compactPoint(point: WhiteboardPoint): WhiteboardPoint {
   return {
     x: Math.round(point.x * 1_000) / 1_000,

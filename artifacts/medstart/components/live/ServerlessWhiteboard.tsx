@@ -31,6 +31,7 @@ import type {
   WhiteboardPoint,
 } from '@/lib/domain'
 import {
+  canApplyRealtimeElement,
   compactRealtimeElement,
   type WhiteboardRealtimeChannel,
 } from '@/lib/live-whiteboard'
@@ -393,8 +394,23 @@ export default function ServerlessWhiteboard({
         return
       }
 
+      const committed = elementsRef.current.find(
+        (item) => item.id === packet.element.id,
+      )
+      if (!canApplyRealtimeElement(committed, packet.element, senderUid)) return
+
       if (packet.type === 'draft') {
         setRemoteDrafts((current) => {
+          const existingDraft = current[packet.element.id]
+          if (
+            !canApplyRealtimeElement(
+              existingDraft,
+              packet.element,
+              senderUid,
+            )
+          ) {
+            return current
+          }
           const next = { ...current }
           const keys = Object.keys(next)
           if (
@@ -410,11 +426,23 @@ export default function ServerlessWhiteboard({
       }
 
       setRemoteDrafts((current) => {
+        const existingDraft = current[packet.element.id]
+        if (
+          !canApplyRealtimeElement(existingDraft, packet.element, senderUid)
+        ) {
+          return current
+        }
         const next = { ...current }
         delete next[packet.element.id]
         return next
       })
-      setElements((current) => mergeElement(current, packet.element))
+      setElements((current) => {
+        const existing = current.find((item) => item.id === packet.element.id)
+        if (!canApplyRealtimeElement(existing, packet.element, senderUid)) {
+          return current
+        }
+        return mergeElement(current, packet.element)
+      })
     })
   }, [realtime, tutorUid, userUid])
 

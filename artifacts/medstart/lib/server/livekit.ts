@@ -118,17 +118,16 @@ export async function createLessonToken(input: CreateLessonTokenInput) {
   const { serverUrl, apiKey, apiSecret } = liveKitConfig()
   const roomName = `medstart_${input.booking.id}`
   const token = new AccessToken(apiKey, apiSecret, {
+    // Firebase UID is the immutable application identity used to map the
+    // LiveKit participant back to the server-authorized booking participant.
     identity: input.participantUid,
     name: input.participantName,
     ttl: '4h',
-    metadata: JSON.stringify({
-      bookingId: input.booking.id,
-      role: input.participantRole,
-      subject: input.booking.subject,
-    }),
+    // Participant attributes are user-mutable when canUpdateOwnMetadata is
+    // granted. Keep them UI-only. Never place role, booking authorization or
+    // any other security decision in this mutable namespace.
     attributes: {
-      'medstart.bookingId': input.booking.id,
-      'medstart.role': input.participantRole,
+      'medstart.handRaised': 'false',
     },
   })
 
@@ -138,6 +137,8 @@ export async function createLessonToken(input: CreateLessonTokenInput) {
     canPublish: true,
     canSubscribe: true,
     canPublishData: true,
+    // Required only for the low-frequency "raise hand" UI attribute. All
+    // authorization remains based on Firebase UID + booking data on our server.
     canUpdateOwnMetadata: true,
   })
 

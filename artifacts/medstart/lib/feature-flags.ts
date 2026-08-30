@@ -1,0 +1,2 @@
+export const SCHOOL_TRACK_ENABLED =
+  process.env.NEXT_PUBLIC_MEDSTART_SCHOOL_TRACK_ENABLED === 'true'

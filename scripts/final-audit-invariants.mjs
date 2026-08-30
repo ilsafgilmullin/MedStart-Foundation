@@ -50,6 +50,8 @@ const requiredFiles = [
   'artifacts/medstart/lib/server/firebase-admin.ts',
   'artifacts/medstart/lib/server/firebase-identity.ts',
   'artifacts/medstart/lib/server/auth-security.ts',
+  'artifacts/medstart/lib/feature-flags.ts',
+  'artifacts/medstart/lib/server/feature-flags.ts',
   'artifacts/medstart/hooks/useHydrated.ts',
   'artifacts/medstart/app/api/auth/login/route.ts',
   'artifacts/medstart/app/api/auth/register/route.ts',
@@ -57,6 +59,12 @@ const requiredFiles = [
   'artifacts/medstart/app/api/health/auth/route.ts',
   'artifacts/medstart/app/api/admin/overview/route.ts',
   'artifacts/medstart/app/api/admin/action/route.ts',
+  'artifacts/medstart/app/api/knowledge/files/route.ts',
+  'artifacts/medstart/app/api/knowledge/submissions/route.ts',
+  'artifacts/medstart/app/api/knowledge/moderation/route.ts',
+  'artifacts/medstart/lib/server/knowledge-access.ts',
+  'artifacts/medstart/lib/server/knowledge-security.ts',
+  'artifacts/medstart/lib/server/malware-scanner.ts',
   'artifacts/medstart/lib/admin-control.ts',
   'artifacts/medstart/lib/server/admin-control.ts',
   'artifacts/medstart/components/auth/AuthHealthBanner.tsx',
@@ -92,6 +100,7 @@ const adminOverviewRouteSource = await readFile(join(sourceRoot, 'app', 'api', '
 const adminActionRouteSource = await readFile(join(sourceRoot, 'app', 'api', 'admin', 'action', 'route.ts'), 'utf8')
 const adminServerSource = await readFile(join(sourceRoot, 'lib', 'server', 'admin-control.ts'), 'utf8')
 const nextConfigSource = await readFile(join(sourceRoot, 'next.config.ts'), 'utf8')
+const middlewareSource = await readFile(join(sourceRoot, 'middleware.ts'), 'utf8')
 const serviceWorkerSource = await readFile(join(sourceRoot, 'public', 'sw.js'), 'utf8')
 const authShellSource = await readFile(join(sourceRoot, 'components', 'auth', 'AuthShell.tsx'), 'utf8')
 const loginPageSource = await readFile(join(sourceRoot, 'app', 'login', 'page.tsx'), 'utf8')
@@ -141,14 +150,39 @@ for (const marker of ['FirebaseAdminConfigurationError', 'ownerAccount', 'ownerP
 for (const marker of ['requireAdminActor', 'listAllAuthUsers', 'adminAuditLogs', 'ownerProtected']) {
   if (!adminOverviewRouteSource.includes(marker)) failures.push(`Admin overview route is missing: ${marker}`)
 }
-for (const marker of ['requireOwner', 'assertTargetIsNotOwner', 'revokeRefreshTokens', 'writeAdminAudit', 'set_booking_status']) {
+for (const marker of [
+  'requireOwner',
+  'assertTargetIsNotOwner',
+  'buildAdminAuditData',
+  'startAdminAudit',
+  'completeAdminAudit',
+  'failAdminAudit',
+  'revokeRefreshTokens',
+  'set_booking_status',
+]) {
   if (!adminActionRouteSource.includes(marker)) failures.push(`Admin action route is missing: ${marker}`)
 }
-for (const marker of ['verifyIdToken(token, true)', 'PRIMARY_OWNER_UID', 'adminAuditLogs']) {
+for (const marker of [
+  'verifyIdToken(token, true)',
+  'PRIMARY_OWNER_UID',
+  'adminAuditLogs',
+  'operationStatus',
+  'startAdminAudit',
+  'completeAdminAudit',
+  'failAdminAudit',
+]) {
   if (!adminServerSource.includes(marker)) failures.push(`Admin server guard is missing: ${marker}`)
 }
+if (!adminServerSource.includes("operationStatus === 'started' ? null")) {
+  failures.push('Admin audit intent does not preserve an explicit incomplete state')
+}
+if (!adminActionRouteSource.includes("operationStatus: 'succeeded'")) {
+  failures.push('Admin Auth/Firestore compound actions do not atomically finalize their audit record')
+}
 
-if (!nextConfigSource.includes("!isProduction ? [\"'unsafe-eval'\"] : []")) failures.push('Development CSP can block Next.js hydration in Replit')
+if (!middlewareSource.includes("...(!isProduction ? [\"'unsafe-inline'\", \"'unsafe-eval'\"] : [])")) failures.push('Development nonce CSP can block Next.js hydration')
+if (!middlewareSource.includes("`'nonce-${nonce}'`")) failures.push('Production CSP is missing a per-request script nonce')
+if (nextConfigSource.includes('Content-Security-Policy')) failures.push('Static CSP competes with per-request nonce CSP')
 if (!serviceWorkerSource.includes("CACHE_NAME = 'medstart-shell-v5'")) failures.push('Service worker cache version was not advanced')
 if (!serviceWorkerSource.includes('networkFirst(request)')) failures.push('Next.js static assets can remain stale in the service worker')
 if (!authShellSource.includes('AuthHealthBanner')) failures.push('Authentication screens do not display dependency health')

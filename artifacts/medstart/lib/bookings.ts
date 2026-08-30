@@ -4,8 +4,6 @@ import {
   getDoc,
   onSnapshot,
   query,
-  runTransaction,
-  serverTimestamp,
   where,
   type Unsubscribe,
 } from 'firebase/firestore'
@@ -45,6 +43,12 @@ export interface BookingActionInput {
 interface CreateBookingResponse {
   bookingId?: string
   conversationId?: string
+  error?: string
+}
+
+interface BookingActionResponse {
+  ok?: boolean
+  status?: BookingStatus
   error?: string
 }
 
@@ -152,43 +156,26 @@ export async function getBooking(bookingId: string): Promise<Booking | null> {
 export async function changeBookingStatus(
   input: BookingActionInput,
 ): Promise<void> {
-  const bookingRef = doc(db, 'bookings', input.bookingId)
+  const currentUser = auth.currentUser
+  if (!currentUser || currentUser.uid !== input.actorUid) {
+    throw new Error('Сессия авторизации устарела. Войдите повторно.')
+  }
 
-  await runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(bookingRef)
-    if (!snapshot.exists()) throw new Error('Заявка не найдена.')
-
-    const booking = { id: snapshot.id, ...snapshot.data() } as Booking
-    const tutorAction =
-      input.actorUid === booking.tutorUid &&
-      ((booking.status === 'pending' &&
-        (input.nextStatus === 'accepted' || input.nextStatus === 'declined')) ||
-        (booking.status === 'accepted' && input.nextStatus === 'completed'))
-    const studentAction =
-      input.actorUid === booking.studentUid &&
-      (booking.status === 'pending' || booking.status === 'accepted') &&
-      input.nextStatus === 'cancelled'
-
-    if (!tutorAction && !studentAction) {
-      throw new Error('Это действие недоступно для текущего статуса занятия.')
-    }
-
-    const patch: Record<string, unknown> = {
-      status: input.nextStatus,
-      updatedAt: serverTimestamp(),
-    }
-
-    if (input.nextStatus === 'accepted') {
-      patch.confirmedAt = serverTimestamp()
-      patch.tutorResponse = clean(input.response ?? '')
-    }
-    if (input.nextStatus === 'declined') {
-      patch.tutorResponse = clean(input.response ?? '')
-    }
-    if (input.nextStatus === 'completed') {
-      patch.completedAt = serverTimestamp()
-    }
-
-    transaction.update(bookingRef, patch)
+  const token = await currentUser.getIdToken()
+  const response = await fetch('/api/bookings/action', {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      bookingId: input.bookingId,
+      nextStatus: input.nextStatus,
+      response: clean(input.response ?? ''),
+    }),
   })
+  const payload = (await response.json().catch(() => ({}))) as BookingActionResponse
+  if (!response.ok || payload.ok !== true) {
+    throw new Error(payload.error || 'Не удалось изменить статус занятия.')
+  }
 }

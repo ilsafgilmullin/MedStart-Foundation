@@ -51,6 +51,7 @@ const inputClass =
 const roleNames = {
   student: 'Студент',
   tutor: 'Репетитор',
+  moderator: 'Модератор',
   admin: 'Администратор',
   owner: 'Владелец',
 } as const
@@ -59,6 +60,7 @@ const statusNames = {
   pending: 'На проверке',
   active: 'Активен',
   rejected: 'Требуется доработка',
+  suspended: 'Приостановлен',
   blocked: 'Заблокирован',
   deleted: 'Удалён',
 } as const
@@ -348,7 +350,6 @@ export default function ProfilePage() {
         firstName,
         lastName,
         displayName: `${firstName} ${lastName}`.trim(),
-        avatar: form.avatar,
         ...(profile.role === 'student'
           ? {
               learnerTrack: form.learnerTrack,
@@ -419,7 +420,6 @@ export default function ProfilePage() {
     setMessage('')
     try {
       const avatar = await uploadAvatar(user.uid, file)
-      await updateUserProfile(user.uid, { avatar })
       field('avatar', avatar)
       setMessage('Фотография профиля обновлена.')
     } catch (caught) {

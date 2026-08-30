@@ -1,11 +1,16 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { NextResponse } from 'next/server'
 import {
+  AppCheckAccessError,
+  appCheckTokenForRequest,
+} from '@/lib/server/app-check'
+import {
   FirebaseAdminConfigurationError,
   getFirebaseAdminAuth,
   getFirebaseAdminDb,
 } from '@/lib/server/firebase-admin'
 import { firebaseIdentityRequest } from '@/lib/server/firebase-identity'
+import { schoolTrackEnabled } from '@/lib/server/feature-flags'
 import {
   isSchoolGradeCompatible,
   subjectsForExam,
@@ -13,6 +18,7 @@ import {
   type SchoolExam,
 } from '@/lib/education'
 import {
+  AuthSecurityConfigurationError,
   cleanText,
   clientAddress,
   isValidEmail,
@@ -105,6 +111,18 @@ function normalizeExamTypes(value: unknown): SchoolExam[] {
   ].slice(0, 2)
 }
 
+function rateLimited(retryAfterSeconds: number) {
+  return NextResponse.json(
+    { ok: false, code: 'TOO_MANY_REQUESTS' },
+    {
+      status: 429,
+      headers: noStoreHeaders({
+        'retry-after': String(Math.max(1, retryAfterSeconds)),
+      }),
+    },
+  )
+}
+
 export async function POST(request: Request) {
   let body: RegistrationBody
   try {
@@ -150,6 +168,18 @@ export async function POST(request: Request) {
   const subjects = normalizeSubjects(body.subjects)
   const tutorAudiences = normalizeTutorAudiences(body.tutorAudiences)
   const examTypes = normalizeExamTypes(body.examTypes)
+  const schoolEnabled = schoolTrackEnabled()
+
+  if (
+    !schoolEnabled &&
+    ((role === 'student' && learnerTrack === 'school') ||
+      (role === 'tutor' && tutorAudiences.includes('school')))
+  ) {
+    return NextResponse.json(
+      { ok: false, code: 'SCHOOL_TRACK_DISABLED' },
+      { status: 403, headers: noStoreHeaders() },
+    )
+  }
 
   if (role === 'tutor' && !specialization) {
     return NextResponse.json(
@@ -197,24 +227,28 @@ export async function POST(request: Request) {
     )
   }
 
-  const limit = takeRateLimit(`register:${clientAddress(request)}:${email}`, 5)
-  if (!limit.allowed) {
-    return NextResponse.json(
-      { ok: false, code: 'TOO_MANY_REQUESTS' },
-      {
-        status: 429,
-        headers: noStoreHeaders({
-          'retry-after': String(limit.retryAfterSeconds),
-        }),
-      },
-    )
-  }
-
   let adminAuth: AdminAuth | undefined
   let adminDb: AdminDb | undefined
   let createdUid = ''
 
   try {
+    const appCheckToken = await appCheckTokenForRequest(request)
+    const address = clientAddress(request)
+    if (address) {
+      const networkLimit = await takeRateLimit(
+        `register:network:${address}`,
+        30,
+      )
+      if (!networkLimit.allowed) {
+        return rateLimited(networkLimit.retryAfterSeconds)
+      }
+    }
+
+    const accountLimit = await takeRateLimit(`register:account:${email}`, 5)
+    if (!accountLimit.allowed) {
+      return rateLimited(accountLimit.retryAfterSeconds)
+    }
+
     adminAuth = getFirebaseAdminAuth()
     adminDb = getFirebaseAdminDb()
 
@@ -302,18 +336,36 @@ export async function POST(request: Request) {
       transaction.set(profileRef, profile)
     })
 
-    const signedIn = await firebaseIdentityRequest('signInWithPassword', {
-      email,
-      password,
-      returnSecureToken: true,
-    })
+    const signedIn = await firebaseIdentityRequest(
+      'signInWithPassword',
+      {
+        email,
+        password,
+        returnSecureToken: true,
+      },
+      appCheckToken,
+    )
+
+    if (!signedIn.response.ok) {
+      const firebaseCode = signedIn.payload.error?.message || ''
+      if (
+        firebaseCode.includes('MISSING_APP_CREDENTIAL') ||
+        firebaseCode.includes('INVALID_APP_CREDENTIAL')
+      ) {
+        throw new AppCheckAccessError()
+      }
+    }
 
     let verificationSent = false
     if (signedIn.response.ok && signedIn.payload.idToken) {
-      const verification = await firebaseIdentityRequest('sendOobCode', {
-        requestType: 'VERIFY_EMAIL',
-        idToken: signedIn.payload.idToken,
-      })
+      const verification = await firebaseIdentityRequest(
+        'sendOobCode',
+        {
+          requestType: 'VERIFY_EMAIL',
+          idToken: signedIn.payload.idToken,
+        },
+        appCheckToken,
+      )
       verificationSent = verification.response.ok
     }
 
@@ -334,7 +386,16 @@ export async function POST(request: Request) {
       ])
     }
 
-    if (error instanceof FirebaseAdminConfigurationError) {
+    if (error instanceof AppCheckAccessError) {
+      return NextResponse.json(
+        { ok: false, code: 'APP_CHECK_REQUIRED' },
+        { status: 401, headers: noStoreHeaders() },
+      )
+    }
+    if (
+      error instanceof FirebaseAdminConfigurationError ||
+      error instanceof AuthSecurityConfigurationError
+    ) {
       return NextResponse.json(
         { ok: false, code: 'AUTH_CONFIGURATION_ERROR' },
         { status: 503, headers: noStoreHeaders() },

@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { PRIMARY_OWNER_UID } from './access-control'
+import { SCHOOL_TRACK_ENABLED } from './feature-flags'
 import type {
   LessonFormat,
   NotificationPreferences,
@@ -82,6 +83,7 @@ const protectedProfileFields = new Set<keyof UserProfile>([
   'moderatedBy',
   'moderatedAt',
   'createdAt',
+  'avatar',
 ])
 
 function sortTutors(items: UserProfile[]) {
@@ -92,6 +94,12 @@ function sortTutors(items: UserProfile[]) {
       left.displayName.localeCompare(right.displayName, 'ru')
     )
   })
+}
+
+function visibleTutorForCurrentScope(profile: UserProfile) {
+  if (SCHOOL_TRACK_ENABLED) return true
+  if (!Array.isArray(profile.tutorAudiences)) return true
+  return profile.tutorAudiences.includes('medical')
 }
 
 function publicTutorsQuery() {
@@ -228,7 +236,11 @@ export async function deleteUserProfile(uid: string) {
 
 export async function getPublicTutors(): Promise<UserProfile[]> {
   const snapshot = await getDocs(publicTutorsQuery())
-  return sortTutors(snapshot.docs.map((item) => item.data() as UserProfile))
+  return sortTutors(
+    snapshot.docs
+      .map((item) => item.data() as UserProfile)
+      .filter(visibleTutorForCurrentScope),
+  )
 }
 
 export async function getPublicTutor(
@@ -237,7 +249,8 @@ export async function getPublicTutor(
   const profile = await getUserProfile(tutorUid)
   return profile?.role === 'tutor' &&
     profile.status === 'active' &&
-    profile.isPublic
+    profile.isPublic &&
+    visibleTutorForCurrentScope(profile)
     ? profile
     : null
 }
@@ -250,7 +263,11 @@ export function subscribeToPublicTutors(
     publicTutorsQuery(),
     (snapshot) =>
       onChange(
-        sortTutors(snapshot.docs.map((item) => item.data() as UserProfile)),
+        sortTutors(
+          snapshot.docs
+            .map((item) => item.data() as UserProfile)
+            .filter(visibleTutorForCurrentScope),
+        ),
       ),
     onError,
   )

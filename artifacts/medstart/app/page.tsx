@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { SCHOOL_TRACK_ENABLED } from '@/lib/feature-flags'
 import {
   ArrowRight,
   BadgeCheck,
@@ -24,13 +25,17 @@ import {
 } from 'lucide-react'
 
 export const metadata: Metadata = {
-  title: 'MedStart — ОГЭ, ЕГЭ и медицинское обучение',
-  description:
-    'Индивидуальные занятия для школьников и студентов медвузов: подготовка к ОГЭ и ЕГЭ, медицинские дисциплины, видео, доска и учебные материалы.',
+  title: SCHOOL_TRACK_ENABLED
+    ? 'MedStart — ОГЭ, ЕГЭ и медицинское обучение'
+    : 'MedStart — индивидуальное обучение студентов-медиков',
+  description: SCHOOL_TRACK_ENABLED
+    ? 'Индивидуальные занятия для школьников и студентов медвузов: подготовка к ОГЭ и ЕГЭ, медицинские дисциплины, видео, доска и учебные материалы.'
+    : 'Индивидуальные занятия для студентов медвузов: медицинские дисциплины, видео, совместная доска и проверенные учебные материалы.',
 }
 
 const audiences = [
   {
+    enabled: SCHOOL_TRACK_ENABLED,
     eyebrow: '8–11 классы',
     title: 'Подготовка к ОГЭ и ЕГЭ',
     text: 'Выберите класс, экзамен и предметы — MedStart подберёт преподавателей под вашу учебную цель.',
@@ -47,6 +52,7 @@ const audiences = [
     checkClass: 'text-cyan-700',
   },
   {
+    enabled: true,
     eyebrow: 'Студентам медвузов',
     title: 'Индивидуальное изучение медицины',
     text: 'Разбирайте дисциплины, клинические задачи и сложные темы один на один с профильным преподавателем.',
@@ -62,7 +68,7 @@ const audiences = [
     eyebrowClass: 'text-violet-700',
     checkClass: 'text-violet-700',
   },
-]
+].filter((item) => item.enabled)
 
 const lessonTools = [
   {
@@ -235,7 +241,9 @@ export default function HomePage() {
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1.5 text-xs font-black text-cyan-100 sm:px-4 sm:py-2 sm:text-sm">
               <Sparkles className="h-4 w-4" />
-              ОГЭ · ЕГЭ · медицинские дисциплины
+              {SCHOOL_TRACK_ENABLED
+                ? 'ОГЭ · ЕГЭ · медицинские дисциплины'
+                : 'Медицинские дисциплины · индивидуальное обучение'}
             </div>
 
             <h1 className="mt-5 max-w-3xl text-4xl font-black leading-[1.05] tracking-[-0.04em] text-white sm:mt-6 sm:text-5xl lg:text-6xl">
@@ -246,9 +254,9 @@ export default function HomePage() {
             </h1>
 
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg sm:leading-8">
-              MedStart объединяет подготовку школьников к ОГЭ и ЕГЭ и
-              индивидуальное обучение студентов-медиков в одной современной
-              платформе.
+              {SCHOOL_TRACK_ENABLED
+                ? 'MedStart объединяет подготовку школьников к ОГЭ и ЕГЭ и индивидуальное обучение студентов-медиков в одной современной платформе.'
+                : 'MedStart объединяет студентов-медиков и проверенных профильных преподавателей: занятия, видео, совместную доску и учебные материалы в одной платформе.'}
             </p>
 
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
@@ -299,8 +307,11 @@ export default function HomePage() {
                   </span>
                 </div>
 
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
+                <div
+                  className={`mt-4 grid gap-3 ${SCHOOL_TRACK_ENABLED ? 'sm:grid-cols-2' : ''}`}
+                >
+                  {SCHOOL_TRACK_ENABLED && (
+                    <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
                     <span className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-700 text-white">
                       <School className="h-5 w-5" />
                     </span>
@@ -313,7 +324,8 @@ export default function HomePage() {
                     <p className="mt-2 text-xs leading-5 text-slate-600">
                       8–11 классы · выбор предметов
                     </p>
-                  </div>
+                    </div>
+                  )}
 
                   <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
                     <span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-700 text-white">
@@ -358,11 +370,21 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <SectionHeading
             eyebrow="Два направления"
-            title="Одна платформа для разных учебных целей"
-            description="При регистрации ученик выбирает свою траекторию, а MedStart показывает подходящих преподавателей и инструменты."
+            title={
+              SCHOOL_TRACK_ENABLED
+                ? 'Одна платформа для разных учебных целей'
+                : 'Медицинское обучение в одном пространстве'
+            }
+            description={
+              SCHOOL_TRACK_ENABLED
+                ? 'При регистрации ученик выбирает свою траекторию, а MedStart показывает подходящих преподавателей и инструменты.'
+                : 'Студент медвуза выбирает профильного преподавателя, бронирует занятие и продолжает работу с материалами в одном кабинете.'
+            }
           />
 
-          <div className="mt-9 grid gap-5 lg:grid-cols-2">
+          <div
+            className={`mt-9 grid gap-5 ${SCHOOL_TRACK_ENABLED ? 'lg:grid-cols-2' : 'mx-auto max-w-3xl'}`}
+          >
             {audiences.map(({ icon: Icon, ...item }) => (
               <article
                 key={item.title}

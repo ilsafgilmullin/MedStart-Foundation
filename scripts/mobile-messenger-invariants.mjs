@@ -5,6 +5,7 @@ const sources = {
   capture: await readFile('artifacts/medstart/components/messages/MediaCaptureDialog.tsx', 'utf8'),
   bubble: await readFile('artifacts/medstart/components/messages/MessageBubble.tsx', 'utf8'),
   media: await readFile('artifacts/medstart/lib/chat-media.ts', 'utf8'),
+  mediaRoute: await readFile('artifacts/medstart/app/api/messages/media/route.ts', 'utf8'),
   conversations: await readFile('artifacts/medstart/lib/conversations.ts', 'utf8'),
   action: await readFile('artifacts/medstart/app/api/messages/action/route.ts', 'utf8'),
 }
@@ -33,6 +34,12 @@ requireMarker(sources.capture, "recorder.start(1_000)", 'Recorder must avoid exc
 requireMarker(sources.media, 'request.timeout = 90_000', 'Media upload must have a timeout')
 requireMarker(sources.media, 'fetchWithTimeout', 'Protected media reads must have a timeout')
 requireMarker(sources.media, 'Проверьте интернет и повторите действие', 'Safari network errors must be user-friendly')
+
+requireMarker(sources.mediaRoute, 'await takeRateLimit', 'Media uploads must use distributed rate limiting')
+requireMarker(sources.mediaRoute, 'message-media-upload:account:', 'Media limiter must be account-scoped')
+requireMarker(sources.mediaRoute, 'MEDIA_UPLOAD_WINDOW_MS', 'Media limiter window must be explicit')
+requireMarker(sources.mediaRoute, 'MEDIA_UPLOAD_SECURITY_UNAVAILABLE', 'Media limiter configuration failure must be explicit')
+forbidMarker(sources.mediaRoute, 'new Map<', 'Media uploads must not use a process-local rate limiter')
 
 requireMarker(sources.conversations, 'requestId: newRequestId()', 'Message retry must use an idempotency key')
 requireMarker(sources.conversations, 'MessageNetworkError', 'Message API must distinguish network failures')

@@ -11,6 +11,7 @@ import { getProfileCompletion } from '@/lib/profile-completion'
 const roleNames = {
   student: 'Студент',
   tutor: 'Репетитор',
+  moderator: 'Модератор',
   admin: 'Администратор',
   owner: 'Владелец',
 } as const
@@ -50,16 +51,18 @@ export default function Sidebar() {
                 ? 'Центр владельца'
                 : role === 'admin'
                   ? 'Панель администратора'
-                  : role === 'tutor'
-                    ? 'Кабинет преподавателя'
-                    : 'Учебный кабинет'}
+                  : role === 'moderator'
+                    ? 'Панель модератора'
+                    : role === 'tutor'
+                      ? 'Кабинет преподавателя'
+                      : 'Учебный кабинет'}
             </span>
           </span>
         </Link>
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-4">
-        {getNavigation(role).map((item) => {
+        {getNavigation(role, profile?.status).map((item) => {
           const Icon = item.icon
           const active =
             pathname === item.href ||

@@ -11,6 +11,7 @@ import {
 } from '@livekit/components-react'
 import { ConnectionQuality, Track } from 'livekit-client'
 import { Hand, MicOff, MonitorUp, UserRound, UsersRound } from 'lucide-react'
+import type { Booking } from '@/lib/domain'
 
 function qualityStyle(quality: ConnectionQuality) {
   if (quality === ConnectionQuality.Excellent) {
@@ -28,7 +29,19 @@ function qualityStyle(quality: ConnectionQuality) {
   return { label: 'Проверяем сеть', dot: 'bg-slate-400' }
 }
 
-function ParticipantVideo({ track }: { track: TrackReferenceOrPlaceholder }) {
+function trustedParticipantName(booking: Booking, identity: string) {
+  if (identity === booking.studentUid) return booking.studentName || 'Студент'
+  if (identity === booking.tutorUid) return booking.tutorName || 'Репетитор'
+  return 'Участник занятия'
+}
+
+function ParticipantVideo({
+  track,
+  booking,
+}: {
+  track: TrackReferenceOrPlaceholder
+  booking: Booking
+}) {
   const { quality } = useConnectionQualityIndicator({
     participant: track.participant,
   })
@@ -39,9 +52,9 @@ function ParticipantVideo({ track }: { track: TrackReferenceOrPlaceholder }) {
     isTrackReference(track) &&
     !track.publication.isMuted &&
     Boolean(track.publication.track)
-  const name =
-    track.participant.name ||
-    (track.participant.isLocal ? 'Вы' : 'Участник занятия')
+  // LiveKit allows a participant with canUpdateOwnMetadata to change their
+  // display name. Never trust that mutable value for MedStart identity UI.
+  const name = trustedParticipantName(booking, track.participant.identity)
   const initials = name
     .split(/\s+/)
     .slice(0, 2)
@@ -104,7 +117,7 @@ function ParticipantVideo({ track }: { track: TrackReferenceOrPlaceholder }) {
   )
 }
 
-export default function VideoStage() {
+export default function VideoStage({ booking }: { booking: Booking }) {
   const tracks = useTracks([
     { source: Track.Source.Camera, withPlaceholder: true },
     { source: Track.Source.ScreenShare, withPlaceholder: false },
@@ -142,7 +155,8 @@ export default function VideoStage() {
             >
               <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-xs font-semibold text-white">
                 <MonitorUp className="h-3.5 w-3.5 text-violet-300" />
-                Экран · {track.participant.name || 'Участник'}
+                Экран ·{' '}
+                {trustedParticipantName(booking, track.participant.identity)}
               </div>
               <VideoTrack
                 trackRef={track}
@@ -157,6 +171,7 @@ export default function VideoStage() {
           <ParticipantVideo
             key={`${track.participant.identity}-camera`}
             track={track}
+            booking={booking}
           />
         ))}
 

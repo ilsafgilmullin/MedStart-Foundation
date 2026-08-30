@@ -13,6 +13,8 @@ function messageFor(error: unknown) {
         return 'Создать аккаунт с этими данными нельзя. Возможно, аккаунт уже создан — войдите или восстановите пароль.'
       case 'INVALID_REGISTRATION':
         return 'Проверьте заполненные данные и требования к паролю.'
+      case 'SCHOOL_TRACK_DISABLED':
+        return 'Школьный трек пока закрыт. Выберите преподавание для студентов медвузов.'
       case 'TOO_MANY_REQUESTS':
         return 'Слишком много попыток регистрации. Подождите и повторите позже.'
       case 'AUTH_CONFIGURATION_ERROR':

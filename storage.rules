@@ -42,48 +42,25 @@ service firebase.storage {
       return isOwner() || isActiveAdmin();
     }
 
-    function isActiveTutor(userId) {
-      return isActiveUser(userId)
-        && userProfile(userId).role == 'tutor';
-    }
-
-    function isPublishedSubmission(submissionId) {
-      return firestore.exists(
-          /databases/(default)/documents/knowledgeSubmissions/$(submissionId)
-        )
-        && firestore.get(
-          /databases/(default)/documents/knowledgeSubmissions/$(submissionId)
-        ).data.status == 'published';
-    }
-
+    // Avatar bytes are server-managed. Browser clients may only read the public
+    // profile image; upload validation and writes go through /api/profile/avatar.
     match /avatars/{userId}/{fileName} {
       allow read: if true;
-      allow create, update: if isActiveUser(userId)
-        && request.resource.size > 0
-        && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/(jpeg|png|webp)');
-      allow delete: if isActiveUser(userId) || isModerator();
+      allow create, update, delete: if false;
     }
 
+    // Knowledge files are private server-managed objects. Browser clients use
+    // authenticated MedStart API routes for quarantine, review and download.
     match /knowledge-submissions/{userId}/{submissionId}/{fileName} {
-      allow read: if signedIn()
-        && userExists(request.auth.uid)
-        && userProfile(request.auth.uid).status == 'active'
-        && (
-          request.auth.uid == userId
-          || isModerator()
-          || isPublishedSubmission(submissionId)
-        );
+      allow read, write: if false;
+    }
 
-      allow create: if isActiveTutor(userId)
-        && fileName.matches('.+[.]pdf')
-        && request.resource.size > 0
-        && request.resource.size <= 25 * 1024 * 1024
-        && request.resource.contentType == 'application/pdf';
+    match /knowledge-quarantine/{userId}/{submissionId}/{fileName} {
+      allow read, write: if false;
+    }
 
-      allow update: if false;
-
-      allow delete: if isActiveTutor(userId) || isModerator();
+    match /knowledge-published/{submissionId}/{fileName} {
+      allow read, write: if false;
     }
 
     function bookingExists(bookingId) {

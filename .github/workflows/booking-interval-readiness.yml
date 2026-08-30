@@ -1,0 +1,71 @@
+name: Booking interval readiness audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Read production active bookings without modifying data.'
+        required: true
+        type: choice
+        default: DO_NOT_AUDIT
+        options:
+          - DO_NOT_AUDIT
+          - READ_ONLY_PRODUCTION_AUDIT
+
+permissions:
+  contents: read
+
+concurrency:
+  group: medstart-booking-readiness-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'READ_ONLY_PRODUCTION_AUDIT' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Verify main ref
+        run: |
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --reporter=silent
+
+      - name: Prepare read-only Firebase credential
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          test -n "$FIREBASE_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/firebase-service-account.json"
+          chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
+
+      - name: Audit active booking interval schema
+        working-directory: artifacts/medstart
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+          MEDSTART_AUDIT_PROJECT_ID: medstart-e9bfe
+          MEDSTART_EXPECTED_FIREBASE_PROJECT_ID: medstart-e9bfe
+        run: node scripts/audit-booking-interval-readiness.mjs
+
+      - name: Upload sanitized readiness report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: booking-interval-readiness
+          path: artifacts/medstart/booking-interval-readiness-report.json
+          if-no-files-found: warn
+          retention-days: 3

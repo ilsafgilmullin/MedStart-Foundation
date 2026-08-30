@@ -269,7 +269,7 @@ function Workspace({
             <div className="mt-2 flex min-h-0 min-w-0 flex-1 overflow-hidden">
               {sideView === 'video' ? (
                 <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-                  <VideoStage />
+                  <VideoStage booking={booking} />
                 </div>
               ) : sideView === 'anatomy' && !schoolLesson ? (
                 <AnatomyViewer compact />
@@ -288,7 +288,7 @@ function Workspace({
 
         {mobileView === 'video' && (
           <div className="min-h-0 min-w-0 overflow-y-auto rounded-[26px] border border-white/10 bg-slate-900 p-3 md:hidden">
-            <VideoStage />
+            <VideoStage booking={booking} />
           </div>
         )}
 

@@ -4,6 +4,10 @@ import { pipeline } from 'node:stream/promises'
 import { NextResponse } from 'next/server'
 import { getFirebaseAdminBucket } from '@/lib/server/firebase-admin'
 import {
+  AuthSecurityConfigurationError,
+  takeRateLimit,
+} from '@/lib/server/auth-security'
+import {
   buildStoredFileName,
   detectUploadType,
   isAttachmentMime,
@@ -22,7 +26,9 @@ export const dynamic = 'force-dynamic'
 
 const MAX_MEDIA_BYTES = 25 * 1024 * 1024
 const MAX_FILE_BYTES = 15 * 1024 * 1024
+const MAX_MULTIPART_OVERHEAD = 512 * 1024
 const SIGNATURE_BYTES = 512
+const MEDIA_UPLOAD_WINDOW_MS = 10 * 60_000
 const safeInlineMime = new Set([
   'audio/mp4',
   'audio/webm',
@@ -33,8 +39,6 @@ const safeInlineMime = new Set([
   'video/webm',
   'video/quicktime',
 ])
-
-const uploadWindows = new Map<string, { startedAt: number; count: number }>()
 
 function clean(value: unknown, max = 400) {
   return typeof value === 'string' ? value.trim().slice(0, max) : ''
@@ -52,20 +56,30 @@ function parsePath(path: string) {
   return { conversationId: match[1], uploaderUid: match[2], fileName: match[3] }
 }
 
-function enforceUploadRate(uid: string) {
-  const now = Date.now()
-  const current = uploadWindows.get(uid)
-  if (!current || now - current.startedAt > 10 * 60_000) {
-    uploadWindows.set(uid, { startedAt: now, count: 1 })
-    return
-  }
-  current.count += 1
-  if (current.count > 30) {
-    throw new MessageAccessError(
-      429,
-      'UPLOAD_RATE_LIMIT',
-      'Слишком много загрузок. Повторите позже.',
+async function enforceUploadRate(uid: string) {
+  try {
+    const limit = await takeRateLimit(
+      `message-media-upload:account:${uid}`,
+      30,
+      MEDIA_UPLOAD_WINDOW_MS,
     )
+    if (!limit.allowed) {
+      throw new MessageAccessError(
+        429,
+        'UPLOAD_RATE_LIMIT',
+        'Слишком много загрузок. Повторите позже.',
+      )
+    }
+  } catch (error) {
+    if (error instanceof MessageAccessError) throw error
+    if (error instanceof AuthSecurityConfigurationError) {
+      throw new MessageAccessError(
+        503,
+        'MEDIA_UPLOAD_SECURITY_UNAVAILABLE',
+        'Защита загрузок временно не настроена. Повторите позже.',
+      )
+    }
+    throw error
   }
 }
 
@@ -152,8 +166,20 @@ async function saveVerifiedUpload(
 
 export async function POST(request: Request) {
   try {
+    const contentLength = Number(request.headers.get('content-length') || 0)
+    if (
+      Number.isFinite(contentLength) &&
+      contentLength > MAX_MEDIA_BYTES + MAX_MULTIPART_OVERHEAD
+    ) {
+      throw new MessageAccessError(
+        413,
+        'MEDIA_MULTIPART_TOO_LARGE',
+        'Размер загрузки превышает допустимый предел.',
+      )
+    }
+
     const actor = await requireMessageActor(request)
-    enforceUploadRate(actor.uid)
+    await enforceUploadRate(actor.uid)
     const form = await request.formData()
     const conversationId = clean(form.get('conversationId'))
     const file = form.get('file')

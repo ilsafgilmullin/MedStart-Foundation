@@ -293,6 +293,12 @@ try {
   }
   check('owner-account-consistency')
 
+  if (process.env.MEDSTART_ALLOW_RULES_DEPLOY !== 'CONFIRMED') {
+    throw new Error(
+      'Live audit refused to deploy Firestore Rules without explicit confirmation.',
+    )
+  }
+
   const rulesetName = await deployFirestoreRules(credential)
   check('firestore-rules-api-deployed', { rulesetName })
 

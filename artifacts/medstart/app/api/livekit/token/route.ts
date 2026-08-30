@@ -5,8 +5,8 @@ import {
   getFirebaseAdminDb,
 } from '@/lib/server/firebase-admin'
 import {
+  checkLiveVideoAvailability,
   createLessonToken,
-  getLiveVideoAvailability,
 } from '@/lib/server/livekit'
 
 export const runtime = 'nodejs'
@@ -239,14 +239,15 @@ export async function POST(request: Request) {
       return demoResponse(booking)
     }
 
-    const videoAvailability = getLiveVideoAvailability()
+    const videoAvailability = await checkLiveVideoAvailability()
     if (!videoAvailability.enabled) {
-      return jsonError(
+      const message =
         videoAvailability.code === 'disabled'
           ? 'Собственный видеосервер MedStart пока не активирован. Откройте медицинскую доску без звонка.'
-          : 'Настройка собственного видеосервера MedStart не завершена.',
-        503,
-      )
+          : videoAvailability.code === 'unreachable'
+            ? 'Собственный видеосервер MedStart сейчас недоступен. Продолжайте на доске и повторите подключение позже.'
+            : 'Настройка собственного видеосервера MedStart не завершена.'
+      return jsonError(message, 503)
     }
 
     const windowError = videoRoomWindowError(booking)
