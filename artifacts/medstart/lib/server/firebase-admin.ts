@@ -8,6 +8,7 @@ import {
   type App,
   type ServiceAccount,
 } from 'firebase-admin/app'
+import { getAppCheck } from 'firebase-admin/app-check'
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore } from 'firebase-admin/firestore'
 import { getStorage } from 'firebase-admin/storage'
@@ -128,6 +129,10 @@ function getAdminApp(): App {
 
 export function getFirebaseAdminAuth() {
   return getAuth(getAdminApp())
+}
+
+export function getFirebaseAdminAppCheck() {
+  return getAppCheck(getAdminApp())
 }
 
 export function getFirebaseAdminDb() {
