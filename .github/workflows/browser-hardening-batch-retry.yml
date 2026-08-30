@@ -1,0 +1,208 @@
+name: Temporary MedStart browser hardening retry
+
+on:
+  push:
+    branches:
+      - security/release-governance-hardening
+    paths:
+      - '.github/workflows/browser-hardening-batch-retry.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: temporary-medstart-browser-hardening-retry
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: security/release-governance-hardening
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Make client avatar updates server-owned
+        shell: python
+        run: |
+          from pathlib import Path
+          def replace_once(path, old, new):
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, found {count}')
+              file.write_text(text.replace(old, new, 1))
+          replace_once(
+              'artifacts/medstart/lib/firestore.ts',
+              "  'createdAt',\n])",
+              "  'createdAt',\n  'avatar',\n])",
+          )
+          replace_once(
+              'artifacts/medstart/app/dashboard/profile/page.tsx',
+              "        avatar: form.avatar,\n",
+              "",
+          )
+          replace_once(
+              'artifacts/medstart/app/dashboard/profile/page.tsx',
+              "      const avatar = await uploadAvatar(user.uid, file)\n      await updateUserProfile(user.uid, { avatar })\n      field('avatar', avatar)",
+              "      const avatar = await uploadAvatar(user.uid, file)\n      field('avatar', avatar)",
+          )
+
+      - name: Add pinned Playwright test runner
+        run: pnpm add -Dw @playwright/test@1.62.0 --save-exact
+
+      - name: Create cross-browser smoke suite
+        shell: bash
+        run: |
+          cat > playwright.config.ts <<'EOF'
+          import { defineConfig, devices } from '@playwright/test'
+
+          export default defineConfig({
+            testDir: './scripts/browser-smoke',
+            timeout: 30_000,
+            expect: { timeout: 8_000 },
+            retries: 1,
+            workers: 1,
+            reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
+            use: {
+              baseURL: 'http://127.0.0.1:3000',
+              trace: 'retain-on-failure',
+              screenshot: 'only-on-failure',
+            },
+            projects: [
+              { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'] } },
+              { name: 'android-chromium', use: { ...devices['Pixel 7'] } },
+              { name: 'iphone-webkit', use: { ...devices['iPhone 14'] } },
+            ],
+            webServer: {
+              command: 'pnpm --filter @workspace/medstart start',
+              url: 'http://127.0.0.1:3000',
+              reuseExistingServer: false,
+              timeout: 120_000,
+            },
+          })
+          EOF
+          mkdir -p scripts/browser-smoke
+          cat > scripts/browser-smoke/public-routes.spec.ts <<'EOF'
+          import { expect, test } from '@playwright/test'
+
+          for (const route of ['/', '/login', '/register']) {
+            test(`${route} renders without overflow and with strict CSP`, async ({ page }) => {
+              const response = await page.goto(route, { waitUntil: 'domcontentloaded' })
+              expect(response?.ok()).toBeTruthy()
+              const csp = response?.headers()['content-security-policy'] || ''
+              expect(csp).toContain("script-src 'self' 'nonce-")
+              expect(csp).not.toContain("script-src 'self' 'unsafe-inline'")
+              expect(csp).not.toContain("'unsafe-eval'")
+              await expect(page.locator('body')).toBeVisible()
+              const dimensions = await page.evaluate(() => ({
+                scrollWidth: document.documentElement.scrollWidth,
+                clientWidth: document.documentElement.clientWidth,
+              }))
+              expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth + 1)
+            })
+          }
+
+          test('auth primary controls stay usable', async ({ page }) => {
+            for (const route of ['/login', '/register']) {
+              await page.goto(route, { waitUntil: 'domcontentloaded' })
+              await expect(page.locator('input').first()).toBeVisible()
+              await expect(page.locator('button[type="submit"]')).toBeVisible()
+            }
+          })
+          EOF
+          cat > .github/workflows/medstart-browser-smoke.yml <<'EOF'
+          name: MedStart browser smoke
+
+          on:
+            push:
+              branches:
+                - main
+                - 'security/**'
+              paths:
+                - 'artifacts/medstart/**'
+                - 'scripts/browser-smoke/**'
+                - 'playwright.config.ts'
+                - 'pnpm-lock.yaml'
+                - 'package.json'
+                - '.github/workflows/medstart-browser-smoke.yml'
+            pull_request:
+              branches:
+                - main
+              paths:
+                - 'artifacts/medstart/**'
+                - 'scripts/browser-smoke/**'
+                - 'playwright.config.ts'
+                - 'pnpm-lock.yaml'
+                - 'package.json'
+                - '.github/workflows/medstart-browser-smoke.yml'
+            workflow_dispatch:
+
+          permissions:
+            contents: read
+
+          concurrency:
+            group: medstart-browser-smoke-${{ github.ref }}
+            cancel-in-progress: true
+
+          jobs:
+            smoke:
+              runs-on: ubuntu-latest
+              timeout-minutes: 35
+              env:
+                NEXT_PUBLIC_FIREBASE_API_KEY: test-api-key
+                NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: example.firebaseapp.com
+                NEXT_PUBLIC_FIREBASE_PROJECT_ID: example
+                NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: example.appspot.com
+                NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '123456789'
+                NEXT_PUBLIC_FIREBASE_APP_ID: 1:123456789:web:test
+                NEXT_PUBLIC_OWNER_UID: test-owner
+                NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+              steps:
+                - uses: actions/checkout@v4
+                - uses: pnpm/action-setup@v4
+                  with:
+                    version: 10.26.1
+                - uses: actions/setup-node@v4
+                  with:
+                    node-version: 24
+                    cache: pnpm
+                - name: Install dependencies
+                  run: pnpm install --frozen-lockfile
+                - name: Build production app
+                  run: pnpm --filter @workspace/medstart build
+                - name: Install Chromium and WebKit
+                  run: pnpm exec playwright install --with-deps chromium webkit
+                - name: Run desktop Android and iPhone browser smoke
+                  run: pnpm exec playwright test
+                - name: Upload browser failure evidence
+                  if: failure()
+                  uses: actions/upload-artifact@v4
+                  with:
+                    name: medstart-browser-smoke-evidence
+                    path: |
+                      playwright-report
+                      test-results
+                    if-no-files-found: ignore
+                    retention-days: 5
+          EOF
+
+      - name: Commit and self-clean
+        shell: bash
+        run: |
+          git config user.name "MedStart Security Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/browser-hardening-batch-retry.yml
+          git add artifacts/medstart/lib/firestore.ts artifacts/medstart/app/dashboard/profile/page.tsx package.json pnpm-lock.yaml playwright.config.ts scripts/browser-smoke/public-routes.spec.ts .github/workflows/medstart-browser-smoke.yml
+          git commit -m "Завершить server-owned avatar и browser smoke"
+          git push origin HEAD:security/release-governance-hardening
