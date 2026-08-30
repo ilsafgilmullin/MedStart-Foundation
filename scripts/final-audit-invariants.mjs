@@ -50,6 +50,8 @@ const requiredFiles = [
   'artifacts/medstart/lib/server/firebase-admin.ts',
   'artifacts/medstart/lib/server/firebase-identity.ts',
   'artifacts/medstart/lib/server/auth-security.ts',
+  'artifacts/medstart/lib/feature-flags.ts',
+  'artifacts/medstart/lib/server/feature-flags.ts',
   'artifacts/medstart/hooks/useHydrated.ts',
   'artifacts/medstart/app/api/auth/login/route.ts',
   'artifacts/medstart/app/api/auth/register/route.ts',

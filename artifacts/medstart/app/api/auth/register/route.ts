@@ -6,6 +6,7 @@ import {
   getFirebaseAdminDb,
 } from '@/lib/server/firebase-admin'
 import { firebaseIdentityRequest } from '@/lib/server/firebase-identity'
+import { schoolTrackEnabled } from '@/lib/server/feature-flags'
 import {
   isSchoolGradeCompatible,
   subjectsForExam,
@@ -163,6 +164,18 @@ export async function POST(request: Request) {
   const subjects = normalizeSubjects(body.subjects)
   const tutorAudiences = normalizeTutorAudiences(body.tutorAudiences)
   const examTypes = normalizeExamTypes(body.examTypes)
+  const schoolEnabled = schoolTrackEnabled()
+
+  if (
+    !schoolEnabled &&
+    ((role === 'student' && learnerTrack === 'school') ||
+      (role === 'tutor' && tutorAudiences.includes('school')))
+  ) {
+    return NextResponse.json(
+      { ok: false, code: 'SCHOOL_TRACK_DISABLED' },
+      { status: 403, headers: noStoreHeaders() },
+    )
+  }
 
   if (role === 'tutor' && !specialization) {
     return NextResponse.json(

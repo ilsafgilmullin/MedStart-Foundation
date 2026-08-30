@@ -17,6 +17,7 @@ import { PasswordRequirements } from '@/components/auth/PasswordRequirements'
 import { useHydrated } from '@/hooks/useHydrated'
 import { useStudentRegistration } from '@/hooks/useStudentRegistration'
 import { ROUTES } from '@/lib/constants'
+import { SCHOOL_TRACK_ENABLED } from '@/lib/feature-flags'
 import {
   MEDICAL_FIELDS,
   SCHOOL_EXAM_LABELS,
@@ -34,7 +35,11 @@ export default function RegisterStudentPage() {
     <AuthShell
       eyebrow="Аккаунт ученика"
       title="Начните учиться в MedStart"
-      description="Создайте профиль школьника для подготовки к ОГЭ и ЕГЭ или профиль студента медвуза. После подтверждения почты откроются преподаватели, расписание, сообщения и материалы."
+      description={
+        SCHOOL_TRACK_ENABLED
+          ? 'Создайте профиль школьника для подготовки к ОГЭ и ЕГЭ или профиль студента медвуза. После подтверждения почты откроются преподаватели, расписание, сообщения и материалы.'
+          : 'Создайте профиль студента медвуза. После подтверждения почты откроются преподаватели, расписание, сообщения и медицинские учебные материалы.'
+      }
       footer={
         <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
           <Link
@@ -67,12 +72,16 @@ export default function RegisterStudentPage() {
           </legend>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {[
-              {
-                value: 'school' as LearnerTrack,
-                label: 'Школьник',
-                hint: 'Подготовка к ОГЭ и ЕГЭ',
-                icon: School,
-              },
+              ...(SCHOOL_TRACK_ENABLED
+                ? [
+                    {
+                      value: 'school' as LearnerTrack,
+                      label: 'Школьник',
+                      hint: 'Подготовка к ОГЭ и ЕГЭ',
+                      icon: School,
+                    },
+                  ]
+                : []),
               {
                 value: 'medical' as LearnerTrack,
                 label: 'Студент медвуза',
@@ -145,7 +154,7 @@ export default function RegisterStudentPage() {
           />
         </label>
 
-        {form.learnerTrack === 'medical' ? (
+        {form.learnerTrack === 'medical' || !SCHOOL_TRACK_ENABLED ? (
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="space-y-2 text-sm font-semibold text-slate-700">
               Направление

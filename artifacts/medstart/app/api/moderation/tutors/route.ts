@@ -1,6 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { NextResponse } from 'next/server'
 import { getFirebaseAdminDb } from '@/lib/server/firebase-admin'
+import { schoolTrackEnabled } from '@/lib/server/feature-flags'
 import {
   ModerationAccessError,
   moderationErrorResponse,
@@ -106,6 +107,7 @@ export async function POST(request: Request) {
         role?: string
         status?: string
         displayName?: string
+        tutorAudiences?: unknown
       }
       if (profile.role !== 'tutor') {
         throw new ModerationAccessError(
@@ -120,6 +122,23 @@ export async function POST(request: Request) {
         160,
       )
       const previousStatus = profile.status as TutorStatus
+      const tutorAudiences = Array.isArray(profile.tutorAudiences)
+        ? profile.tutorAudiences.filter(
+            (item): item is 'medical' | 'school' =>
+              item === 'medical' || item === 'school',
+          )
+        : ['medical']
+      if (
+        !schoolTrackEnabled() &&
+        (decision === 'approve' || decision === 'reinstate') &&
+        !tutorAudiences.includes('medical')
+      ) {
+        throw new ModerationAccessError(
+          409,
+          'SCHOOL_TRACK_DISABLED',
+          'Нельзя публиковать профиль только школьного направления, пока школьный трек отключён.',
+        )
+      }
 
       if (decision === 'approve') {
         if (profile.status !== 'pending') {

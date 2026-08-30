@@ -6,6 +6,7 @@ import {
   getFirebaseAdminAuth,
   getFirebaseAdminDb,
 } from '@/lib/server/firebase-admin'
+import { schoolTrackEnabled } from '@/lib/server/feature-flags'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -347,6 +348,11 @@ export async function POST(request: NextRequest) {
 
       const learnerTrack =
         student.learnerTrack === 'school' ? 'school' : 'medical'
+      if (learnerTrack === 'school' && !schoolTrackEnabled()) {
+        throw new Error(
+          'Школьный трек MedStart временно недоступен до завершения отдельного правового контура.',
+        )
+      }
       const tutorAudiences = Array.isArray(tutor.tutorAudiences)
         ? tutor.tutorAudiences.filter(
             (item): item is 'medical' | 'school' =>

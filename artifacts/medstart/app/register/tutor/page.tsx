@@ -12,6 +12,7 @@ import { PasswordRequirements } from '@/components/auth/PasswordRequirements'
 import { useHydrated } from '@/hooks/useHydrated'
 import { useTutorRegistration } from '@/hooks/useTutorRegistration'
 import { ROUTES } from '@/lib/constants'
+import { SCHOOL_TRACK_ENABLED } from '@/lib/feature-flags'
 import {
   SCHOOL_EXAM_LABELS,
   subjectsForExam,
@@ -36,7 +37,11 @@ export default function RegisterTutorPage() {
       wide
       eyebrow="Анкета репетитора"
       title="Преподавайте в MedStart"
-      description="Заполните профессиональный профиль для занятий со школьниками, студентами медвузов или обеими группами. После подтверждения почты анкета поступит на модерацию."
+      description={
+        SCHOOL_TRACK_ENABLED
+          ? 'Заполните профессиональный профиль для занятий со школьниками, студентами медвузов или обеими группами. После подтверждения почты анкета поступит на модерацию.'
+          : 'Заполните профессиональный профиль для занятий со студентами медвузов. После подтверждения почты анкета поступит на модерацию.'
+      }
       footer={
         <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
           <Link
@@ -118,12 +123,16 @@ export default function RegisterTutorPage() {
             </legend>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {[
-                {
-                  value: 'school' as LearnerTrack,
-                  label: 'Школьники',
-                  hint: 'ОГЭ и ЕГЭ',
-                  icon: School,
-                },
+                ...(SCHOOL_TRACK_ENABLED
+                  ? [
+                      {
+                        value: 'school' as LearnerTrack,
+                        label: 'Школьники',
+                        hint: 'ОГЭ и ЕГЭ',
+                        icon: School,
+                      },
+                    ]
+                  : []),
                 {
                   value: 'medical' as LearnerTrack,
                   label: 'Студенты медвузов',
@@ -154,7 +163,7 @@ export default function RegisterTutorPage() {
             </div>
           </fieldset>
 
-          {form.tutorAudiences.includes('school') && (
+          {SCHOOL_TRACK_ENABLED && form.tutorAudiences.includes('school') && (
             <fieldset className="rounded-3xl border border-sky-200 bg-sky-50/60 p-4 sm:p-5">
               <legend className="px-1 text-sm font-semibold text-slate-700">
                 К каким экзаменам готовите *
