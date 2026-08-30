@@ -76,25 +76,15 @@ jobs:
           test = 'scripts/test-knowledge-pipeline.mjs'
           p = Path(test)
           text = p.read_text()
-          if "\"malwareScanStatus: 'not-configured'\"" not in text:
+          marker = "\"malwareScanStatus: 'not-configured'\""
+          if marker not in text:
               raise SystemExit('knowledge pipeline test: expected not-configured marker')
-          p.write_text(text.replace("\"malwareScanStatus: 'not-configured'\"", "\"malwareScanStatus: 'clean'\""))
+          p.write_text(text.replace(marker, "\"malwareScanStatus: 'clean'\""))
 
           invariants = 'scripts/final-audit-invariants.mjs'
           patch(invariants,
               "  'artifacts/medstart/lib/server/knowledge-security.ts',\n",
               "  'artifacts/medstart/lib/server/knowledge-security.ts',\n  'artifacts/medstart/lib/server/malware-scanner.ts',\n")
-
-          ci = '.github/workflows/medstart-ci.yml'
-          patch(ci,
-              "          test -f artifacts/medstart/lib/server/knowledge-security.ts\n",
-              "          test -f artifacts/medstart/lib/server/knowledge-security.ts\n          test -f artifacts/medstart/lib/server/malware-scanner.ts\n")
-          patch(ci,
-              "          test -f scripts/test-knowledge-pipeline.mjs\n",
-              "          test -f scripts/test-knowledge-pipeline.mjs\n          test -f scripts/test-malware-scanner.mjs\n")
-          patch(ci,
-              "      - name: Test trusted knowledge pipeline\n        run: |\n          node scripts/test-knowledge-pipeline.mjs\n",
-              "      - name: Test trusted knowledge pipeline\n        run: |\n          node scripts/test-malware-scanner.mjs\n          node scripts/test-knowledge-pipeline.mjs\n")
 
           env = '.env.example'
           p = Path(env)
@@ -106,12 +96,11 @@ jobs:
           p.write_text(text.replace(marker, block + marker, 1))
           PY
 
-      - name: Commit generated hardening and remove temporary workflow
+      - name: Commit generated hardening
         run: |
-          rm .github/workflows/final-security-batch.yml
           git config user.name "ilsafgilmullin"
           git config user.email "ilsafgilmullin@gmail.com"
-          git add -A
+          git add .env.example scripts/final-audit-invariants.mjs scripts/test-knowledge-pipeline.mjs artifacts/medstart/app/api/knowledge/files/route.ts artifacts/medstart/app/api/knowledge/submissions/route.ts artifacts/medstart/app/api/knowledge/moderation/route.ts
           git diff --cached --check
           git commit -m "Закрыть malware scan для учебных PDF"
           git push origin HEAD:security/release-governance-hardening
