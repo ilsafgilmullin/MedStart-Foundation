@@ -106,6 +106,7 @@ jobs:
           test -f artifacts/medstart/lib/server/malware-scanner.ts
           test -f artifacts/medstart/lib/feature-flags.ts
           test -f artifacts/medstart/lib/server/feature-flags.ts
+          test -f artifacts/medstart/scripts/audit-production-readiness.mjs
           test -f scripts/test-file-security.mjs
           test -f scripts/test-avatar-rules.mjs
           test -f scripts/test-avatar-url-security.mjs
@@ -116,6 +117,7 @@ jobs:
           test -f scripts/test-knowledge-pipeline.mjs
           test -f scripts/test-malware-scanner.mjs
           test -f scripts/test-school-track-gate.mjs
+          test -f scripts/test-production-readiness-guard.mjs
           test -f scripts/test-knowledge-rules.mjs
           test -f scripts/test-live-audit-guard.mjs
           grep -q "fetch('/api/bookings'" artifacts/medstart/lib/bookings.ts
@@ -157,6 +159,9 @@ jobs:
 
       - name: Test product scope gates
         run: node scripts/test-school-track-gate.mjs
+
+      - name: Test production readiness guard
+        run: node scripts/test-production-readiness-guard.mjs
 
       - name: Test server file security
         run: node scripts/test-file-security.mjs
