@@ -308,12 +308,6 @@ export async function POST(request: NextRequest) {
     const conversationId = [...participantUids].sort().join('__')
     const conversationRef = db.collection('conversations').doc(conversationId)
     const messageRef = conversationRef.collection('messages').doc()
-    const tutorBookingsQuery = db
-      .collection('bookings')
-      .where('tutorUid', '==', input.tutorUid)
-    const studentBookingsQuery = db
-      .collection('bookings')
-      .where('studentUid', '==', decoded.uid)
 
     await db.runTransaction(async (transaction) => {
       // A shared server-only calendar document makes the overlap query serializable
@@ -326,15 +320,11 @@ export async function POST(request: NextRequest) {
         tutorSnapshot,
         availabilitySnapshot,
         conversationSnapshot,
-        tutorBookingsSnapshot,
-        studentBookingsSnapshot,
       ] = await Promise.all([
         transaction.get(studentRef),
         transaction.get(tutorRef),
         transaction.get(availabilityRef),
         transaction.get(conversationRef),
-        transaction.get(tutorBookingsQuery),
-        transaction.get(studentBookingsQuery),
       ])
 
       if (!studentSnapshot.exists)
@@ -420,6 +410,23 @@ export async function POST(request: NextRequest) {
       )
 
       const requestedEndMs = requestedStartMs + durationMinutes * 60_000
+      const tutorBookingsQuery = db
+        .collection('bookings')
+        .where('tutorUid', '==', input.tutorUid)
+        .where('status', 'in', ['pending', 'accepted'])
+        .where('requestedStartAt', '<', Timestamp.fromMillis(requestedEndMs))
+        .where('requestedEndAt', '>', Timestamp.fromMillis(requestedStartMs))
+      const studentBookingsQuery = db
+        .collection('bookings')
+        .where('studentUid', '==', decoded.uid)
+        .where('status', 'in', ['pending', 'accepted'])
+        .limit(MAX_ACTIVE_STUDENT_BOOKINGS)
+      const [tutorBookingsSnapshot, studentBookingsSnapshot] =
+        await Promise.all([
+          transaction.get(tutorBookingsQuery),
+          transaction.get(studentBookingsQuery),
+        ])
+
       for (const existingDocument of tutorBookingsSnapshot.docs) {
         const existing = existingDocument.data() as UnknownRecord
         if (!activeBooking(existing)) continue
@@ -439,9 +446,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const activeStudentBookings = studentBookingsSnapshot.docs.filter(
-        (item) => activeBooking(item.data() as UnknownRecord),
-      ).length
+      const activeStudentBookings = studentBookingsSnapshot.size
       if (activeStudentBookings >= MAX_ACTIVE_STUDENT_BOOKINGS) {
         throw new Error(
           'Слишком много активных заявок. Завершите или отмените часть из них.',

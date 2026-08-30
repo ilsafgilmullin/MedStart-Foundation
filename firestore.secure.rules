@@ -207,7 +207,7 @@ service cloud.firestore {
         && request.resource.data.reviewsCount == resource.data.reviewsCount
         && request.resource.data.isPublic == resource.data.isPublic
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'firstName', 'lastName', 'displayName', 'avatar',
+          'firstName', 'lastName', 'displayName',
           'learnerTrack', 'fieldOfStudy', 'studyYear', 'schoolGrade',
           'schoolExam', 'schoolConsentConfirmed', 'title', 'specialization',
           'subjects', 'tutorAudiences', 'examTypes', 'institution',
@@ -257,15 +257,18 @@ service cloud.firestore {
         || (signedIn() && isOwnProfile(userId))
         || isPublicTutorResource();
       allow list: if isModerator() || isPublicTutorResource();
-      allow update: if isOwner()
-        || (isActiveAdmin() && validAdminTutorModeration())
-        || (
-          signedIn()
-          && isOwnProfile(userId)
-          && userExists(userId)
-          && resource.data.status != 'blocked'
-          && resource.data.status != 'deleted'
-          && (safeSelfUpdate() || validTutorResubmission())
+      allow update: if request.resource.data.avatar == resource.data.avatar
+        && (
+          isOwner()
+          || (isActiveAdmin() && validAdminTutorModeration())
+          || (
+            signedIn()
+            && isOwnProfile(userId)
+            && userExists(userId)
+            && resource.data.status != 'blocked'
+            && resource.data.status != 'deleted'
+            && (safeSelfUpdate() || validTutorResubmission())
+          )
         );
       allow delete: if isOwner();
 

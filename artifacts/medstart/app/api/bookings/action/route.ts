@@ -128,13 +128,9 @@ export async function PATCH(request: NextRequest) {
 
       const actorRef = db.collection('users').doc(decoded.uid)
       const calendarRef = db.collection('bookingCalendars').doc(tutorUid)
-      const tutorBookingsQuery = db
-        .collection('bookings')
-        .where('tutorUid', '==', tutorUid)
-      const [actorSnapshot, , tutorBookingsSnapshot] = await Promise.all([
+      const [actorSnapshot] = await Promise.all([
         transaction.get(actorRef),
         transaction.get(calendarRef),
-        transaction.get(tutorBookingsQuery),
       ])
       if (!actorSnapshot.exists) throw new Error('Профиль пользователя не найден.')
       const actor = actorSnapshot.data() as UnknownRecord
@@ -165,6 +161,17 @@ export async function PATCH(request: NextRequest) {
       }
 
       if (nextStatus === 'accepted') {
+        const targetInterval = bookingInterval(booking)
+        if (targetInterval.start === null || targetInterval.end === null) {
+          throw new Error('У занятия отсутствуют нормализованные временные метки.')
+        }
+        const tutorBookingsQuery = db
+          .collection('bookings')
+          .where('tutorUid', '==', tutorUid)
+          .where('status', '==', 'accepted')
+          .where('requestedStartAt', '<', Timestamp.fromMillis(targetInterval.end))
+          .where('requestedEndAt', '>', Timestamp.fromMillis(targetInterval.start))
+        const tutorBookingsSnapshot = await transaction.get(tutorBookingsQuery)
         for (const document of tutorBookingsSnapshot.docs) {
           if (document.id === bookingId) continue
           const existing = document.data() as UnknownRecord

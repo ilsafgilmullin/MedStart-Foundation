@@ -7,6 +7,7 @@ import {
   getFirebaseAdminDb,
 } from '@/lib/server/firebase-admin'
 import { detectUploadType } from '@/lib/server/file-security'
+import { normalizeAvatarImage } from '@/lib/server/avatar-image'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -117,23 +118,28 @@ export async function POST(request: Request) {
       return jsonError('Размер переданного файла не прошёл проверку.', 400)
     }
 
-    const sha256 = createHash('sha256').update(bytes).digest('hex')
+    const normalized = await normalizeAvatarImage(bytes)
+    const sha256 = createHash('sha256').update(normalized.bytes).digest('hex')
     const bucket = getFirebaseAdminBucket()
-    uploadedPath = `avatars/${decoded.uid}/${randomUUID()}.${detected.extension}`
+    uploadedPath = `avatars/${decoded.uid}/${randomUUID()}.webp`
     const object = bucket.file(uploadedPath)
 
-    await object.save(bytes, {
+    await object.save(normalized.bytes, {
       resumable: false,
       validation: 'crc32c',
       metadata: {
-        contentType: detected.mime,
+        contentType: normalized.mimeType,
         cacheControl: 'public, max-age=3600',
         metadata: {
           ownerUid: decoded.uid,
           declaredMime: String(file.type || '').slice(0, 120),
-          detectedMime: detected.mime,
+          sourceMime: detected.mime,
+          detectedMime: normalized.mimeType,
           sha256,
-          securityStatus: 'signature-verified',
+          width: String(normalized.width),
+          height: String(normalized.height),
+          metadataStripped: 'true',
+          securityStatus: 'decoded-reencoded',
         },
       },
     })
@@ -173,7 +179,7 @@ export async function POST(request: Request) {
       {
         ok: true,
         avatarUrl,
-        mimeType: detected.mime,
+        mimeType: normalized.mimeType,
       },
       {
         status: 201,
