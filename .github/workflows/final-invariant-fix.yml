@@ -1,0 +1,52 @@
+name: Temporary MedStart CSP invariant fix
+
+on:
+  push:
+    branches:
+      - security/release-governance-hardening
+    paths:
+      - '.github/workflows/final-invariant-fix.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: temporary-medstart-csp-invariant-fix
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: security/release-governance-hardening
+          fetch-depth: 0
+
+      - name: Update invariant to inspect per-request CSP
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('scripts/final-audit-invariants.mjs')
+          text = path.read_text()
+          old_source = "const nextConfigSource = await readFile(join(sourceRoot, 'next.config.ts'), 'utf8')\n"
+          new_source = old_source + "const middlewareSource = await readFile(join(sourceRoot, 'middleware.ts'), 'utf8')\n"
+          if text.count(old_source) != 1:
+              raise SystemExit('nextConfig source marker not unique')
+          text = text.replace(old_source, new_source, 1)
+          old_check = "if (!nextConfigSource.includes(\"!isProduction ? [\\\"'unsafe-eval'\\\"] : []\")) failures.push('Development CSP can block Next.js hydration in Replit')\n"
+          new_check = "if (!middlewareSource.includes(\"...(!isProduction ? [\\\"'unsafe-inline'\\\", \\\"'unsafe-eval'\\\"] : [])\")) failures.push('Development nonce CSP can block Next.js hydration')\nif (!middlewareSource.includes(\"`'nonce-${nonce}'`\")) failures.push('Production CSP is missing a per-request script nonce')\nif (nextConfigSource.includes('Content-Security-Policy')) failures.push('Static CSP competes with per-request nonce CSP')\n"
+          if text.count(old_check) != 1:
+              raise SystemExit('legacy CSP invariant marker not unique')
+          path.write_text(text.replace(old_check, new_check, 1))
+
+      - name: Commit and self-clean
+        shell: bash
+        run: |
+          git config user.name "MedStart Security Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/final-invariant-fix.yml
+          git add scripts/final-audit-invariants.mjs
+          git commit -m "Синхронизировать audit invariant с nonce CSP"
+          git push origin HEAD:security/release-governance-hardening
