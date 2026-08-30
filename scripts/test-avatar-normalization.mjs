@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
-import sharp from 'sharp'
+import { createRequire } from 'node:module'
 import { normalizeAvatarImage } from '../artifacts/medstart/lib/server/avatar-image.ts'
+
+const requireFromMedStart = createRequire(
+  new URL('../artifacts/medstart/package.json', import.meta.url),
+)
+const sharp = requireFromMedStart('sharp')
 
 const source = await sharp({
   create: {
