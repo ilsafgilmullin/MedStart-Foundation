@@ -13,6 +13,7 @@ import {
   type SchoolExam,
 } from '@/lib/education'
 import {
+  AuthSecurityConfigurationError,
   cleanText,
   clientAddress,
   isValidEmail,
@@ -103,6 +104,18 @@ function normalizeExamTypes(value: unknown): SchoolExam[] {
       ),
     ),
   ].slice(0, 2)
+}
+
+function rateLimited(retryAfterSeconds: number) {
+  return NextResponse.json(
+    { ok: false, code: 'TOO_MANY_REQUESTS' },
+    {
+      status: 429,
+      headers: noStoreHeaders({
+        'retry-after': String(Math.max(1, retryAfterSeconds)),
+      }),
+    },
+  )
 }
 
 export async function POST(request: Request) {
@@ -197,24 +210,27 @@ export async function POST(request: Request) {
     )
   }
 
-  const limit = takeRateLimit(`register:${clientAddress(request)}:${email}`, 5)
-  if (!limit.allowed) {
-    return NextResponse.json(
-      { ok: false, code: 'TOO_MANY_REQUESTS' },
-      {
-        status: 429,
-        headers: noStoreHeaders({
-          'retry-after': String(limit.retryAfterSeconds),
-        }),
-      },
-    )
-  }
-
   let adminAuth: AdminAuth | undefined
   let adminDb: AdminDb | undefined
   let createdUid = ''
 
   try {
+    const address = clientAddress(request)
+    if (address) {
+      const networkLimit = await takeRateLimit(
+        `register:network:${address}`,
+        30,
+      )
+      if (!networkLimit.allowed) {
+        return rateLimited(networkLimit.retryAfterSeconds)
+      }
+    }
+
+    const accountLimit = await takeRateLimit(`register:account:${email}`, 5)
+    if (!accountLimit.allowed) {
+      return rateLimited(accountLimit.retryAfterSeconds)
+    }
+
     adminAuth = getFirebaseAdminAuth()
     adminDb = getFirebaseAdminDb()
 
@@ -334,7 +350,10 @@ export async function POST(request: Request) {
       ])
     }
 
-    if (error instanceof FirebaseAdminConfigurationError) {
+    if (
+      error instanceof FirebaseAdminConfigurationError ||
+      error instanceof AuthSecurityConfigurationError
+    ) {
       return NextResponse.json(
         { ok: false, code: 'AUTH_CONFIGURATION_ERROR' },
         { status: 503, headers: noStoreHeaders() },
