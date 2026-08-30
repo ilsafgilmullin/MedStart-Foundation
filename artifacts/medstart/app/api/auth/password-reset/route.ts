@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { firebaseIdentityRequest } from '@/lib/server/firebase-identity'
 import {
+  AuthSecurityConfigurationError,
   clientAddress,
   isValidEmail,
   noStoreHeaders,
@@ -10,6 +11,18 @@ import {
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+function rateLimited(retryAfterSeconds: number) {
+  return NextResponse.json(
+    { ok: false, code: 'TOO_MANY_REQUESTS' },
+    {
+      status: 429,
+      headers: noStoreHeaders({
+        'retry-after': String(Math.max(1, retryAfterSeconds)),
+      }),
+    },
+  )
+}
 
 export async function POST(request: Request) {
   let body: { email?: unknown }
@@ -30,21 +43,28 @@ export async function POST(request: Request) {
     )
   }
 
-  const limit = takeRateLimit(
-    `password-reset:${clientAddress(request)}:${email}`,
-    5,
-  )
-  if (!limit.allowed) {
-    return NextResponse.json(
-      { ok: false, code: 'TOO_MANY_REQUESTS' },
-      {
-        status: 429,
-        headers: noStoreHeaders({ 'retry-after': String(limit.retryAfterSeconds) }),
-      },
-    )
-  }
-
   try {
+    const address = clientAddress(request)
+    if (address) {
+      const networkLimit = await takeRateLimit(
+        `password-reset:network:${address}`,
+        60,
+      )
+      if (!networkLimit.allowed) {
+        return rateLimited(networkLimit.retryAfterSeconds)
+      }
+    }
+
+    // Use the same account limiter regardless of whether Firebase knows this
+    // address so password-reset responses do not become an enumeration oracle.
+    const accountLimit = await takeRateLimit(
+      `password-reset:account:${email}`,
+      5,
+    )
+    if (!accountLimit.allowed) {
+      return rateLimited(accountLimit.retryAfterSeconds)
+    }
+
     const { response, payload } = await firebaseIdentityRequest('sendOobCode', {
       requestType: 'PASSWORD_RESET',
       email,
@@ -87,7 +107,13 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Password reset proxy unavailable', error)
     return NextResponse.json(
-      { ok: false, code: 'AUTH_SERVICE_UNAVAILABLE' },
+      {
+        ok: false,
+        code:
+          error instanceof AuthSecurityConfigurationError
+            ? 'AUTH_CONFIGURATION_ERROR'
+            : 'AUTH_SERVICE_UNAVAILABLE',
+      },
       { status: 503, headers: noStoreHeaders() },
     )
   }
