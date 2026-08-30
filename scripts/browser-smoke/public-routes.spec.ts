@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test'
 
-for (const route of ['/', '/login', '/register']) {
+const publicRoutes = ['/', '/login', '/register/student', '/register/tutor']
+
+for (const route of publicRoutes) {
   test(`${route} renders without overflow and with strict CSP`, async ({ page }) => {
     const response = await page.goto(route, { waitUntil: 'domcontentloaded' })
     expect(response?.ok()).toBeTruthy()
@@ -18,7 +20,7 @@ for (const route of ['/', '/login', '/register']) {
 }
 
 test('auth primary controls stay usable', async ({ page }) => {
-  for (const route of ['/login', '/register']) {
+  for (const route of ['/login', '/register/student', '/register/tutor']) {
     await page.goto(route, { waitUntil: 'domcontentloaded' })
     await expect(page.locator('input').first()).toBeVisible()
     await expect(page.locator('button[type="submit"]')).toBeVisible()
