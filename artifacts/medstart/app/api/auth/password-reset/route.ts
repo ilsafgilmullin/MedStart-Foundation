@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server'
+import {
+  AppCheckAccessError,
+  appCheckTokenForRequest,
+} from '@/lib/server/app-check'
 import { firebaseIdentityRequest } from '@/lib/server/firebase-identity'
 import {
   AuthSecurityConfigurationError,
@@ -44,6 +48,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    const appCheckToken = await appCheckTokenForRequest(request)
     const address = clientAddress(request)
     if (address) {
       const networkLimit = await takeRateLimit(
@@ -65,13 +70,26 @@ export async function POST(request: Request) {
       return rateLimited(accountLimit.retryAfterSeconds)
     }
 
-    const { response, payload } = await firebaseIdentityRequest('sendOobCode', {
-      requestType: 'PASSWORD_RESET',
-      email,
-    })
+    const { response, payload } = await firebaseIdentityRequest(
+      'sendOobCode',
+      {
+        requestType: 'PASSWORD_RESET',
+        email,
+      },
+      appCheckToken,
+    )
 
     if (!response.ok) {
       const firebaseCode = payload.error?.message || 'RESET_REQUEST_FAILED'
+      if (
+        firebaseCode.includes('MISSING_APP_CREDENTIAL') ||
+        firebaseCode.includes('INVALID_APP_CREDENTIAL')
+      ) {
+        return NextResponse.json(
+          { ok: false, code: 'APP_CHECK_REQUIRED' },
+          { status: 401, headers: noStoreHeaders() },
+        )
+      }
       if (firebaseCode.includes('TOO_MANY_ATTEMPTS_TRY_LATER')) {
         return NextResponse.json(
           { ok: false, code: 'TOO_MANY_REQUESTS' },
@@ -105,6 +123,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true }, { headers: noStoreHeaders() })
   } catch (error) {
+    if (error instanceof AppCheckAccessError) {
+      return NextResponse.json(
+        { ok: false, code: 'APP_CHECK_REQUIRED' },
+        { status: 401, headers: noStoreHeaders() },
+      )
+    }
     console.error('Password reset proxy unavailable', error)
     return NextResponse.json(
       {
