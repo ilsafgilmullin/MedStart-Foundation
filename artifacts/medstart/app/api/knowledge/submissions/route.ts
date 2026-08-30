@@ -112,6 +112,7 @@ export async function POST(request: Request) {
         custom.submissionId !== input.id ||
         custom.tutorUid !== actor.uid ||
         custom.securityStatus !== 'signature-verified' ||
+        custom.malwareScanStatus !== 'clean' ||
         custom.storageState !== 'quarantined' ||
         !/^[a-f0-9]{64}$/.test(String(custom.sha256 || ''))
       ) {
@@ -130,7 +131,7 @@ export async function POST(request: Request) {
       mimeType = 'application/pdf'
       sha256 = String(custom.sha256)
       securityStatus = 'signature-verified'
-      malwareScanStatus = String(custom.malwareScanStatus || 'not-configured')
+      malwareScanStatus = 'clean'
       storageState = 'quarantined'
     }
 

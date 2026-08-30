@@ -77,7 +77,7 @@ for (const marker of [
   'knowledge-quarantine/',
   'detectUploadType',
   "securityStatus: 'signature-verified'",
-  "malwareScanStatus: 'not-configured'",
+  "malwareScanStatus: 'clean'",
   "storageState: 'quarantined'",
   "validation: 'crc32c'",
   "createHash('sha256')",

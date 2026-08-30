@@ -62,6 +62,7 @@ const requiredFiles = [
   'artifacts/medstart/app/api/knowledge/moderation/route.ts',
   'artifacts/medstart/lib/server/knowledge-access.ts',
   'artifacts/medstart/lib/server/knowledge-security.ts',
+  'artifacts/medstart/lib/server/malware-scanner.ts',
   'artifacts/medstart/lib/admin-control.ts',
   'artifacts/medstart/lib/server/admin-control.ts',
   'artifacts/medstart/components/auth/AuthHealthBanner.tsx',

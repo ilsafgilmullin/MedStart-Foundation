@@ -19,6 +19,11 @@ import {
   parseKnowledgeStoragePath,
   validateKnowledgeSubmissionId,
 } from '@/lib/server/knowledge-security'
+import {
+  MalwareScannerConfigurationError,
+  MalwareScannerUnavailableError,
+  scanBufferForMalware,
+} from '@/lib/server/malware-scanner'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -126,11 +131,37 @@ function adminAuditData(input: {
           : 'not-applicable',
       malwareScanStatus:
         input.decision === 'approve' && input.data.sourceMode === 'file'
-          ? 'not-configured'
+          ? 'clean'
           : 'not-applicable',
       moderationNote: input.note,
     },
     createdAt: FieldValue.serverTimestamp(),
+  }
+}
+
+async function requireCleanStoredPdf(bytes: Uint8Array) {
+  try {
+    const result = await scanBufferForMalware(bytes)
+    if (!result.clean) {
+      throw new AdminAccessError(
+        422,
+        'KNOWLEDGE_MALWARE_REJECTED',
+        'PDF отклонён повторной проверкой безопасности.',
+      )
+    }
+  } catch (error) {
+    if (error instanceof AdminAccessError) throw error
+    if (
+      error instanceof MalwareScannerConfigurationError ||
+      error instanceof MalwareScannerUnavailableError
+    ) {
+      throw new AdminAccessError(
+        503,
+        'KNOWLEDGE_MALWARE_SCANNER_UNAVAILABLE',
+        'Проверка PDF временно недоступна. Повторите позже.',
+      )
+    }
+    throw error
   }
 }
 
@@ -318,6 +349,7 @@ export async function POST(request: Request) {
       (custom.submissionId !== submissionId ||
         custom.tutorUid !== String(data.submittedByUid || '') ||
         custom.securityStatus !== 'signature-verified' ||
+        custom.malwareScanStatus !== 'clean' ||
         custom.storageState !== 'quarantined')
     ) {
       throw new AdminAccessError(
@@ -351,6 +383,16 @@ export async function POST(request: Request) {
         'Размер PDF изменился после отправки на модерацию.',
       )
     }
+
+    const [scanBytes] = await source.download()
+    if (scanBytes.byteLength !== size) {
+      throw new AdminAccessError(
+        409,
+        'KNOWLEDGE_FILE_SIZE_MISMATCH',
+        'Размер PDF изменился перед проверкой безопасности.',
+      )
+    }
+    await requireCleanStoredPdf(new Uint8Array(scanBytes))
 
     const submissionSha = String(data.sha256 || '')
     const metadataSha = String(custom.sha256 || '')
@@ -412,7 +454,7 @@ export async function POST(request: Request) {
         originalName,
         detectedMime: 'application/pdf',
         securityStatus: 'signature-verified',
-        malwareScanStatus: 'not-configured',
+        malwareScanStatus: 'clean',
         storageState: 'published',
         sha256,
         uploadedBytes: String(uploadedBytes),
@@ -452,7 +494,7 @@ export async function POST(request: Request) {
         mimeType: 'application/pdf',
         sha256,
         securityStatus: 'signature-verified',
-        malwareScanStatus: 'not-configured',
+        malwareScanStatus: 'clean',
         storageState: 'published',
         moderationLeaseId: FieldValue.delete(),
         moderationLeaseExpiresAt: FieldValue.delete(),

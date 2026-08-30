@@ -25,6 +25,11 @@ import {
   parseKnowledgeStoragePath,
   validateKnowledgeSubmissionId,
 } from '@/lib/server/knowledge-security'
+import {
+  MalwareScannerConfigurationError,
+  MalwareScannerUnavailableError,
+  scanBufferForMalware,
+} from '@/lib/server/malware-scanner'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -101,6 +106,34 @@ async function validatePdf(file: File) {
   return detected
 }
 
+async function requireCleanPdf(file: File) {
+  try {
+    const result = await scanBufferForMalware(
+      new Uint8Array(await file.arrayBuffer()),
+    )
+    if (!result.clean) {
+      throw new KnowledgeAccessError(
+        422,
+        'KNOWLEDGE_MALWARE_REJECTED',
+        'PDF отклонён проверкой безопасности.',
+      )
+    }
+  } catch (error) {
+    if (error instanceof KnowledgeAccessError) throw error
+    if (
+      error instanceof MalwareScannerConfigurationError ||
+      error instanceof MalwareScannerUnavailableError
+    ) {
+      throw new KnowledgeAccessError(
+        503,
+        'KNOWLEDGE_MALWARE_SCANNER_UNAVAILABLE',
+        'Проверка PDF временно недоступна. Повторите позже.',
+      )
+    }
+    throw error
+  }
+}
+
 async function saveQuarantinedPdf(input: {
   file: File
   path: string
@@ -126,7 +159,7 @@ async function saveQuarantinedPdf(input: {
     declaredMime: String(input.file.type || '').slice(0, 120),
     detectedMime: 'application/pdf',
     securityStatus: 'signature-verified',
-    malwareScanStatus: 'not-configured',
+    malwareScanStatus: 'clean',
     storageState: 'quarantined',
   }
 
@@ -199,6 +232,7 @@ export async function POST(request: Request) {
     }
 
     await validatePdf(file)
+    await requireCleanPdf(file)
 
     const originalName = canonicalKnowledgePdfName(
       sanitizeOriginalFileName(file.name),
@@ -240,7 +274,7 @@ export async function POST(request: Request) {
         mimeType: 'application/pdf',
         sha256,
         securityStatus: 'signature-verified',
-        malwareScanStatus: 'not-configured',
+        malwareScanStatus: 'clean',
         storageState: 'quarantined',
       },
       { status: 201, headers: { 'Cache-Control': 'no-store' } },
