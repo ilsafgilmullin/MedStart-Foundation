@@ -76,6 +76,7 @@ jobs:
           grep -q '"rules": "firestore.secure.rules"' firebase.json
           grep -q 'allow create, update: if false;' storage.rules
           grep -A2 'match /users/{userId}' firestore.secure.rules | grep -q 'allow create: if false;'
+          grep -A8 'match /users/{userId}' firestore.secure.rules | grep -q 'request.resource.data.avatar == resource.data.avatar'
           grep -A2 'match /bookings/{bookingId}' firestore.secure.rules | grep -q 'allow create: if false;'
           grep -A2 'match /conversations/{conversationId}' firestore.secure.rules | grep -q 'allow create: if false;'
           grep -A16 'match /knowledgeSubmissions/{submissionId}' firestore.secure.rules | grep -q 'allow create: if false;'
@@ -84,9 +85,12 @@ jobs:
           grep -A3 'match /knowledge-submissions/' storage.rules | grep -q 'allow read, write: if false;'
           grep -A3 'match /knowledge-quarantine/' storage.rules | grep -q 'allow read, write: if false;'
           grep -A3 'match /knowledge-published/' storage.rules | grep -q 'allow read, write: if false;'
+          grep -q '"collectionGroup": "securityRateLimits"' firestore.indexes.json
+          grep -q '"ttl": true' firestore.indexes.json
           grep -q "direct-client-profile-create-blocked" artifacts/medstart/scripts/live-auth-audit.mjs
           ! grep -q 'medstart-board-' artifacts/medstart/components/live/ServerlessWhiteboard.tsx
           grep -q 'canApplyRealtimeElement' artifacts/medstart/components/live/ServerlessWhiteboard.tsx
+          test -f artifacts/medstart/middleware.ts
           test -f artifacts/medstart/app/api/bookings/route.ts
           test -f artifacts/medstart/app/api/messages/action/route.ts
           test -f artifacts/medstart/app/api/messages/media/route.ts
@@ -95,12 +99,16 @@ jobs:
           test -f artifacts/medstart/app/api/knowledge/submissions/route.ts
           test -f artifacts/medstart/app/api/knowledge/moderation/route.ts
           test -f artifacts/medstart/lib/avatar-security.ts
+          test -f artifacts/medstart/lib/server/avatar-image.ts
           test -f artifacts/medstart/lib/server/file-security.ts
           test -f artifacts/medstart/lib/server/knowledge-access.ts
           test -f artifacts/medstart/lib/server/knowledge-security.ts
           test -f scripts/test-file-security.mjs
           test -f scripts/test-avatar-rules.mjs
           test -f scripts/test-avatar-url-security.mjs
+          test -f scripts/test-avatar-normalization.mjs
+          test -f scripts/test-csp-policy.mjs
+          test -f scripts/test-booking-query-bounds.mjs
           test -f scripts/test-live-whiteboard-security.mjs
           test -f scripts/test-knowledge-pipeline.mjs
           test -f scripts/test-knowledge-rules.mjs
@@ -108,8 +116,9 @@ jobs:
           grep -q "fetch('/api/bookings'" artifacts/medstart/lib/bookings.ts
           grep -q "fetch('/api/messages/action'" artifacts/medstart/lib/conversations.ts
           grep -q "'/api/messages/media'" artifacts/medstart/lib/chat-media.ts
+          grep -q 'MAX_MULTIPART_OVERHEAD' artifacts/medstart/app/api/messages/media/route.ts
           grep -q "fetch('/api/profile/avatar'" artifacts/medstart/lib/storage.ts
-          grep -q 'detectUploadType' artifacts/medstart/app/api/profile/avatar/route.ts
+          grep -q 'normalizeAvatarImage' artifacts/medstart/app/api/profile/avatar/route.ts
           grep -q 'isTrustedAvatarUrl' artifacts/medstart/components/dashboard/ProfilePhoto.tsx
           grep -q "'/api/knowledge/files'" artifacts/medstart/lib/knowledge-upload.ts
           grep -q "'/api/knowledge/submissions'" artifacts/medstart/lib/knowledge-base.ts
@@ -144,8 +153,15 @@ jobs:
       - name: Test server file security
         run: node scripts/test-file-security.mjs
 
-      - name: Test avatar render security
-        run: node scripts/test-avatar-url-security.mjs
+      - name: Test avatar security pipeline
+        run: |
+          node scripts/test-avatar-url-security.mjs
+          node scripts/test-avatar-normalization.mjs
+
+      - name: Test CSP and booking hardening contracts
+        run: |
+          node scripts/test-csp-policy.mjs
+          node scripts/test-booking-query-bounds.mjs
 
       - name: Test realtime whiteboard security
         run: node scripts/test-live-whiteboard-security.mjs
