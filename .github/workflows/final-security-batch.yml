@@ -1,0 +1,117 @@
+name: Temporary MedStart final security batch
+
+on:
+  push:
+    branches:
+      - security/release-governance-hardening
+    paths:
+      - '.github/workflows/final-security-batch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: security/release-governance-hardening
+          fetch-depth: 0
+
+      - name: Apply malware pipeline hardening
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def patch(path, old, new, count=1):
+              p = Path(path)
+              text = p.read_text()
+              actual = text.count(old)
+              if actual < count:
+                  raise SystemExit(f'{path}: expected at least {count} occurrence(s), found {actual}: {old!r}')
+              p.write_text(text.replace(old, new, count))
+
+          files = 'artifacts/medstart/app/api/knowledge/files/route.ts'
+          patch(files,
+              "} from '@/lib/server/knowledge-security'\n\nexport const runtime",
+              "} from '@/lib/server/knowledge-security'\nimport {\n  MalwareScannerConfigurationError,\n  MalwareScannerUnavailableError,\n  scanBufferForMalware,\n} from '@/lib/server/malware-scanner'\n\nexport const runtime")
+          patch(files,
+              "async function saveQuarantinedPdf(input: {",
+              "async function requireCleanPdf(file: File) {\n  try {\n    const result = await scanBufferForMalware(\n      new Uint8Array(await file.arrayBuffer()),\n    )\n    if (!result.clean) {\n      throw new KnowledgeAccessError(\n        422,\n        'KNOWLEDGE_MALWARE_REJECTED',\n        'PDF отклонён проверкой безопасности.',\n      )\n    }\n  } catch (error) {\n    if (error instanceof KnowledgeAccessError) throw error\n    if (\n      error instanceof MalwareScannerConfigurationError ||\n      error instanceof MalwareScannerUnavailableError\n    ) {\n      throw new KnowledgeAccessError(\n        503,\n        'KNOWLEDGE_MALWARE_SCANNER_UNAVAILABLE',\n        'Проверка PDF временно недоступна. Повторите позже.',\n      )\n    }\n    throw error\n  }\n}\n\nasync function saveQuarantinedPdf(input: {")
+          patch(files, "    await validatePdf(file)\n", "    await validatePdf(file)\n    await requireCleanPdf(file)\n")
+          p = Path(files)
+          text = p.read_text()
+          if "malwareScanStatus: 'not-configured'" not in text:
+              raise SystemExit('knowledge files route: expected not-configured marker')
+          p.write_text(text.replace("malwareScanStatus: 'not-configured'", "malwareScanStatus: 'clean'"))
+
+          submissions = 'artifacts/medstart/app/api/knowledge/submissions/route.ts'
+          patch(submissions,
+              "        custom.securityStatus !== 'signature-verified' ||\n        custom.storageState !== 'quarantined' ||",
+              "        custom.securityStatus !== 'signature-verified' ||\n        custom.malwareScanStatus !== 'clean' ||\n        custom.storageState !== 'quarantined' ||")
+          patch(submissions,
+              "      malwareScanStatus = String(custom.malwareScanStatus || 'not-configured')",
+              "      malwareScanStatus = 'clean'")
+
+          moderation = 'artifacts/medstart/app/api/knowledge/moderation/route.ts'
+          patch(moderation,
+              "} from '@/lib/server/knowledge-security'\n\nexport const runtime",
+              "} from '@/lib/server/knowledge-security'\nimport {\n  MalwareScannerConfigurationError,\n  MalwareScannerUnavailableError,\n  scanBufferForMalware,\n} from '@/lib/server/malware-scanner'\n\nexport const runtime")
+          patch(moderation,
+              "async function releaseModerationLease(\n",
+              "async function requireCleanStoredPdf(bytes: Uint8Array) {\n  try {\n    const result = await scanBufferForMalware(bytes)\n    if (!result.clean) {\n      throw new AdminAccessError(\n        422,\n        'KNOWLEDGE_MALWARE_REJECTED',\n        'PDF отклонён повторной проверкой безопасности.',\n      )\n    }\n  } catch (error) {\n    if (error instanceof AdminAccessError) throw error\n    if (\n      error instanceof MalwareScannerConfigurationError ||\n      error instanceof MalwareScannerUnavailableError\n    ) {\n      throw new AdminAccessError(\n        503,\n        'KNOWLEDGE_MALWARE_SCANNER_UNAVAILABLE',\n        'Проверка PDF временно недоступна. Повторите позже.',\n      )\n    }\n    throw error\n  }\n}\n\nasync function releaseModerationLease(\n")
+          patch(moderation,
+              "        custom.securityStatus !== 'signature-verified' ||\n        custom.storageState !== 'quarantined')",
+              "        custom.securityStatus !== 'signature-verified' ||\n        custom.malwareScanStatus !== 'clean' ||\n        custom.storageState !== 'quarantined')")
+          patch(moderation,
+              "    if (hashed.bytes !== size) {\n      throw new AdminAccessError(\n        409,\n        'KNOWLEDGE_FILE_SIZE_MISMATCH',\n        'Размер PDF изменился после отправки на модерацию.',\n      )\n    }\n",
+              "    if (hashed.bytes !== size) {\n      throw new AdminAccessError(\n        409,\n        'KNOWLEDGE_FILE_SIZE_MISMATCH',\n        'Размер PDF изменился после отправки на модерацию.',\n      )\n    }\n\n    const [scanBytes] = await source.download()\n    if (scanBytes.byteLength !== size) {\n      throw new AdminAccessError(\n        409,\n        'KNOWLEDGE_FILE_SIZE_MISMATCH',\n        'Размер PDF изменился перед проверкой безопасности.',\n      )\n    }\n    await requireCleanStoredPdf(new Uint8Array(scanBytes))\n")
+          p = Path(moderation)
+          text = p.read_text()
+          if "'not-configured'" not in text:
+              raise SystemExit('knowledge moderation route: expected not-configured marker')
+          p.write_text(text.replace("'not-configured'", "'clean'"))
+
+          test = 'scripts/test-knowledge-pipeline.mjs'
+          p = Path(test)
+          text = p.read_text()
+          if "\"malwareScanStatus: 'not-configured'\"" not in text:
+              raise SystemExit('knowledge pipeline test: expected not-configured marker')
+          p.write_text(text.replace("\"malwareScanStatus: 'not-configured'\"", "\"malwareScanStatus: 'clean'\""))
+
+          invariants = 'scripts/final-audit-invariants.mjs'
+          patch(invariants,
+              "  'artifacts/medstart/lib/server/knowledge-security.ts',\n",
+              "  'artifacts/medstart/lib/server/knowledge-security.ts',\n  'artifacts/medstart/lib/server/malware-scanner.ts',\n")
+
+          ci = '.github/workflows/medstart-ci.yml'
+          patch(ci,
+              "          test -f artifacts/medstart/lib/server/knowledge-security.ts\n",
+              "          test -f artifacts/medstart/lib/server/knowledge-security.ts\n          test -f artifacts/medstart/lib/server/malware-scanner.ts\n")
+          patch(ci,
+              "          test -f scripts/test-knowledge-pipeline.mjs\n",
+              "          test -f scripts/test-knowledge-pipeline.mjs\n          test -f scripts/test-malware-scanner.mjs\n")
+          patch(ci,
+              "      - name: Test trusted knowledge pipeline\n        run: |\n          node scripts/test-knowledge-pipeline.mjs\n",
+              "      - name: Test trusted knowledge pipeline\n        run: |\n          node scripts/test-malware-scanner.mjs\n          node scripts/test-knowledge-pipeline.mjs\n")
+
+          env = '.env.example'
+          p = Path(env)
+          text = p.read_text()
+          marker = "# Видео включается только при явном значении true/1/yes."
+          if marker not in text:
+              raise SystemExit('.env.example insertion marker missing')
+          block = "# Учебные PDF публикуются только после fail-closed ClamAV INSTREAM scan.\n# clamd TCP не имеет встроенной аутентификации/шифрования: держите его только\n# в приватной сети/localhost и не публикуйте порт 3310 в интернет.\nMEDSTART_CLAMAV_HOST=\nMEDSTART_CLAMAV_PORT=3310\nMEDSTART_CLAMAV_TIMEOUT_MS=12000\n\n"
+          p.write_text(text.replace(marker, block + marker, 1))
+          PY
+
+      - name: Commit generated hardening and remove temporary workflow
+        run: |
+          rm .github/workflows/final-security-batch.yml
+          git config user.name "ilsafgilmullin"
+          git config user.email "ilsafgilmullin@gmail.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Закрыть malware scan для учебных PDF"
+          git push origin HEAD:security/release-governance-hardening
