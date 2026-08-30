@@ -97,6 +97,7 @@ const adminOverviewRouteSource = await readFile(join(sourceRoot, 'app', 'api', '
 const adminActionRouteSource = await readFile(join(sourceRoot, 'app', 'api', 'admin', 'action', 'route.ts'), 'utf8')
 const adminServerSource = await readFile(join(sourceRoot, 'lib', 'server', 'admin-control.ts'), 'utf8')
 const nextConfigSource = await readFile(join(sourceRoot, 'next.config.ts'), 'utf8')
+const middlewareSource = await readFile(join(sourceRoot, 'middleware.ts'), 'utf8')
 const serviceWorkerSource = await readFile(join(sourceRoot, 'public', 'sw.js'), 'utf8')
 const authShellSource = await readFile(join(sourceRoot, 'components', 'auth', 'AuthShell.tsx'), 'utf8')
 const loginPageSource = await readFile(join(sourceRoot, 'app', 'login', 'page.tsx'), 'utf8')
@@ -176,7 +177,9 @@ if (!adminActionRouteSource.includes("operationStatus: 'succeeded'")) {
   failures.push('Admin Auth/Firestore compound actions do not atomically finalize their audit record')
 }
 
-if (!nextConfigSource.includes("!isProduction ? [\"'unsafe-eval'\"] : []")) failures.push('Development CSP can block Next.js hydration in Replit')
+if (!middlewareSource.includes("...(!isProduction ? [\"'unsafe-inline'\", \"'unsafe-eval'\"] : [])")) failures.push('Development nonce CSP can block Next.js hydration')
+if (!middlewareSource.includes("`'nonce-${nonce}'`")) failures.push('Production CSP is missing a per-request script nonce')
+if (nextConfigSource.includes('Content-Security-Policy')) failures.push('Static CSP competes with per-request nonce CSP')
 if (!serviceWorkerSource.includes("CACHE_NAME = 'medstart-shell-v5'")) failures.push('Service worker cache version was not advanced')
 if (!serviceWorkerSource.includes('networkFirst(request)')) failures.push('Next.js static assets can remain stale in the service worker')
 if (!authShellSource.includes('AuthHealthBanner')) failures.push('Authentication screens do not display dependency health')
