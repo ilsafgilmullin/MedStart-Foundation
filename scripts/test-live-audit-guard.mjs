@@ -37,6 +37,10 @@ const livekitServer = await readFile(
   'artifacts/medstart/lib/server/livekit.ts',
   'utf8',
 )
+const livekitTokenRoute = await readFile(
+  'artifacts/medstart/app/api/livekit/token/route.ts',
+  'utf8',
+)
 const lessonControls = await readFile(
   'artifacts/medstart/components/live/LessonControls.tsx',
   'utf8',
@@ -186,6 +190,19 @@ assert.equal(
   true,
 )
 
+// Token issuance must distinguish configured-but-unreachable SFU from a valid
+// room so the client receives an explicit recoverable 503 instead of a doomed
+// WebSocket token/session attempt.
+assert.equal(
+  livekitTokenRoute.includes('await checkLiveVideoAvailability()'),
+  true,
+)
+assert.equal(livekitTokenRoute.includes("code === 'unreachable'"), true)
+assert.equal(
+  livekitTokenRoute.includes('Продолжайте на доске и повторите подключение позже.'),
+  true,
+)
+
 console.log(
-  'Firebase deployment, environment isolation, distributed auth and LiveKit identity guard tests passed.',
+  'Firebase deployment, environment isolation, distributed auth and LiveKit security guard tests passed.',
 )
