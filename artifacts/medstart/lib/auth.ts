@@ -1,10 +1,11 @@
+import { getToken } from 'firebase/app-check'
 import {
   sendEmailVerification,
   signInWithCustomToken,
   signOut,
   type UserCredential,
 } from 'firebase/auth'
-import { auth } from './firebase'
+import { appCheck, appCheckConfigured, auth } from './firebase'
 import { getUserProfile } from './firestore'
 import type { LearnerTrack, SchoolExam } from './education'
 import type { UserProfile } from './user-profile'
@@ -121,15 +122,32 @@ async function secureSignOut() {
   }
 }
 
+async function appCheckHeaders(): Promise<Record<string, string>> {
+  if (!appCheckConfigured || !appCheck) return {}
+  try {
+    const result = await getToken(appCheck, false)
+    return result.token ? { 'X-Firebase-AppCheck': result.token } : {}
+  } catch {
+    // During staged rollout the backend can remain unenforced while App Check
+    // metrics are observed. Once enforcement is enabled, a missing token is
+    // rejected server-side with APP_CHECK_REQUIRED.
+    return {}
+  }
+}
+
 async function authRequest(
   path: string,
   body: unknown,
 ): Promise<AuthApiResponse> {
   let response: Response
   try {
+    const attestationHeaders = await appCheckHeaders()
     response = await fetch(path, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        ...attestationHeaders,
+      },
       body: JSON.stringify(body),
       cache: 'no-store',
       signal: AbortSignal.timeout(20_000),
@@ -149,6 +167,12 @@ async function authRequest(
           ? 'Почта не подтверждена. Новое письмо отправлено сервером MedStart. Проверьте «Входящие» и «Спам».'
           : 'Почта не подтверждена. Письмо сейчас отправить не удалось; повторите вход позже.',
         Boolean(result.verificationSent),
+      )
+    }
+    if (result.code === 'APP_CHECK_REQUIRED') {
+      throw new MedStartAuthError(
+        'APP_CHECK_REQUIRED',
+        'Не удалось подтвердить подлинность приложения. Обновите страницу и повторите.',
       )
     }
     throw new MedStartAuthError(result.code || 'AUTH_FAILED')
