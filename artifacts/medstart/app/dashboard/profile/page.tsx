@@ -350,7 +350,6 @@ export default function ProfilePage() {
         firstName,
         lastName,
         displayName: `${firstName} ${lastName}`.trim(),
-        avatar: form.avatar,
         ...(profile.role === 'student'
           ? {
               learnerTrack: form.learnerTrack,
@@ -421,7 +420,6 @@ export default function ProfilePage() {
     setMessage('')
     try {
       const avatar = await uploadAvatar(user.uid, file)
-      await updateUserProfile(user.uid, { avatar })
       field('avatar', avatar)
       setMessage('Фотография профиля обновлена.')
     } catch (caught) {

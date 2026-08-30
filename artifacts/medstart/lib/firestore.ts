@@ -82,6 +82,7 @@ const protectedProfileFields = new Set<keyof UserProfile>([
   'moderatedBy',
   'moderatedAt',
   'createdAt',
+  'avatar',
 ])
 
 function sortTutors(items: UserProfile[]) {
