@@ -26,6 +26,7 @@ export const dynamic = 'force-dynamic'
 
 const MAX_MEDIA_BYTES = 25 * 1024 * 1024
 const MAX_FILE_BYTES = 15 * 1024 * 1024
+const MAX_MULTIPART_OVERHEAD = 512 * 1024
 const SIGNATURE_BYTES = 512
 const MEDIA_UPLOAD_WINDOW_MS = 10 * 60_000
 const safeInlineMime = new Set([
@@ -165,6 +166,18 @@ async function saveVerifiedUpload(
 
 export async function POST(request: Request) {
   try {
+    const contentLength = Number(request.headers.get('content-length') || 0)
+    if (
+      Number.isFinite(contentLength) &&
+      contentLength > MAX_MEDIA_BYTES + MAX_MULTIPART_OVERHEAD
+    ) {
+      throw new MessageAccessError(
+        413,
+        'MEDIA_MULTIPART_TOO_LARGE',
+        'Размер загрузки превышает допустимый предел.',
+      )
+    }
+
     const actor = await requireMessageActor(request)
     await enforceUploadRate(actor.uid)
     const form = await request.formData()
