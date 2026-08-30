@@ -1,6 +1,10 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { NextResponse } from 'next/server'
 import {
+  AppCheckAccessError,
+  appCheckTokenForRequest,
+} from '@/lib/server/app-check'
+import {
   FirebaseAdminConfigurationError,
   getFirebaseAdminAuth,
   getFirebaseAdminDb,
@@ -228,6 +232,7 @@ export async function POST(request: Request) {
   let createdUid = ''
 
   try {
+    const appCheckToken = await appCheckTokenForRequest(request)
     const address = clientAddress(request)
     if (address) {
       const networkLimit = await takeRateLimit(
@@ -331,18 +336,36 @@ export async function POST(request: Request) {
       transaction.set(profileRef, profile)
     })
 
-    const signedIn = await firebaseIdentityRequest('signInWithPassword', {
-      email,
-      password,
-      returnSecureToken: true,
-    })
+    const signedIn = await firebaseIdentityRequest(
+      'signInWithPassword',
+      {
+        email,
+        password,
+        returnSecureToken: true,
+      },
+      appCheckToken,
+    )
+
+    if (!signedIn.response.ok) {
+      const firebaseCode = signedIn.payload.error?.message || ''
+      if (
+        firebaseCode.includes('MISSING_APP_CREDENTIAL') ||
+        firebaseCode.includes('INVALID_APP_CREDENTIAL')
+      ) {
+        throw new AppCheckAccessError()
+      }
+    }
 
     let verificationSent = false
     if (signedIn.response.ok && signedIn.payload.idToken) {
-      const verification = await firebaseIdentityRequest('sendOobCode', {
-        requestType: 'VERIFY_EMAIL',
-        idToken: signedIn.payload.idToken,
-      })
+      const verification = await firebaseIdentityRequest(
+        'sendOobCode',
+        {
+          requestType: 'VERIFY_EMAIL',
+          idToken: signedIn.payload.idToken,
+        },
+        appCheckToken,
+      )
       verificationSent = verification.response.ok
     }
 
@@ -363,6 +386,12 @@ export async function POST(request: Request) {
       ])
     }
 
+    if (error instanceof AppCheckAccessError) {
+      return NextResponse.json(
+        { ok: false, code: 'APP_CHECK_REQUIRED' },
+        { status: 401, headers: noStoreHeaders() },
+      )
+    }
     if (
       error instanceof FirebaseAdminConfigurationError ||
       error instanceof AuthSecurityConfigurationError
