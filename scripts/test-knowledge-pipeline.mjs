@@ -85,9 +85,19 @@ for (const marker of [
   'KNOWLEDGE_SUBMISSION_ALREADY_EXISTS',
   'submissionAfterUpload',
   'orphanDeleted: true',
+  'await takeRateLimit',
+  'knowledge-upload:account:',
+  'KNOWLEDGE_UPLOAD_WINDOW_MS',
+  'KNOWLEDGE_UPLOAD_RATE_LIMIT',
+  'KNOWLEDGE_UPLOAD_SECURITY_UNAVAILABLE',
 ]) {
   assert.equal(fileRoute.includes(marker), true, `Missing upload marker: ${marker}`)
 }
+assert.equal(
+  fileRoute.includes('new Map<'),
+  false,
+  'Knowledge uploads must not use a process-local rate limiter.',
+)
 
 for (const marker of [
   'runTransaction',
