@@ -13,6 +13,10 @@ const auditScript = await readFile(
   'artifacts/medstart/scripts/live-auth-audit.mjs',
   'utf8',
 )
+const firebasePublicConfig = await readFile(
+  'artifacts/medstart/lib/firebase-public-config.ts',
+  'utf8',
+)
 
 // Live authentication audit must never run from pull requests or feature refs.
 assert.equal(auditWorkflow.includes('pull_request:'), false)
@@ -64,4 +68,17 @@ assert.equal(
   true,
 )
 
-console.log('Firebase production deployment guard tests passed.')
+// Application builds must never silently fall back to the production project.
+assert.equal(firebasePublicConfig.includes('MEDSTART_DEFAULT_CONFIG'), false)
+assert.equal(firebasePublicConfig.includes("projectId: 'medstart-e9bfe'"), false)
+assert.equal(firebasePublicConfig.includes('configuredValues === 0'), true)
+assert.equal(
+  firebasePublicConfig.includes('MedStart never falls back to the production Firebase project'),
+  true,
+)
+assert.equal(
+  firebasePublicConfig.includes('configuredValues > 0 && configuredValues < 6'),
+  true,
+)
+
+console.log('Firebase production deployment and environment isolation guard tests passed.')
