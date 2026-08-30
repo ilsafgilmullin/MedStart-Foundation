@@ -123,6 +123,22 @@ async function run() {
     }),
   )
 
+  // Distributed abuse-control buckets are server-only. A signed-in browser
+  // must never inspect, reset or inflate another requester's counters.
+  const limiterProbe = doc(
+    verified.firestore(),
+    'securityRateLimits',
+    'client-probe',
+  )
+  await assertFails(getDoc(limiterProbe))
+  await assertFails(
+    setDoc(limiterProbe, {
+      count: 0,
+      resetAt: serverTimestamp(),
+      expiresAt: serverTimestamp(),
+    }),
+  )
+
   const mismatchedUid = 'auth-email-mismatch'
   const mismatched = environment.authenticatedContext(mismatchedUid, {
     email: `${mismatchedUid}@example.test`,
@@ -266,7 +282,7 @@ async function run() {
   )
 
   console.log(
-    'Authentication, moderator least-privilege and server-only registration Firebase rules suite passed.',
+    'Authentication, distributed limiter isolation, moderator least-privilege and server-only registration Firebase rules suite passed.',
   )
 }
 
