@@ -8,6 +8,7 @@ on:
     paths:
       - 'artifacts/medstart/**'
       - 'scripts/browser-smoke/**'
+      - 'scripts/final-audit-invariants.mjs'
       - 'playwright.config.ts'
       - 'pnpm-lock.yaml'
       - 'package.json'
@@ -18,6 +19,7 @@ on:
     paths:
       - 'artifacts/medstart/**'
       - 'scripts/browser-smoke/**'
+      - 'scripts/final-audit-invariants.mjs'
       - 'playwright.config.ts'
       - 'pnpm-lock.yaml'
       - 'package.json'
