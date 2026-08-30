@@ -1,5 +1,10 @@
 import { initializeApp, getApps, getApp } from 'firebase/app'
 import {
+  initializeAppCheck,
+  ReCaptchaEnterpriseProvider,
+  type AppCheck,
+} from 'firebase/app-check'
+import {
   browserLocalPersistence,
   browserSessionPersistence,
   getAuth,
@@ -15,6 +20,30 @@ import {
 import { firebasePublicConfig } from '@/lib/firebase-public-config'
 
 const app = getApps().length ? getApp() : initializeApp(firebasePublicConfig)
+
+function createAppCheck(): AppCheck | null {
+  if (typeof window === 'undefined') return null
+
+  const siteKey = String(
+    process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY || '',
+  ).trim()
+  if (!siteKey) return null
+
+  try {
+    return initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider(siteKey),
+      isTokenAutoRefreshEnabled: true,
+    })
+  } catch {
+    // Hot reload can initialize App Check for the same app more than once.
+    return null
+  }
+}
+
+// App Check is initialized before Auth/Firestore instances so configured web
+// clients can attach attestation to Firebase requests. Enforcement remains a
+// separate Firebase Console rollout after request metrics have been observed.
+export const appCheck = createAppCheck()
 
 function createAuth() {
   try {
