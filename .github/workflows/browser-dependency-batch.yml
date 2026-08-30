@@ -1,0 +1,138 @@
+name: Temporary MedStart browser dependency batch
+
+on:
+  push:
+    branches:
+      - security/release-governance-hardening
+    paths:
+      - '.github/workflows/browser-dependency-batch.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: temporary-medstart-browser-dependency-batch
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: security/release-governance-hardening
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Make browser profile writes unable to carry avatar
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, found {count}')
+              file.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              'artifacts/medstart/lib/firestore.ts',
+              "  'createdAt',\n])",
+              "  'createdAt',\n  'avatar',\n])",
+          )
+          replace_once(
+              'artifacts/medstart/app/dashboard/profile/page.tsx',
+              "        avatar: form.avatar,\n",
+              "",
+          )
+          replace_once(
+              'artifacts/medstart/app/dashboard/profile/page.tsx',
+              "      const avatar = await uploadAvatar(user.uid, file)\n      await updateUserProfile(user.uid, { avatar })\n      field('avatar', avatar)",
+              "      const avatar = await uploadAvatar(user.uid, file)\n      field('avatar', avatar)",
+          )
+
+      - name: Add pinned Playwright test runner
+        run: pnpm add -Dw @playwright/test@1.62.0 --save-exact
+
+      - name: Create cross-browser smoke suite
+        shell: bash
+        run: |
+          cat > playwright.config.ts <<'EOF'
+          import { defineConfig, devices } from '@playwright/test'
+
+          export default defineConfig({
+            testDir: './scripts/browser-smoke',
+            timeout: 30_000,
+            expect: { timeout: 8_000 },
+            retries: 1,
+            workers: 1,
+            reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
+            use: {
+              baseURL: 'http://127.0.0.1:3000',
+              trace: 'retain-on-failure',
+              screenshot: 'only-on-failure',
+            },
+            projects: [
+              { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'] } },
+              { name: 'android-chromium', use: { ...devices['Pixel 7'] } },
+              { name: 'iphone-webkit', use: { ...devices['iPhone 14'] } },
+            ],
+            webServer: {
+              command: 'pnpm --filter @workspace/medstart start',
+              url: 'http://127.0.0.1:3000',
+              reuseExistingServer: false,
+              timeout: 120_000,
+            },
+          })
+          EOF
+
+          mkdir -p scripts/browser-smoke
+          cat > scripts/browser-smoke/public-routes.spec.ts <<'EOF'
+          import { expect, test } from '@playwright/test'
+
+          for (const route of ['/', '/login', '/register']) {
+            test(`${route} renders without overflow and with strict CSP`, async ({ page }) => {
+              const response = await page.goto(route, { waitUntil: 'domcontentloaded' })
+              expect(response?.ok()).toBeTruthy()
+              const csp = response?.headers()['content-security-policy'] || ''
+              expect(csp).toContain("script-src 'self' 'nonce-")
+              expect(csp).not.toContain("script-src 'self' 'unsafe-inline'")
+              expect(csp).not.toContain("'unsafe-eval'")
+              await expect(page.locator('body')).toBeVisible()
+              const dimensions = await page.evaluate(() => ({
+                scrollWidth: document.documentElement.scrollWidth,
+                clientWidth: document.documentElement.clientWidth,
+              }))
+              expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth + 1)
+            })
+          }
+
+          test('auth primary controls stay usable', async ({ page }) => {
+            for (const route of ['/login', '/register']) {
+              await page.goto(route, { waitUntil: 'domcontentloaded' })
+              await expect(page.locator('input').first()).toBeVisible()
+              await expect(page.locator('button[type="submit"]')).toBeVisible()
+            }
+          })
+          EOF
+
+      - name: Commit generated files and self-clean
+        shell: bash
+        run: |
+          git config user.name "MedStart Security Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/browser-dependency-batch.yml
+          git add artifacts/medstart/lib/firestore.ts artifacts/medstart/app/dashboard/profile/page.tsx package.json pnpm-lock.yaml playwright.config.ts scripts/browser-smoke/public-routes.spec.ts
+          git commit -m "Завершить server-owned avatar и browser smoke dependencies"
+          git push origin HEAD:security/release-governance-hardening
