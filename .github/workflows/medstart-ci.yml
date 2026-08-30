@@ -103,6 +103,7 @@ jobs:
           test -f artifacts/medstart/lib/server/file-security.ts
           test -f artifacts/medstart/lib/server/knowledge-access.ts
           test -f artifacts/medstart/lib/server/knowledge-security.ts
+          test -f artifacts/medstart/lib/server/malware-scanner.ts
           test -f scripts/test-file-security.mjs
           test -f scripts/test-avatar-rules.mjs
           test -f scripts/test-avatar-url-security.mjs
@@ -111,6 +112,7 @@ jobs:
           test -f scripts/test-booking-query-bounds.mjs
           test -f scripts/test-live-whiteboard-security.mjs
           test -f scripts/test-knowledge-pipeline.mjs
+          test -f scripts/test-malware-scanner.mjs
           test -f scripts/test-knowledge-rules.mjs
           test -f scripts/test-live-audit-guard.mjs
           grep -q "fetch('/api/bookings'" artifacts/medstart/lib/bookings.ts
@@ -168,6 +170,7 @@ jobs:
 
       - name: Test trusted knowledge pipeline
         run: |
+          node scripts/test-malware-scanner.mjs
           node scripts/test-knowledge-pipeline.mjs
           node scripts/test-live-audit-guard.mjs
           pnpm --dir artifacts/medstart exec node scripts/verify-knowledge-rules.mjs
