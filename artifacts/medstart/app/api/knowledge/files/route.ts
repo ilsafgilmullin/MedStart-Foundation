@@ -4,6 +4,10 @@ import { pipeline } from 'node:stream/promises'
 import { NextResponse } from 'next/server'
 import { getFirebaseAdminBucket, getFirebaseAdminDb } from '@/lib/server/firebase-admin'
 import {
+  AuthSecurityConfigurationError,
+  takeRateLimit,
+} from '@/lib/server/auth-security'
+import {
   buildStoredFileName,
   detectUploadType,
   sanitizeOriginalFileName,
@@ -25,22 +29,32 @@ import {
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const uploadWindows = new Map<string, { startedAt: number; count: number }>()
+const KNOWLEDGE_UPLOAD_WINDOW_MS = 30 * 60_000
 
-function enforceUploadRate(uid: string) {
-  const now = Date.now()
-  const current = uploadWindows.get(uid)
-  if (!current || now - current.startedAt > 30 * 60_000) {
-    uploadWindows.set(uid, { startedAt: now, count: 1 })
-    return
-  }
-  current.count += 1
-  if (current.count > 10) {
-    throw new KnowledgeAccessError(
-      429,
-      'KNOWLEDGE_UPLOAD_RATE_LIMIT',
-      'Слишком много загрузок. Повторите позже.',
+async function enforceUploadRate(uid: string) {
+  try {
+    const limit = await takeRateLimit(
+      `knowledge-upload:account:${uid}`,
+      10,
+      KNOWLEDGE_UPLOAD_WINDOW_MS,
     )
+    if (!limit.allowed) {
+      throw new KnowledgeAccessError(
+        429,
+        'KNOWLEDGE_UPLOAD_RATE_LIMIT',
+        'Слишком много загрузок. Повторите позже.',
+      )
+    }
+  } catch (error) {
+    if (error instanceof KnowledgeAccessError) throw error
+    if (error instanceof AuthSecurityConfigurationError) {
+      throw new KnowledgeAccessError(
+        503,
+        'KNOWLEDGE_UPLOAD_SECURITY_UNAVAILABLE',
+        'Защита загрузок временно не настроена. Повторите позже.',
+      )
+    }
+    throw error
   }
 }
 
@@ -142,7 +156,7 @@ export async function POST(request: Request) {
   try {
     const actor = await requireKnowledgeActor(request)
     requireTutor(actor)
-    enforceUploadRate(actor.uid)
+    await enforceUploadRate(actor.uid)
 
     const form = await request.formData()
     const submissionId = validateKnowledgeSubmissionId(form.get('submissionId'))
