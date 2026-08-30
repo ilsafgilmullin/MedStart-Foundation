@@ -94,11 +94,13 @@ jobs:
           test -f artifacts/medstart/app/api/knowledge/files/route.ts
           test -f artifacts/medstart/app/api/knowledge/submissions/route.ts
           test -f artifacts/medstart/app/api/knowledge/moderation/route.ts
+          test -f artifacts/medstart/lib/avatar-security.ts
           test -f artifacts/medstart/lib/server/file-security.ts
           test -f artifacts/medstart/lib/server/knowledge-access.ts
           test -f artifacts/medstart/lib/server/knowledge-security.ts
           test -f scripts/test-file-security.mjs
           test -f scripts/test-avatar-rules.mjs
+          test -f scripts/test-avatar-url-security.mjs
           test -f scripts/test-live-whiteboard-security.mjs
           test -f scripts/test-knowledge-pipeline.mjs
           test -f scripts/test-knowledge-rules.mjs
@@ -108,6 +110,7 @@ jobs:
           grep -q "'/api/messages/media'" artifacts/medstart/lib/chat-media.ts
           grep -q "fetch('/api/profile/avatar'" artifacts/medstart/lib/storage.ts
           grep -q 'detectUploadType' artifacts/medstart/app/api/profile/avatar/route.ts
+          grep -q 'isTrustedAvatarUrl' artifacts/medstart/components/dashboard/ProfilePhoto.tsx
           grep -q "'/api/knowledge/files'" artifacts/medstart/lib/knowledge-upload.ts
           grep -q "'/api/knowledge/submissions'" artifacts/medstart/lib/knowledge-base.ts
           grep -q "'/api/knowledge/moderation'" artifacts/medstart/lib/knowledge-base.ts
@@ -140,6 +143,9 @@ jobs:
 
       - name: Test server file security
         run: node scripts/test-file-security.mjs
+
+      - name: Test avatar render security
+        run: node scripts/test-avatar-url-security.mjs
 
       - name: Test realtime whiteboard security
         run: node scripts/test-live-whiteboard-security.mjs
