@@ -104,6 +104,8 @@ jobs:
           test -f artifacts/medstart/lib/server/knowledge-access.ts
           test -f artifacts/medstart/lib/server/knowledge-security.ts
           test -f artifacts/medstart/lib/server/malware-scanner.ts
+          test -f artifacts/medstart/lib/feature-flags.ts
+          test -f artifacts/medstart/lib/server/feature-flags.ts
           test -f scripts/test-file-security.mjs
           test -f scripts/test-avatar-rules.mjs
           test -f scripts/test-avatar-url-security.mjs
@@ -113,6 +115,7 @@ jobs:
           test -f scripts/test-live-whiteboard-security.mjs
           test -f scripts/test-knowledge-pipeline.mjs
           test -f scripts/test-malware-scanner.mjs
+          test -f scripts/test-school-track-gate.mjs
           test -f scripts/test-knowledge-rules.mjs
           test -f scripts/test-live-audit-guard.mjs
           grep -q "fetch('/api/bookings'" artifacts/medstart/lib/bookings.ts
@@ -151,6 +154,9 @@ jobs:
 
       - name: Run final static audit invariants
         run: node scripts/final-audit-invariants.mjs
+
+      - name: Test product scope gates
+        run: node scripts/test-school-track-gate.mjs
 
       - name: Test server file security
         run: node scripts/test-file-security.mjs
