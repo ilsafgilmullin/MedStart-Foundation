@@ -33,6 +33,22 @@ const resetRoute = await readFile(
   'artifacts/medstart/app/api/auth/password-reset/route.ts',
   'utf8',
 )
+const livekitServer = await readFile(
+  'artifacts/medstart/lib/server/livekit.ts',
+  'utf8',
+)
+const lessonControls = await readFile(
+  'artifacts/medstart/components/live/LessonControls.tsx',
+  'utf8',
+)
+const videoStage = await readFile(
+  'artifacts/medstart/components/live/VideoStage.tsx',
+  'utf8',
+)
+const liveLessonRoom = await readFile(
+  'artifacts/medstart/components/live/LiveLessonRoom.tsx',
+  'utf8',
+)
 const envExample = await readFile('.env.example', 'utf8')
 
 // Live authentication audit must never run from pull requests or feature refs.
@@ -103,7 +119,10 @@ assert.equal(
 // Authentication abuse controls must be distributed and privacy-preserving.
 assert.equal(authSecurity.includes('new Map<'), false)
 assert.equal(authSecurity.includes("createHmac('sha256'"), true)
-assert.equal(authSecurity.includes("RATE_LIMIT_COLLECTION = 'securityRateLimits'"), true)
+assert.equal(
+  authSecurity.includes("RATE_LIMIT_COLLECTION = 'securityRateLimits'"),
+  true,
+)
 assert.equal(authSecurity.includes('db.runTransaction'), true)
 assert.equal(authSecurity.includes('MEDSTART_RATE_LIMIT_PEPPER'), true)
 assert.equal(authSecurity.includes('MEDSTART_TRUST_PROXY_HEADERS'), true)
@@ -122,15 +141,51 @@ for (const [label, route, accountMarker, networkMarker] of [
     'password-reset:network:',
   ],
 ]) {
-  assert.equal(route.includes('await takeRateLimit'), true, `${label} limiter is not awaited`)
-  assert.equal(route.includes(accountMarker), true, `${label} account limiter is missing`)
-  assert.equal(route.includes('clientAddress(request)'), true, `${label} proxy guard is missing`)
-  assert.equal(route.includes(networkMarker), true, `${label} network limiter is missing`)
+  assert.equal(
+    route.includes('await takeRateLimit'),
+    true,
+    `${label} limiter is not awaited`,
+  )
+  assert.equal(
+    route.includes(accountMarker),
+    true,
+    `${label} account limiter is missing`,
+  )
+  assert.equal(
+    route.includes('clientAddress(request)'),
+    true,
+    `${label} proxy guard is missing`,
+  )
+  assert.equal(
+    route.includes(networkMarker),
+    true,
+    `${label} network limiter is missing`,
+  )
 }
 assert.equal(envExample.includes('MEDSTART_RATE_LIMIT_PEPPER='), true)
 assert.equal(envExample.includes('MEDSTART_TRUST_PROXY_HEADERS=false'), true)
 assert.equal(envExample.includes('securityRateLimits.expiresAt'), true)
 
+// LiveKit participant attributes are user-mutable. Keep them presentation-only
+// and derive trusted participant labels from immutable Firebase UID identities.
+assert.equal(livekitServer.includes('identity: input.participantUid'), true)
+assert.equal(
+  livekitServer.includes("'medstart.handRaised': 'false'"),
+  true,
+)
+assert.equal(livekitServer.includes("'medstart.role'"), false)
+assert.equal(livekitServer.includes("'medstart.bookingId'"), false)
+assert.equal(livekitServer.includes('metadata: JSON.stringify'), false)
+assert.equal(livekitServer.includes('canUpdateOwnMetadata: true'), true)
+assert.equal(lessonControls.includes('localParticipant.setAttributes'), true)
+assert.equal(lessonControls.includes("'medstart.handRaised'"), true)
+assert.equal(videoStage.includes('trustedParticipantName'), true)
+assert.equal(videoStage.includes('track.participant.name'), false)
+assert.equal(
+  liveLessonRoom.includes('<VideoStage booking={booking} />'),
+  true,
+)
+
 console.log(
-  'Firebase deployment, environment isolation and distributed auth security guard tests passed.',
+  'Firebase deployment, environment isolation, distributed auth and LiveKit identity guard tests passed.',
 )
