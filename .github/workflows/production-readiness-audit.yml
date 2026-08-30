@@ -45,18 +45,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --reporter=silent
 
-      - name: Prepare read-only Firebase credential
+      - name: Prepare dedicated read-only Firebase credential
         env:
-          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          FIREBASE_READ_ONLY_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_READ_ONLY_SERVICE_ACCOUNT_JSON }}
         run: |
-          test -n "$FIREBASE_SERVICE_ACCOUNT_JSON"
-          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/firebase-service-account.json"
-          chmod 600 "$RUNNER_TEMP/firebase-service-account.json"
+          test -n "$FIREBASE_READ_ONLY_SERVICE_ACCOUNT_JSON"
+          printf '%s' "$FIREBASE_READ_ONLY_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/firebase-read-only-service-account.json"
+          chmod 600 "$RUNNER_TEMP/firebase-read-only-service-account.json"
 
       - name: Audit production release invariants
         working-directory: artifacts/medstart
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-read-only-service-account.json
           MEDSTART_AUDIT_PROJECT_ID: medstart-e9bfe
           MEDSTART_EXPECTED_FIREBASE_PROJECT_ID: medstart-e9bfe
         run: node scripts/audit-production-readiness.mjs
