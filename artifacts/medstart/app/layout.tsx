@@ -3,6 +3,8 @@ import './globals.css'
 import ServiceWorkerRegistration from '@/components/common/ServiceWorkerRegistration'
 import { AuthProvider } from '@/providers/AuthProvider'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: { default: 'MedStart', template: '%s · MedStart' },
   description:
