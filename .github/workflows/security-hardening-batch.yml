@@ -1,0 +1,144 @@
+name: Temporary MedStart security hardening batch
+
+on:
+  push:
+    branches:
+      - security/release-governance-hardening
+    paths:
+      - '.github/workflows/security-hardening-batch.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: temporary-medstart-security-hardening-batch
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: security/release-governance-hardening
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Apply exact security transformations
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, found {count}')
+              file.write_text(text.replace(old, new, 1))
+
+          rules = 'firestore.secure.rules'
+          replace_once(
+              rules,
+              "          'firstName', 'lastName', 'displayName', 'avatar',\n",
+              "          'firstName', 'lastName', 'displayName',\n",
+          )
+          replace_once(
+              rules,
+              "      allow update: if isOwner()\n        || (isActiveAdmin() && validAdminTutorModeration())\n        || (\n          signedIn()\n          && isOwnProfile(userId)\n          && userExists(userId)\n          && resource.data.status != 'blocked'\n          && resource.data.status != 'deleted'\n          && (safeSelfUpdate() || validTutorResubmission())\n        );",
+              "      allow update: if request.resource.data.avatar == resource.data.avatar\n        && (\n          isOwner()\n          || (isActiveAdmin() && validAdminTutorModeration())\n          || (\n            signedIn()\n            && isOwnProfile(userId)\n            && userExists(userId)\n            && resource.data.status != 'blocked'\n            && resource.data.status != 'deleted'\n            && (safeSelfUpdate() || validTutorResubmission())\n          )\n        );",
+          )
+
+          booking = 'artifacts/medstart/app/api/bookings/route.ts'
+          replace_once(
+              booking,
+              "    const tutorBookingsQuery = db\n      .collection('bookings')\n      .where('tutorUid', '==', input.tutorUid)\n    const studentBookingsQuery = db\n      .collection('bookings')\n      .where('studentUid', '==', decoded.uid)\n",
+              "",
+          )
+          replace_once(
+              booking,
+              "      const [\n        studentSnapshot,\n        tutorSnapshot,\n        availabilitySnapshot,\n        conversationSnapshot,\n        tutorBookingsSnapshot,\n        studentBookingsSnapshot,\n      ] = await Promise.all([\n        transaction.get(studentRef),\n        transaction.get(tutorRef),\n        transaction.get(availabilityRef),\n        transaction.get(conversationRef),\n        transaction.get(tutorBookingsQuery),\n        transaction.get(studentBookingsQuery),\n      ])",
+              "      const [\n        studentSnapshot,\n        tutorSnapshot,\n        availabilitySnapshot,\n        conversationSnapshot,\n      ] = await Promise.all([\n        transaction.get(studentRef),\n        transaction.get(tutorRef),\n        transaction.get(availabilityRef),\n        transaction.get(conversationRef),\n      ])",
+          )
+          replace_once(
+              booking,
+              "      const requestedEndMs = requestedStartMs + durationMinutes * 60_000\n      for (const existingDocument of tutorBookingsSnapshot.docs) {",
+              "      const requestedEndMs = requestedStartMs + durationMinutes * 60_000\n      const tutorBookingsQuery = db\n        .collection('bookings')\n        .where('tutorUid', '==', input.tutorUid)\n        .where('status', 'in', ['pending', 'accepted'])\n        .where('requestedStartAt', '<', Timestamp.fromMillis(requestedEndMs))\n        .where('requestedEndAt', '>', Timestamp.fromMillis(requestedStartMs))\n      const studentBookingsQuery = db\n        .collection('bookings')\n        .where('studentUid', '==', decoded.uid)\n        .where('status', 'in', ['pending', 'accepted'])\n        .limit(MAX_ACTIVE_STUDENT_BOOKINGS)\n      const [tutorBookingsSnapshot, studentBookingsSnapshot] =\n        await Promise.all([\n          transaction.get(tutorBookingsQuery),\n          transaction.get(studentBookingsQuery),\n        ])\n\n      for (const existingDocument of tutorBookingsSnapshot.docs) {",
+          )
+          replace_once(
+              booking,
+              "      const activeStudentBookings = studentBookingsSnapshot.docs.filter(\n        (item) => activeBooking(item.data() as UnknownRecord),\n      ).length",
+              "      const activeStudentBookings = studentBookingsSnapshot.size",
+          )
+
+          action = 'artifacts/medstart/app/api/bookings/action/route.ts'
+          replace_once(
+              action,
+              "      const tutorBookingsQuery = db\n        .collection('bookings')\n        .where('tutorUid', '==', tutorUid)\n      const [actorSnapshot, , tutorBookingsSnapshot] = await Promise.all([\n        transaction.get(actorRef),\n        transaction.get(calendarRef),\n        transaction.get(tutorBookingsQuery),\n      ])",
+              "      const [actorSnapshot] = await Promise.all([\n        transaction.get(actorRef),\n        transaction.get(calendarRef),\n      ])",
+          )
+          replace_once(
+              action,
+              "      if (nextStatus === 'accepted') {\n        for (const document of tutorBookingsSnapshot.docs) {",
+              "      if (nextStatus === 'accepted') {\n        const targetInterval = bookingInterval(booking)\n        if (targetInterval.start === null || targetInterval.end === null) {\n          throw new Error('У занятия отсутствуют нормализованные временные метки.')\n        }\n        const tutorBookingsQuery = db\n          .collection('bookings')\n          .where('tutorUid', '==', tutorUid)\n          .where('status', '==', 'accepted')\n          .where('requestedStartAt', '<', Timestamp.fromMillis(targetInterval.end))\n          .where('requestedEndAt', '>', Timestamp.fromMillis(targetInterval.start))\n        const tutorBookingsSnapshot = await transaction.get(tutorBookingsQuery)\n        for (const document of tutorBookingsSnapshot.docs) {",
+          )
+
+          avatar_route = Path('artifacts/medstart/app/api/profile/avatar/route.ts')
+          avatar = avatar_route.read_text()
+          avatar = avatar.replace(
+              "import { detectUploadType } from '@/lib/server/file-security'\n",
+              "import { detectUploadType } from '@/lib/server/file-security'\nimport { normalizeAvatarImage } from '@/lib/server/avatar-image'\n",
+              1,
+          )
+          avatar = avatar.replace(
+              "    const sha256 = createHash('sha256').update(bytes).digest('hex')\n    const bucket = getFirebaseAdminBucket()\n    uploadedPath = `avatars/${decoded.uid}/${randomUUID()}.${detected.extension}`\n    const object = bucket.file(uploadedPath)\n\n    await object.save(bytes, {",
+              "    const normalized = await normalizeAvatarImage(bytes)\n    const sha256 = createHash('sha256').update(normalized.bytes).digest('hex')\n    const bucket = getFirebaseAdminBucket()\n    uploadedPath = `avatars/${decoded.uid}/${randomUUID()}.webp`\n    const object = bucket.file(uploadedPath)\n\n    await object.save(normalized.bytes, {",
+              1,
+          )
+          avatar = avatar.replace(
+              "        contentType: detected.mime,\n",
+              "        contentType: normalized.mimeType,\n",
+              1,
+          )
+          avatar = avatar.replace(
+              "          detectedMime: detected.mime,\n          sha256,\n          securityStatus: 'signature-verified',\n",
+              "          sourceMime: detected.mime,\n          detectedMime: normalized.mimeType,\n          sha256,\n          width: String(normalized.width),\n          height: String(normalized.height),\n          metadataStripped: 'true',\n          securityStatus: 'decoded-reencoded',\n",
+              1,
+          )
+          avatar = avatar.replace(
+              "        mimeType: detected.mime,\n",
+              "        mimeType: normalized.mimeType,\n",
+              1,
+          )
+          if "normalizeAvatarImage" not in avatar or "decoded-reencoded" not in avatar:
+              raise SystemExit('avatar route normalization patch failed')
+          avatar_route.write_text(avatar)
+
+          Path('artifacts/medstart/lib/server/avatar-image.ts').write_text("""import sharp from 'sharp'\n\nconst MAX_AVATAR_DIMENSION = 1024\nconst MAX_INPUT_PIXELS = 40_000_000\n\nexport interface NormalizedAvatarImage {\n  bytes: Buffer\n  mimeType: 'image/webp'\n  width: number\n  height: number\n}\n\nexport async function normalizeAvatarImage(\n  input: Buffer | Uint8Array,\n): Promise<NormalizedAvatarImage> {\n  const { data, info } = await sharp(input, {\n    failOn: 'warning',\n    limitInputPixels: MAX_INPUT_PIXELS,\n  })\n    .autoOrient()\n    .resize({\n      width: MAX_AVATAR_DIMENSION,\n      height: MAX_AVATAR_DIMENSION,\n      fit: 'inside',\n      withoutEnlargement: true,\n    })\n    .webp({ quality: 82, effort: 4 })\n    .toBuffer({ resolveWithObject: true })\n\n  if (\n    info.format !== 'webp' ||\n    !info.width ||\n    !info.height ||\n    info.width > MAX_AVATAR_DIMENSION ||\n    info.height > MAX_AVATAR_DIMENSION\n  ) {\n    throw new Error('AVATAR_NORMALIZATION_FAILED')\n  }\n\n  return {\n    bytes: data,\n    mimeType: 'image/webp',\n    width: info.width,\n    height: info.height,\n  }\n}\n""")
+
+          Path('scripts/test-avatar-normalization.mjs').write_text("""import assert from 'node:assert/strict'\nimport sharp from 'sharp'\nimport { normalizeAvatarImage } from '../artifacts/medstart/lib/server/avatar-image.ts'\n\nconst source = await sharp({\n  create: {\n    width: 1800,\n    height: 1200,\n    channels: 3,\n    background: { r: 20, g: 120, b: 180 },\n  },\n})\n  .jpeg()\n  .withMetadata({ orientation: 6 })\n  .toBuffer()\n\nconst normalized = await normalizeAvatarImage(source)\nconst metadata = await sharp(normalized.bytes).metadata()\nassert.equal(normalized.mimeType, 'image/webp')\nassert.equal(metadata.format, 'webp')\nassert.equal((metadata.width ?? 0) <= 1024, true)\nassert.equal((metadata.height ?? 0) <= 1024, true)\nassert.equal(metadata.exif, undefined)\nassert.equal(metadata.xmp, undefined)\nassert.equal(metadata.orientation, undefined)\nconsole.log('Avatar decode/re-encode metadata stripping suite passed.')\n""")
+
+      - name: Add pinned image normalizer and refresh lockfile
+        run: pnpm --filter @workspace/medstart add sharp@0.35.4 --save-exact
+
+      - name: Commit generated hardening changes
+        shell: bash
+        run: |
+          git config user.name "MedStart Security Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add firestore.secure.rules firestore.indexes.json pnpm-lock.yaml artifacts/medstart/package.json artifacts/medstart/app/api/bookings/route.ts artifacts/medstart/app/api/bookings/action/route.ts artifacts/medstart/app/api/profile/avatar/route.ts artifacts/medstart/lib/server/avatar-image.ts scripts/test-avatar-normalization.mjs
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 1
+          fi
+          git commit -m "Завершить avatar integrity и bounded booking queries"
+          git push origin HEAD:security/release-governance-hardening
